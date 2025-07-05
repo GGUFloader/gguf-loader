@@ -262,6 +262,143 @@
       font-size: 0.9rem;
     }
     
+    .faq-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    
+    .faq-item {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border: 1px solid rgba(102, 126, 234, 0.1);
+      border-radius: 15px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+    }
+    
+    .faq-item:hover {
+      border-color: rgba(102, 126, 234, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+    }
+    
+    .faq-question {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .faq-answer {
+      color: #6c757d;
+      line-height: 1.6;
+      font-size: 1rem;
+    }
+    
+    .faq-answer a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .faq-answer a:hover {
+      text-decoration: underline;
+    }
+    
+    .contact-container {
+      background: linear-gradient(135deg, #fff6e5 0%, #ffeaa7 100%);
+      border: 1px solid rgba(253, 203, 110, 0.3);
+      border-radius: 15px;
+      padding: 2.5rem;
+      text-align: center;
+      margin-top: 2rem;
+    }
+    
+    .contact-content {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    .contact-text {
+      font-size: 1.1rem;
+      color: #2d3436;
+      margin-bottom: 1rem;
+      line-height: 1.6;
+    }
+    
+    .contact-info {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .contact-label {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 1rem;
+    }
+    
+    .contact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.1rem;
+      color: #0077b5;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      background: rgba(0, 119, 181, 0.1);
+      border: 2px solid rgba(0, 119, 181, 0.2);
+    }
+    
+    .contact-link:hover {
+      background: rgba(0, 119, 181, 0.2);
+      border-color: rgba(0, 119, 181, 0.4);
+      text-decoration: none;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 119, 181, 0.2);
+    }
+    
+    .contact-icon {
+      font-size: 1.2rem;
+    }
+    
+    .contact-email {
+      font-size: 1.1rem;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+    
+    .contact-email:hover {
+      background: rgba(102, 126, 234, 0.1);
+      text-decoration: none;
+      transform: translateY(-1px);
+    }
+    
+    .faq-answer code {
+      background: #dee2e6;
+      color: #495057;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-family: 'Courier New', monospace;
+    }
+    
     .coming-soon {
       background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
       color: #2d3436;
@@ -420,6 +557,93 @@
     </div>
 
     <div class="section">
+      <h2 class="section-title">🎬 Watch GGUF Loader in Action</h2>
+      <div style="text-align: center;">
+        <video width="100%" controls style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-top: 20px; max-width: 800px;">
+          <source src="gguf_demo.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">❓ Frequently Asked Questions</h2>
+      <div class="faq-container">
+        <div class="faq-item">
+          <h3 class="faq-question">🧠 What is GGUF Loader?</h3>
+          <p class="faq-answer">GGUF Loader is a professional, offline Windows application that enables you to deploy local LLM models like Mistral, LLaMA, or DeepSeek with zero configuration, no Python dependencies, and complete offline operation.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">📦 What is GGUF?</h3>
+          <p class="faq-answer">GGUF is an optimized model file format used by <code>llama.cpp</code>. It's specifically designed for efficient local deployment of large language models (LLMs) on enterprise hardware.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">💻 Do I need Python or command line expertise?</h3>
+          <p class="faq-answer">No technical expertise required. GGUF Loader provides a comprehensive GUI interface designed for business users — simply double-click to launch and begin operations.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🌐 Does it operate completely offline?</h3>
+          <p class="faq-answer">Yes. Once deployed, the application runs entirely offline with no external dependencies. Your data remains completely secure and never leaves your infrastructure.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🧩 What models are supported?</h3>
+          <p class="faq-answer">You can deploy any model in GGUF format — including Mistral-7B, LLaMA 3, DeepSeek, TinyLLaMA, and other enterprise-grade language models.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">📁 Where can I source GGUF models?</h3>
+          <p class="faq-answer">GGUF models are available from <a href="https://huggingface.co/TheBloke" target="_blank">TheBloke's Hugging Face repository</a> and other professional model hubs with enterprise licensing.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🚀 Can this support custom AI assistant development?</h3>
+          <p class="faq-answer">Absolutely. GGUF Loader is ideal for rapid prototyping, enterprise AI assistant development, and creating fully private AI solutions within your organization.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🪟 What platforms are supported?</h3>
+          <p class="faq-answer">Currently optimized for Windows enterprise environments. Mac and Linux support is planned for future releases based on enterprise demand.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🤝 Is the source code available?</h3>
+          <p class="faq-answer">Yes, GGUF Loader is fully open source with enterprise-friendly licensing. View the complete source code on <a href="https://github.com/hussainnazary2/gguf-loader" target="_blank">GitHub</a>.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">📨 Enterprise support and consulting</h3>
+          <p class="faq-answer">For enterprise deployment assistance and custom solutions, please <a href="mailto:your@email.com">contact our development team</a> or submit an issue on GitHub.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">📬 Contact & Support</h2>
+      <div class="contact-container">
+        <div class="contact-content">
+          <p class="contact-text">Have questions about enterprise deployment or need technical support?</p>
+          <p class="contact-text">We're here to help you succeed with your AI implementation.</p>
+          <div class="contact-info">
+            <span class="contact-label">Business Inquiries:</span>
+            <a href="mailto:hossainnazary475@gmail.com" class="contact-email">hossainnazary475@gmail.com</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">📬 Connect with Me</h2>
+      <div class="contact-container">
+        <div class="contact-content">
+          <p class="contact-text">Got questions or want to collaborate?</p>
+          <p class="contact-text">Let's connect and explore opportunities together.</p>
+          <div class="contact-info">
+            <span class="contact-label">Professional Network:</span>
+            <a href="https://www.linkedin.com/in/hussain-nazary-188b4385/" target="_blank" class="contact-link">
+              <span class="contact-icon">💼</span>
+              Connect on LinkedIn
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="coming-soon">
         <h2 style="margin-bottom: 1rem;">Platform Roadmap</h2>
         <p>Enhanced UI demonstrations, performance benchmarks, and additional enterprise features in development</p>
@@ -429,7 +653,7 @@
 
   <div class="footer">
     <p>Developed by <a href="https://github.com/hussainnazary2">Hussain Nazary</a> • <a href="https://github.com/hussainnazary2/gguf-loader">View Source Code</a></p>
-    <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">© 2024 GGUF Loader. Enterprise AI solutions for modern organizations.</p>
+    <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">© 2025 GGUF Loader. Enterprise AI solutions for modern organizations.</p>
   </div>
 </body>
 </html>
