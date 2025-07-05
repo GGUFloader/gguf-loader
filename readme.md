@@ -1,5 +1,5 @@
 # 🧠 GGUF Loader - Offline LLM Launcher
-
+ 
 **GGUF Loader** is a lightweight, GUI-based desktop application for loading **GGUF-format language models** locally — with zero cloud or API dependency. Designed with simplicity in mind, it's a perfect fit for AI beginners, students, and educational use.
 > ✅ 100% offline  
 > ✅ GGUF model support (e.g., Mistral, LLaMA, Qwen)  
