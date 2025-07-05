@@ -22,7 +22,7 @@
 
 ### 📦 Download the App
 
-> For Code to Inspire use: just run the provided `LLM-Loader.exe`  
+> you can use: just run the provided `LLM-Loader.exe`  
 > No Python or setup required!
 
 ### 🔧 For Developers
