@@ -63,15 +63,30 @@ Make sure to:
 
 ```
 locald/
-├── assets/
+GGUF-Loader/
+│   config.py
+│   GGUFLoaderInstaller.exe
+│   icon.ico
+│   main.py
+│   main.spec
+│   README.md
+│   requirements.txt
+│   utils.py
+│
 ├── models/
-├── llama_cpp/
-├── main.py
-├── main.spec
-├── requirements.txt
-├── ico=.ico
-└── dist/
-    └── LLM-Loader.exe
+│   ├── chat_generator.py
+│   ├── model_loader.py
+│   └── __init__.py
+│
+├── ui/
+│   ├── ai_chat_window.py
+│   └── __init__.py
+│
+└── widgets/
+    ├── chat_bubble.py
+    └── __init__.py
+
+
 ```
 
 ---
