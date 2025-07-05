@@ -3,93 +3,433 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GGUF Loader – Run Mistral & LLaMA Locally</title>
-  <meta name="description" content="Run Mistral, LLaMA, and other GGUF-format models locally on Windows with a simple GUI. No Python. No internet. 100% offline AI assistant.">
+  <title>GGUF Loader – Enterprise-Grade Local AI Deployment</title>
+  <meta name="description" content="Deploy Mistral, LLaMA, and other GGUF-format models locally with enterprise-grade security. Zero-setup AI infrastructure for Windows environments.">
   <style>
-    body {
-      font-family: sans-serif;
+    * {
       margin: 0;
       padding: 0;
-      background: #f9f9f9;
-      color: #222;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    
+    .hero {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      padding: 4rem 2rem;
+      text-align: center;
+      position: relative;
+    }
+    
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+      opacity: 0.3;
+      pointer-events: none;
+    }
+    
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .hero h1 {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      background: linear-gradient(45deg, #fff, #e0e0e0);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .hero-subtitle {
+      font-size: 1.25rem;
+      font-weight: 300;
+      margin-bottom: 2rem;
+      opacity: 0.9;
+    }
+    
+    .cta-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+      color: white;
+      padding: 1rem 2rem;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+      border: none;
+      cursor: pointer;
+    }
+    
+    .cta-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(255, 107, 107, 0.6);
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+    
+    .section {
+      background: white;
+      margin: 2rem 0;
+      padding: 4rem 2rem;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+    }
+    
+    .section-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      color: #2c3e50;
+      text-align: center;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-top: 3rem;
+    }
+    
+    .feature-card {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      padding: 2rem;
+      border-radius: 15px;
+      text-align: center;
+      transition: transform 0.3s ease;
+      border: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .feature-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    
+    .feature-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #2c3e50;
+    }
+    
+    .feature-description {
+      color: #6c757d;
       line-height: 1.6;
     }
-    .container {
-      max-width: 800px;
-      margin: auto;
-      padding: 2rem;
+    
+    .use-cases {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
     }
-    h1 { font-size: 2.5rem; margin-bottom: 1rem; }
-    h2 { margin-top: 2rem; }
-    a.button {
-      display: inline-block;
-      background: #007acc;
+    
+    .use-case {
+      background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
       color: white;
-      padding: 0.75rem 1.5rem;
-      margin-top: 1rem;
-      text-decoration: none;
-      border-radius: 8px;
+      padding: 2rem;
+      border-radius: 15px;
+      text-align: center;
+      transition: transform 0.3s ease;
     }
-    code {
-      background: #eee;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
+    
+    .use-case:hover {
+      transform: scale(1.02);
     }
-    .feature-list li {
+    
+    .use-case-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-top: 3rem;
+    }
+    
+    .step {
+      text-align: center;
+      position: relative;
+    }
+    
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 700;
+      border-radius: 50%;
+      margin-bottom: 1rem;
+    }
+    
+    .step-title {
+      font-size: 1.25rem;
+      font-weight: 600;
       margin-bottom: 0.5rem;
+      color: #2c3e50;
     }
-    footer {
-      margin-top: 4rem;
+    
+    .step-description {
+      color: #6c757d;
+    }
+    
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    
+    .model-card {
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 15px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    
+    .model-card:hover {
+      border-color: #667eea;
+      transform: translateY(-3px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    .model-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #2c3e50;
+    }
+    
+    .model-description {
+      color: #6c757d;
       font-size: 0.9rem;
-      color: #666;
+    }
+    
+    .coming-soon {
+      background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+      color: #2d3436;
+      padding: 3rem;
+      border-radius: 15px;
+      text-align: center;
+      margin-top: 2rem;
+    }
+    
+    .footer {
+      background: #2c3e50;
+      color: white;
+      padding: 3rem 2rem;
+      text-align: center;
+      margin-top: 4rem;
+    }
+    
+    .footer a {
+      color: #74b9ff;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 768px) {
+      .hero {
+        padding: 2rem 1rem;
+      }
+      
+      .section {
+        margin: 1rem 0;
+        padding: 2rem 1rem;
+      }
+      
+      .features-grid,
+      .use-cases,
+      .steps,
+      .models-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="hero">
+    <div class="hero-content">
+      <h1>GGUF Loader</h1>
+      <p class="hero-subtitle">Enterprise-Grade Local AI Deployment Platform</p>
+      <p style="margin-bottom: 2rem; font-size: 1.1rem; opacity: 0.9;">Deploy Mistral, LLaMA, DeepSeek, and other GGUF-format models with zero-configuration setup. Complete offline AI infrastructure for Windows environments.</p>
+      <a class="cta-primary" href="https://github.com/hussainnazary2/gguf-loader/releases">
+        <span>⬇️</span>
+        Download Enterprise Solution
+      </a>
+    </div>
+  </div>
+
   <div class="container">
-    <h1>GGUF Loader</h1>
-    <p><strong>Run Mistral, LLaMA, DeepSeek, and other GGUF-format models offline — with zero setup.</strong></p>
-    <p>No Python. No command line. No cloud. Just click, load, and chat with your favorite LLMs locally on Windows.</p>
+    <div class="section">
+      <h2 class="section-title">Core Capabilities</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon">🧠</span>
+          <h3 class="feature-title">Multi-Model Support</h3>
+          <p class="feature-description">Deploy Mistral, LLaMA, DeepSeek, TinyLLaMA, and other leading GGUF-format models with seamless integration</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔒</span>
+          <h3 class="feature-title">Complete Offline Operation</h3>
+          <p class="feature-description">Zero external dependencies. No internet connectivity or API keys required for full functionality</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🖥️</span>
+          <h3 class="feature-title">Professional Windows GUI</h3>
+          <p class="feature-description">Intuitive interface designed for enterprise environments. No command-line expertise required</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">⚡</span>
+          <h3 class="feature-title">Optimized Performance</h3>
+          <p class="feature-description">Lightweight architecture with optimized resource utilization for maximum efficiency</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🛡️</span>
+          <h3 class="feature-title">Privacy-First Architecture</h3>
+          <p class="feature-description">All data processing occurs locally. Complete data sovereignty and GDPR compliance</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🚀</span>
+          <h3 class="feature-title">Zero-Configuration Setup</h3>
+          <p class="feature-description">Instant deployment with no technical configuration. Ready to use out of the box</p>
+        </div>
+      </div>
+    </div>
 
-    <a class="button" href="https://github.com/hussainnazary2/gguf-loader/releases">🔽 Download GGUF Loader</a>
+    <div class="section">
+      <h2 class="section-title">Enterprise Use Cases</h2>
+      <div class="use-cases">
+        <div class="use-case">
+          <h3 class="use-case-title">Intelligent Business Assistant</h3>
+          <p>Deploy sophisticated AI assistants for internal operations, customer service, and workflow automation</p>
+        </div>
+        <div class="use-case">
+          <h3 class="use-case-title">Secure Environment Deployment</h3>
+          <p>Implement AI solutions in air-gapped networks, government facilities, and high-security environments</p>
+        </div>
+        <div class="use-case">
+          <h3 class="use-case-title">Compliance-Critical Industries</h3>
+          <p>Enable AI capabilities in healthcare, legal, and financial sectors with complete data control</p>
+        </div>
+        <div class="use-case">
+          <h3 class="use-case-title">Research & Development</h3>
+          <p>Accelerate AI experimentation and model evaluation without cloud dependencies</p>
+        </div>
+      </div>
+    </div>
 
-    <h2>🚀 Features</h2>
-    <ul class="feature-list">
-      <li>🧠 Run Mistral, LLaMA, DeepSeek, TinyLLaMA and more</li>
-      <li>✅ 100% Offline — No Internet or API keys</li>
-      <li>🖥️ Clean Windows GUI — No terminal required</li>
-      <li>⚡ Lightweight and fast</li>
-      <li>🔐 Privacy-first: your data stays local</li>
-    </ul>
+    <div class="section">
+      <h2 class="section-title">Implementation Process</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3 class="step-title">Download & Install</h3>
+          <p class="step-description">Single-click installation with automatic dependency resolution</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3 class="step-title">Load GGUF Model</h3>
+          <p class="step-description">Import your preferred model from HuggingFace or local storage</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3 class="step-title">Deploy & Operate</h3>
+          <p class="step-description">Begin AI operations immediately with full offline functionality</p>
+        </div>
+      </div>
+    </div>
 
-    <h2>🎯 Use Cases</h2>
-    <ul>
-      <li>Build an offline smart assistant</li>
-      <li>Run AI in low-connectivity environments (schools, remote areas)</li>
-      <li>Use AI safely in legal, private, or medical work</li>
-      <li>Experiment with local models without technical setup</li>
-    </ul>
+    <div class="section">
+      <h2 class="section-title">Recommended Model Configurations</h2>
+      <div class="models-grid">
+        <a href="https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF" class="model-card">
+          <h3 class="model-name">Mistral 7B Instruct</h3>
+          <p class="model-description">High-performance general-purpose model optimized for instruction following and complex reasoning tasks</p>
+        </a>
+        <a href="https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF" class="model-card">
+          <h3 class="model-name">LLaMA 3 Instruct</h3>
+          <p class="model-description">Advanced language model with superior comprehension and generation capabilities</p>
+        </a>
+        <a href="https://huggingface.co/TheBloke/Deepseek-Coder-6.7B-GGUF" class="model-card">
+          <h3 class="model-name">DeepSeek Coder</h3>
+          <p class="model-description">Specialized coding assistant for software development and technical documentation</p>
+        </a>
+      </div>
+    </div>
 
-    <h2>📥 How It Works</h2>
-    <ol>
-      <li>Download the app</li>
-      <li>Load a GGUF model from HuggingFace</li>
-      <li>Start chatting — fully offline</li>
-    </ol>
+    <div class="section">
+      <div class="coming-soon">
+        <h2 style="margin-bottom: 1rem;">Platform Roadmap</h2>
+        <p>Enhanced UI demonstrations, performance benchmarks, and additional enterprise features in development</p>
+      </div>
+    </div>
+  </div>
 
-    <h2>💡 Recommended Models</h2>
-    <ul>
-      <li><a href="https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF">Mistral 7B Instruct</a></li>
-      <li><a href="https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF">LLaMA 3 Instruct</a></li>
-      <li><a href="https://huggingface.co/TheBloke/Deepseek-Coder-6.7B-GGUF">DeepSeek Coder</a></li>
-    </ul>
-
-    <h2>📷 Coming Soon</h2>
-    <p>Screenshots and GIF demo of the UI.</p>
-
-    <footer>
-      Built with ❤️ by <a href="https://github.com/hussainnazary2">Hussain</a> • <a href="https://github.com/hussainnazary2/gguf-loader">View Source on GitHub</a>
-    </footer>
+  <div class="footer">
+    <p>Developed by <a href="https://github.com/hussainnazary2">Hussain Nazary</a> • <a href="https://github.com/hussainnazary2/gguf-loader">View Source Code</a></p>
+    <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">© 2024 GGUF Loader. Enterprise AI solutions for modern organizations.</p>
   </div>
 </body>
 </html>
