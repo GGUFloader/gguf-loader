@@ -1,93 +1,90 @@
-# _config.yml for GGUF Loader GitHub Pages
+# Project Info
 title: "GGUF Loader"
-description: "Enterprise-Grade Local AI Deployment Platform. Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI."
+description: "Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI. GGUF Loader is the easiest privacy-first LLM runner for local deployment."
 tagline: "Enterprise-Grade Local AI Deployment Platform"
+lang: en
 url: "https://ggufloader.github.io/gguf-loader"
 baseurl: "/gguf-loader"
-lang: en
 
-# Author info
+# SEO Author Info
 author:
   name: "Hussain Nazary"
   email: "hossainnazary475@gmail.com"
-  twitter: "hussainnazary"
   github: "hussainnazary2"
+  twitter: "hussainnazary"
+  linkedin: "https://linkedin.com/in/hussain-nazary-188b4385"
 
-# Social media
-twitter:
-  username: hussainnazary
-  card: summary_large_image
-
-# GitHub repository
-repository: "ggufloader/gguf-loader"
-
-# SEO and social
-logo: "/docs/apple-touch-icon.png"
-image: "/docs/apple-touch-icon.png"
-
-# Social links
+# Social Metadata
 social:
-  name: "Hussain Nazary"
+  name: "GGUF Loader"
   links:
     - "https://github.com/hussainnazary2"
+    - "https://github.com/ggufloader/gguf-loader"
     - "https://linkedin.com/in/hussain-nazary-188b4385"
     - "https://twitter.com/hussainnazary"
+
+# GitHub Info
+repository: "ggufloader/gguf-loader"
+github:
+  is_project_page: true
+
+# Visual & SEO Assets
+logo: "/docs/apple-touch-icon.png"
+image: "/docs/apple-touch-icon.png"
+theme_color: "#0a74da"
 
 # Plugins
 plugins:
   - jekyll-seo-tag
-  - jekyll-feed
   - jekyll-sitemap
+  - jekyll-feed
 
-# Build settings
+# Build Behavior
 permalink: pretty
 markdown: kramdown
 highlighter: rouge
-lsi: false
-incremental: false
 safe: true
+incremental: false
+lsi: false
 
-# GitHub Pages settings
-github:
-  is_project_page: true
-
-# Collections and defaults
+# Page Defaults
 defaults:
   - scope:
       path: ""
     values:
       layout: default
-      author: "Hussain Nazary"
+      author: "GGUF Loader"
 
-# Exclude files/folders from the site output
-exclude:
-  - README.md
-  - LICENSE
-  - node_modules
-  - vendor
-  - .gitignore
-  - .git
-  - .github
-  - Gemfile
-  - Gemfile.lock
-  - package.json
-  - package-lock.json
-
-# Include files
-include:
-  - .htaccess
-  - _pages
-
-# Site settings
+# Time & Encoding
 timezone: UTC
 encoding: utf-8
 
-# Feed settings
+# Sitemap Settings
+sitemap:
+  filename: sitemap.xml
+  exclude:
+    - /404.html
+
+# Feed Settings
 feed:
   collections:
     - posts
   excerpt_only: true
 
-# Sitemap settings
-sitemap:
-  file: "/sitemap.xml"
+# File Inclusion & Exclusion
+exclude:
+  - README.md
+  - LICENSE
+  - Gemfile
+  - Gemfile.lock
+  - package.json
+  - package-lock.json
+  - node_modules
+  - vendor
+  - .git
+  - .github
+  - .gitignore
+
+include:
+  - .htaccess
+  - _pages
