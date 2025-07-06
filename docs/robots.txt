@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ggufloader.github.io/gguf-loader/sitemap.xml
