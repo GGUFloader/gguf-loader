@@ -1,16 +1,19 @@
 # _config.yml for GGUF Loader GitHub Pages
-
 title: GGUF Loader
 description: Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI.
-url: "https://ggufloader.github.io"    # Your GitHub Pages domain (without trailing slash)
-baseurl: "/gguf-loader"                 # The repository name, adjust if different
+url: "https://ggufloader.github.io"
+baseurl: "/gguf-loader"
 
 # Author info
 author:
   name: Hussain Nazary
-  email: your-email@example.com
-  twitter_username: hussainnazary
+  email: hossainnazary475@gmail.com
+  twitter_username: hussainnazary  # or ggufloader - be consistent
   github_username: hussainnazary2
+
+# Social media
+twitter:
+  username: hussainnazary  # or ggufloader - match above
 
 # Plugins
 plugins:
@@ -18,11 +21,15 @@ plugins:
   - jekyll-feed
   - jekyll-sitemap
 
-# Permalinks
+# Build settings
 permalink: pretty
-
-# Markdown processor
 markdown: kramdown
+lsi: false
+incremental: false
+
+# GitHub Pages settings
+github:
+  is_project_page: true
 
 # Exclude files/folders from the site output
 exclude:
@@ -32,22 +39,3 @@ exclude:
   - vendor
   - .gitignore
   - .git
-
-# Enable GitHub metadata
-github:
-  is_project_page: true
-
-# SEO tag config (optional but recommended)
-seo:
-  name: GGUF Loader
-  description: Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI.
-  twitter:
-    username: hussainnazary
-  author:
-    name: Hussain Nazary
-  type: software
-
-# Build settings
-safe: true
-lsi: false
-incremental: false
