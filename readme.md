@@ -1,4 +1,10 @@
+> 💡 GGUF Loader is an open-source Windows app to run Mistral, LLaMA, DeepSeek, and other GGUF-based LLMs locally — with zero setup, no Python, and no internet.
+
 # 🧠 GGUF Loader — Run Local AI Models with Zero Setup
+
+![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
+![GitHub all releases](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
+![License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 
 **The easiest way to run LLMs like Mistral, LLaMA, and DeepSeek locally on Windows — no Python, no command line, no internet.**
 
@@ -35,7 +41,7 @@ Perfect for offline assistants, smart reading, local chatbots, or educational to
 
 ## 📥 Download & Use
 
-1. **[Download the latest release →](https://github.com/hussainnazary2/gguf-loader/releases)**
+1. **[Download the latest release →](https://github.com/ggufloader/gguf-loader/releases)**
 2. **Run the GGUF Loader app**
 3. **Load your GGUF model file** (download from HuggingFace or local source)
 4. **Start chatting with your model offline**
@@ -46,11 +52,19 @@ Perfect for offline assistants, smart reading, local chatbots, or educational to
 - [DeepSeek-Coder](https://huggingface.co/TheBloke/Deepseek-Coder-6.7B-GGUF)
 
 ---
-## 📸 Screenshots
-![1](https://github.com/user-attachments/assets/ff1e30b8-4825-4d6e-9daf-c0cf5a70985f)
-![2 ](https://github.com/user-attachments/assets/ed48d4d2-6192-4a55-847d-2d4efce603e4)
 
-_
+## 📸 Screenshots
+
+![Screenshot 1](docs/your-screenshot1.png)
+![Screenshot 2](docs/your-screenshot2.png)
+
+*(Replace with your real screenshot filenames)*
+
+---
+
+## 🎥 Demo
+
+👉 [Watch a quick demo](docs/gguf_demo.mp4)
 
 ---
 
@@ -72,7 +86,7 @@ PRs and issues are welcome! Help build the best local LLM interface for everyone
 ## 📢 Support the Project
 
 If you find this useful:
-- ⭐ **Star the repo**  
+- ⭐ **Star the repo**
 - 🔁 **Share it on Reddit, Twitter, or Discord**
 - 💬 **Tell others looking for a no-setup offline AI solution**
 
@@ -80,14 +94,13 @@ If you find this useful:
 
 ## 📌 Keywords (for search engines & discoverability)
 
-`local AI`, `run Mistral GGUF`, `offline LLM`, `Windows LLM loader`, `LLM GUI`, `llama.cpp GGUF`, `chat with LLaMA offline`, `no python AI`, `mistral windows`, `open source AI assistant`, `privacy-first chatbot`
+`local AI`, `run Mistral GGUF`, `offline LLM`, `Windows LLM loader`, `LLM GUI`, `llama.cpp GGUF`, `chat with LLaMA offline`, `no python AI`, `mistral windows`, `open source AI assistant`, `privacy-first chatbot`, `GGUF loader`, `offline AI desktop app`
 
 ---
 
 ## 👨‍💻 Creator
 
-Made with ❤️ by [@hussainnazary2](https://github.com/hussainnazary2)  
-For questions or collaborations, open an issue or reach out.
+Published under the [ggufloader](https://github.com/ggufloader) project.
 
 ---
 
