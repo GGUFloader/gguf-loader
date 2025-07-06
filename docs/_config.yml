@@ -3,7 +3,7 @@ title: "GGUF Loader"
 description: "Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI. GGUF Loader is the easiest privacy-first LLM runner for local deployment."
 tagline: "Enterprise-Grade Local AI Deployment Platform"
 lang: en
-url: "https://ggufloader.github.io/gguf-loader"
+url: "https://ggufloader.github.io"
 baseurl: "/gguf-loader"
 
 # SEO Author Info 
