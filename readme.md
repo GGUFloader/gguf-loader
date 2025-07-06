@@ -4,7 +4,7 @@
 
 ![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
 ![GitHub all releases](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
-![License](https://img.shields.io/github/license/ggufloader/gguf-loader)
+![License](https://img.shields.io/github/LICENSE/ggufloader/gguf-loader)
 
 **The easiest way to run LLMs like Mistral, LLaMA, and DeepSeek locally on Windows — no Python, no command line, no internet.**
 
