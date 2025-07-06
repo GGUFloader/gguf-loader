@@ -1,19 +1,37 @@
 # _config.yml for GGUF Loader GitHub Pages
-title: GGUF Loader
-description: Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI.
-url: "https://ggufloader.github.io"
+title: "GGUF Loader"
+description: "Enterprise-Grade Local AI Deployment Platform. Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI."
+tagline: "Enterprise-Grade Local AI Deployment Platform"
+url: "https://ggufloader.github.io/gguf-loader"
 baseurl: "/gguf-loader"
+lang: en
 
 # Author info
 author:
-  name: Hussain Nazary
-  email: hossainnazary475@gmail.com
-  twitter_username: hussainnazary  # or ggufloader - be consistent
-  github_username: hussainnazary2
+  name: "Hussain Nazary"
+  email: "hossainnazary475@gmail.com"
+  twitter: "hussainnazary"
+  github: "hussainnazary2"
 
 # Social media
 twitter:
-  username: hussainnazary  # or ggufloader - match above
+  username: hussainnazary
+  card: summary_large_image
+
+# GitHub repository
+repository: "ggufloader/gguf-loader"
+
+# SEO and social
+logo: "/docs/apple-touch-icon.png"
+image: "/docs/apple-touch-icon.png"
+
+# Social links
+social:
+  name: "Hussain Nazary"
+  links:
+    - "https://github.com/hussainnazary2"
+    - "https://linkedin.com/in/hussain-nazary-188b4385"
+    - "https://twitter.com/hussainnazary"
 
 # Plugins
 plugins:
@@ -24,12 +42,22 @@ plugins:
 # Build settings
 permalink: pretty
 markdown: kramdown
+highlighter: rouge
 lsi: false
 incremental: false
+safe: true
 
 # GitHub Pages settings
 github:
   is_project_page: true
+
+# Collections and defaults
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      author: "Hussain Nazary"
 
 # Exclude files/folders from the site output
 exclude:
@@ -39,3 +67,27 @@ exclude:
   - vendor
   - .gitignore
   - .git
+  - .github
+  - Gemfile
+  - Gemfile.lock
+  - package.json
+  - package-lock.json
+
+# Include files
+include:
+  - .htaccess
+  - _pages
+
+# Site settings
+timezone: UTC
+encoding: utf-8
+
+# Feed settings
+feed:
+  collections:
+    - posts
+  excerpt_only: true
+
+# Sitemap settings
+sitemap:
+  file: "/sitemap.xml"
