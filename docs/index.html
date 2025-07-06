@@ -1,10 +1,12 @@
 ---
 ---
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  {% seo %} <!-- Let this generate title, description, OpenGraph, Twitter tags, canonical, etc. -->
+  <title>GGUF Loader - Enterprise-Grade Local AI Deployment Platform</title>
+  <meta name="description" content="GGUF Loader is the easiest way to run GGUF-based LLMs like Mistral, LLaMA, and DeepSeek offline on Windows — no Python, no setup, no internet. Perfect for privacy-first local AI deployments.">
   
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -130,11 +132,11 @@
       gap: 0.5rem;
       background: linear-gradient(45deg, #000000, #333333);
       color: white;
-      padding: clamp(0.8rem, 2vw, 1rem) clamp(1.5rem, 4vw, 2rem); /* Responsive padding */
+      padding: clamp(0.8rem, 2vw, 1rem) clamp(1.5rem, 4vw, 2rem);
       text-decoration: none;
       border-radius: 50px;
       font-weight: 600;
-      font-size: clamp(1rem, 2.5vw, 1.1rem); /* Responsive font size */
+      font-size: clamp(1rem, 2.5vw, 1.1rem);
       transition: all 0.3s ease;
       box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
       border: none;
@@ -358,13 +360,13 @@
     }
     
     .faq-answer {
-      color: #6c757d;
+      color: #495057;
       line-height: 1.6;
       font-size: 1rem;
     }
     
     .faq-answer a {
-      color: #667eea;
+      color: #0066cc;
       text-decoration: none;
       font-weight: 500;
     }
@@ -416,7 +418,7 @@
       align-items: center;
       gap: 0.5rem;
       font-size: 1.1rem;
-      color: #0077b5;
+      color: white;
       text-decoration: none;
       font-weight: 600;
       padding: 0.75rem 1.5rem;
@@ -440,7 +442,7 @@
     
     .contact-email {
       font-size: 1.1rem;
-      color: #667eea;
+      color: #0066cc;
       text-decoration: none;
       font-weight: 600;
       padding: 0.5rem 1rem;
@@ -449,7 +451,7 @@
     }
     
     .contact-email:hover {
-      background: rgba(102, 126, 234, 0.1);
+      background: rgba(0, 102, 204, 0.1);
       text-decoration: none;
       transform: translateY(-1px);
     }
@@ -493,13 +495,16 @@
       border-bottom-color: #ffffff;
     }
     
+    /* Fixed Media Queries */
     @media (max-width: 768px) {
       .hero {
         padding: 2rem 1rem;
       }
+      
       .hero h1 {
         font-size: 2.5rem;
       }
+      
       .section {
         margin: 1rem 0;
         padding: 2rem 1rem;
@@ -508,51 +513,55 @@
       .section-title {
         font-size: 2rem;
       }
+      
       .features-grid,
       .use-cases,
       .steps,
       .models-grid {
         grid-template-columns: 1fr;
         gap: 1rem;
+      }
+      
       .feature-card,
       .use-case,
       .faq-item {
-        padding: 1.5rem; /* Reduce padding on mobile */
+        padding: 1.5rem;
       }
   
       .contact-container {
-        padding: 2rem 1rem; /* Reduce padding */
+        padding: 2rem 1rem;
       }
   
       .contact-link {
-        padding: 0.6rem 1.2rem; /* Smaller button on mobile */
+        padding: 0.6rem 1.2rem;
         font-size: 1rem;
       }
+    }
 
-      @media (max-width: 480px) {
+    @media (max-width: 480px) {
       .hero {
         padding: 1.5rem 0.5rem;
-        }
+      }
   
       .container {
         padding: 0 1rem;
-        }
+      }
   
       .section {
         padding: 1.5rem 1rem;
-        }
+      }
   
       .feature-card,
       .use-case,
       .faq-item {
         padding: 1rem;
-        }
+      }
   
       .step-number {
         width: 50px;
         height: 50px;
         font-size: 1.2rem;
-        }
+      }
     }
   </style>
 </head>
@@ -670,9 +679,9 @@
     <div class="section">
       <h2 class="section-title">🎬 Watch GGUF Loader in Action</h2>
       <div style="text-align: center;">
-        <video width="100%" controls style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-top: 20px; max-width: 800px;">
-          <source src="{{ '/docs/gguf-demo.mp4' | relative_url }}" type="video/mp4">
-          Your browser does not support the video tag.
+        <video width="100%" controls style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-top: 20px; max-width: 800px;" aria-label="GGUF Loader demonstration video">
+          <source src="docs/gguf-demo.mp4" type="video/mp4">
+          <p>Your browser does not support the video tag. <a href="docs/gguf-demo.mp4">Download the demo video</a> to view it.</p>
         </video>
       </div>
     </div>
@@ -718,11 +727,10 @@
         </div>
         <div class="faq-item">
           <h3 class="faq-question">📨 Enterprise support and consulting</h3>
-          <p class="faq-answer">For enterprise deployment assistance and custom solutions, please <a href="mailto:your@email.com">contact our development team</a> or submit an issue on GitHub.</p>
+          <p class="faq-answer">For enterprise deployment assistance and custom solutions, please <a href="mailto:hossainnazary475@gmail.com">contact our development team</a> or submit an issue on GitHub.</p>
         </div>
       </div>
     </div>
-
     <div class="section">
       <h2 class="section-title">📬 Contact & Support</h2>
       <div class="contact-container">
