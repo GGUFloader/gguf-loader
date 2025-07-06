@@ -1,19 +1,53 @@
-title: GGUF Loader — Run AI Models Offline
-description: Run Mistral, LLaMA, DeepSeek and other GGUF-based AI models locally on Windows — with zero setup, no Python, no internet.
-theme: jekyll-theme-primer
+# _config.yml for GGUF Loader GitHub Pages
 
-# For GitHub Pages SEO
-url: "https://ggufloader.github.io/gguf-loader"
-author: Hussain Nazary
+title: GGUF Loader
+description: Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI.
+url: "https://ggufloader.github.io"    # Your GitHub Pages domain (without trailing slash)
+baseurl: "/gguf-loader"                 # The repository name, adjust if different
 
+# Author info
+author:
+  name: Hussain Nazary
+  email: your-email@example.com
+  twitter_username: hussainnazary
+  github_username: hussainnazary2
+
+# Plugins
 plugins:
   - jekyll-seo-tag
+  - jekyll-feed
+  - jekyll-sitemap
 
-# SEO custom tags
+# Permalinks
+permalink: pretty
+
+# Markdown processor
+markdown: kramdown
+
+# Exclude files/folders from the site output
+exclude:
+  - README.md
+  - LICENSE
+  - node_modules
+  - vendor
+  - .gitignore
+  - .git
+
+# Enable GitHub metadata
+github:
+  is_project_page: true
+
+# SEO tag config (optional but recommended)
 seo:
-  type: "SoftwareApplication"
-  name: "GGUF Loader"
-  description: "Run GGUF-based AI models like Mistral and LLaMA locally on Windows without internet or Python."
-  image: "/docs/preview.png"
+  name: GGUF Loader
+  description: Run Mistral, LLaMA, DeepSeek, and other GGUF AI models offline on Windows — no Python, no internet, easy GUI.
   twitter:
-    username: ggufloader
+    username: hussainnazary
+  author:
+    name: Hussain Nazary
+  type: software
+
+# Build settings
+safe: true
+lsi: false
+incremental: false
