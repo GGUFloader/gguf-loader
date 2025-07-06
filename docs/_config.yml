@@ -6,7 +6,7 @@ lang: en
 url: "https://ggufloader.github.io/gguf-loader"
 baseurl: "/gguf-loader"
 
-# SEO Author Info
+# SEO Author Info 
 author:
   name: "Hussain Nazary"
   email: "hossainnazary475@gmail.com"
