@@ -62,6 +62,7 @@ GGUF Loader eliminates the complexity of running local LLMs by providing a simpl
 | **Flexible Quantization** | Support for 4-bit, 5-bit, and 8-bit quantized models |
 | **Windows Native** | Optimized for Windows 10 and 11 with native performance |
 
+
 ## System Requirements
 
 | Component | Minimum | Recommended |
