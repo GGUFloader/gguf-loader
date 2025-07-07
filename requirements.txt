@@ -1,2 +1,2 @@
-llama-cpp-python>=0.2.72
-PySide6>=6.6.1
+llama-cpp-python
+PySide6
