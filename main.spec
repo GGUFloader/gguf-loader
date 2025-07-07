@@ -1,5 +1,6 @@
 block_cipher = None
 
+
 a = Analysis(
     ['main.py'],
     pathex=['C:\\Users\\MY-PC\\Desktop\\locald'],  # Set your project root here
