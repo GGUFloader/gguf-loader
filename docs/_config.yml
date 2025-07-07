@@ -33,6 +33,9 @@ logo: "/docs/apple-touch-icon.png"
 image: "/docs/apple-touch-icon.png"
 theme_color: "#0a74da"
 
+# Theme — add a blog-friendly theme for post layout
+theme: minima
+
 # Plugins
 plugins:
   - jekyll-seo-tag
@@ -47,8 +50,18 @@ safe: true
 incremental: false
 lsi: false
 
-# Page Defaults
+# Collections and Defaults — enable posts output and default layout
+collections:
+  posts:
+    output: true
+
 defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: post
+      author: "Hussain Nazary"
   - scope:
       path: ""
     values:
