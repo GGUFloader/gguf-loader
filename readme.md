@@ -6,6 +6,7 @@
 
 A beginner-friendly, privacy-first desktop application for running large language models locally on Windows. Run models like Mistral, LLaMA, DeepSeek, and others in GGUF format with zero setup required.
 
+
 ## Development Roadmap
 
 | Phase | Timeline | Status | Key Features |
