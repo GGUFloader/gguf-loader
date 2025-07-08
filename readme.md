@@ -9,12 +9,15 @@ A beginner-friendly, privacy-first desktop application for running large languag
 
 ## Development Roadmap
 
-| Phase | Timeline | Status | Key Features |
-|-------|----------|---------|-------------|
-| **Phase 1: Core Foundation** | Q3 2025 | 🚀 In Progress | Zero-setup installer, Intuitive GUI, Offline functionality |
-| **Phase 2: Power User Features** | Q3-Q4 2025 | 📋 Planned | GPU optimization, Advanced config, Dark mode, Model browser |
-| **Phase 3: AI Automation** | Q4 2025 | 🔬 Research | Document intelligence, RAG pipeline, Batch processing |
-| **Phase 4: Cross-Platform** | 2026 | 🎯 Vision | macOS/Linux support, Plugin architecture, Voice integration |
+| **Phase** | **Timeline** | **Status** | **Key Milestones & Features** |
+|----------|--------------|------------|--------------------------------|
+| **Phase 1: Core Foundation** | ✅ Q3 2025 | 🚀 In Progress | - Zero-setup installer<br>- Offline model loading (GGUF)<br>- Intuitive GUI (PySide6)<br>- Built-in tokenizer viewer<br>- Basic file summarizer (TXT/PDF) |
+| **Phase 2: Addon Ecosystem** | 🔄 Q3–Q4 2025 | 🧪 In Development | - Addon manager + sidebar UI (✅ started)<br>- Addon popup architecture<br>- Example addon templates<br>- Addon activation/deactivation<br>- Addon SDK for easy integration |
+| **Phase 3: Power User Features** | Q4 2025 | 📋 Planned | - GPU acceleration (Auto/Manual)<br>- Model browser + drag-and-run<br>- Prompt builder with reusable templates<br>- Dark/light theme toggle |
+| **Phase 4: AI Automation Toolkit** | Q4 2025 – Q1 2026 | 🔬 Research | - RAG pipeline (Retrieval-Augmented Generation)<br>- Multi-document summarization<br>- Contract/book intelligence<br>- Agent workflows (write → summarize → reply) |
+| **Phase 5: Cross-Platform & Sync** | 2026 | 🎯 Vision | - macOS and Linux support<br>- Auto-updating model index<br>- Cross-device config sync<br>- Voice command system (whisper.cpp integration) |
+| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace (like Blender)<br>- Addon rating and discovery<br>- Developer CLI & SDK<br>- Community themes, extensions, and templates |
+
 
 *[View detailed roadmap](#roadmap)*
 
@@ -368,45 +371,65 @@ Our mission is to make local AI accessible to everyone. Here's our strategic dev
 - **Collaborative AI**: Team-based workflows and shared model instances
 - **Edge Computing**: Optimization for IoT and embedded systems
 
-### Roadmap Milestones
+## 🚧 Development Roadmap
 
-| Phase | Timeline | Users | Stars | Key Milestone |
-|-------|----------|-------|-------|---------------|
-| Phase 1 | Q3 2025 | 1,000+ | 50+ | Core platform launch |
-| Phase 2 | Q4 2025 | 5,000+ | 200+ | Power user adoption |
-| Phase 3 | Q4 2025 | 10,000+ | 500+ | AI workflow platform |
-| Phase 4 | 2026 | 50,000+ | 1,000+ | Cross-platform ecosystem |
+GGUF Loader is evolving rapidly. Here's a transparent view of our product direction — from foundation to full automation and community ecosystem.
 
-*This roadmap is a living document that evolves based on community feedback and technological advances.*
+### 🔭 Roadmap Phases
 
-## Contributing
+| **Phase** | **Timeline** | **Status** | **Key Milestones & Features** |
+|----------|--------------|------------|--------------------------------|
+| **Phase 1: Core Foundation** | ✅ Q3 2025 | 🚀 In Progress | - Zero-setup installer<br>- Offline model loading (GGUF)<br>- Intuitive GUI (PySide6)<br>- Built-in tokenizer viewer<br>- Basic file summarizer (TXT/PDF) |
+| **Phase 2: Addon Ecosystem** | 🔄 Q3–Q4 2025 | 🧪 In Development | - Addon manager + sidebar UI<br>- Addon popup system<br>- Addon template examples<br>- Enable/disable addons<br>- Addon SDK for third-party integration |
+| **Phase 3: Power User Features** | Q4 2025 | 📋 Planned | - GPU optimization support<br>- Drag-and-run model browser<br>- Prompt template builder<br>- Dark/light mode toggle |
+| **Phase 4: AI Automation Toolkit** | Q4 2025 – Q1 2026 | 🔬 Research | - RAG pipeline support<br>- Contract & book intelligence<br>- Multi-document summarization<br>- Agent workflows (e.g. summarize → reply → save) |
+| **Phase 5: Cross-Platform & Sync** | 2026 | 🎯 Vision | - macOS and Linux builds<br>- Config sync across devices<br>- Auto-updating local model index<br>- Voice integration via whisper.cpp |
+| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace (like Blender)<br>- Community rating and discovery<br>- Plugin SDK & CLI tools<br>- Themes, templates, and contributions |
 
-We welcome contributions from the community:
+---
 
-**Ways to Contribute:**
-- Report bugs and suggest features
-- Improve documentation
-- Contribute code improvements
-- Help with testing and validation
-- Share usage examples and tutorials
+### 📈 Roadmap Milestones
 
-**Development Setup:**
+| **Phase** | **Timeline** | **Users** | **GitHub Stars** | **Key Milestone** |
+|-----------|--------------|-----------|------------------|-------------------|
+| Phase 1   | Q3 2025      | 1,000+    | 50+              | Core platform launch |
+| Phase 2   | Q4 2025      | 5,000+    | 200+             | Power user adoption |
+| Phase 3   | Q4 2025      | 10,000+   | 500+             | AI workflow platform |
+| Phase 4   | 2026         | 50,000+   | 1,000+           | Cross-platform ecosystem |
+
+> 🧭 *This roadmap is a living document and may evolve based on user feedback, AI research, and emerging needs.*
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from developers, testers, researchers, and creatives.
+
+### Ways to Contribute:
+- Report bugs and suggest new features
+- Improve UI/UX and documentation
+- Develop or port addons using the SDK
+- Help with testing and optimization
+- Share examples, videos, or tutorials
+
+### Developer Setup:
 1. Fork the repository
-2. Create a feature branch
+2. Create a new feature branch
 3. Make your changes
-4. Submit a pull request
+4. Submit a pull request (PR)
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
-## Roadmap
+---
 
-**Planned Features:**
-- Linux and macOS support
-- Built-in model downloader
-- Multi-modal support (images, documents)
-- Plugin system for extensibility
-- Advanced conversation management
-- RAG (Retrieval-Augmented Generation) integration
+## 🧠 Planned Highlights
+
+- ✅ Cross-platform support (Linux & macOS)
+- ✅ Built-in model downloader
+- ✅ Multi-modal file support (text, images, PDFs)
+- ✅ Plugin system with addon SDK
+- ✅ Advanced chat/conversation memory
+- ✅ RAG (Retrieval-Augmented Generation) integration
 
 ## License
 
