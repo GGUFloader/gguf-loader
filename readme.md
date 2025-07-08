@@ -137,24 +137,119 @@ The main interface consists of:
 - **Settings Panel**: Customize generation parameters
 - **History**: View and manage conversation history
 
-### Effective Prompting
+### 🎯 Effective Prompting
 
-**Role-Based Prompts:**
-```
-You are an expert Python developer. Help me optimize this code:
-[Your code here]
+Maximize the power of local LLMs with the right inputs. Below are curated prompt templates based on your **role**, **task**, or **creative need**. Just copy, paste, and customize.
+
+---
+
+<details>
+<summary>🧑‍💻 Role-Based Prompts</summary>
+
+```text
+👨‍💻 Developer
+You are a senior Python developer. Help me refactor and speed up this code:
+[Paste your code here]
 ```
 
-**Task-Specific Prompts:**
-```
-Summarize the following document in 3 key points:
-[Document content]
+```text
+🧑‍⚖️ Lawyer
+You are a legal assistant. Summarize this contract for a non-technical client:
+[Paste contract here]
 ```
 
-**Creative Prompts:**
+```text
+📈 Analyst
+You are a data analyst. Extract insights and trends from this table:
+[Paste table here]
 ```
-Write a professional email responding to a client inquiry about project delays.
+
+```text
+👨‍🏫 Teacher
+You are a high school teacher. Explain this concept in simple terms:
+[Your topic here]
 ```
+
+```text
+🧑‍💼 Project Manager
+You are a project manager. Create a status update email for this situation:
+[Describe project status or issue]
+```
+
+</details>
+
+---
+
+<details>
+<summary>🛠️ Task-Specific Prompts</summary>
+
+```text
+📑 Summarization
+Summarize this document in 3 key bullet points:
+[Paste document here]
+```
+
+```text
+🧠 Idea Generation
+List 5 unique ideas for a YouTube series about offline AI apps.
+```
+
+```text
+🔍 Information Extraction
+From the text below, extract all company names and dates:
+[Paste text here]
+```
+
+```text
+📊 Comparison
+Compare the following two models based on speed and accuracy:
+[Model A vs Model B]
+```
+
+```text
+📝 Email Drafting
+Write a polite reply to this email declining the offer:
+[Paste email here]
+```
+
+</details>
+
+---
+
+<details>
+<summary>🎨 Creative Prompts</summary>
+
+```text
+✍️ Email Writing
+Write a professional email responding to a client asking for delivery extension.
+```
+
+```text
+🎵 Song/Poem
+Write a motivational poem about building offline AI tools.
+```
+
+```text
+📚 Storytelling
+Turn this idea into a sci-fi short story outline:
+[Your idea here]
+```
+
+```text
+📢 Slogan Maker
+Generate 5 catchy taglines for a local LLM app.
+```
+
+```text
+🤖 Character Creation
+Create a chatbot persona who acts like an old-school Unix sysadmin.
+```
+
+</details>
+
+---
+
+> 💡 **Tip:** Prompts work better when they include a **role**, a **task**, and a desired **style or format**. Try mixing and matching for best results.
 
 ### Use Cases
 
