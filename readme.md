@@ -453,3 +453,5 @@ Special thanks to:
 **GGUF Loader** - Professional local AI inference made simple.
 
 For questions, suggestions, or support, please visit our [GitHub repository](https://github.com/ggufloader/gguf-loader).
+> 🔧 Built by Hussain Nazary 🇦🇫 | [GitHub](https://github.com/hussainnazary2) · [LinkedIn](https://www.linkedin.com/in/hussain-nazary-188b4385) · [Website](https://ggufloader.github.io)
+
