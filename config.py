@@ -6,6 +6,7 @@ from pathlib import Path
 DEFAULT_SYSTEM_PROMPT = "bilingual_assistant"
 DEFAULT_PRESET = "balanced_persian"
 
+
 # Application Configuration
 WINDOW_TITLE = "GGUF Loader"  # AI Chat App in Persian
 APP_NAME_EN = "AI Chat App"
