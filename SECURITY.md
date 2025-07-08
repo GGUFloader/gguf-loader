@@ -16,7 +16,7 @@ Please upgrade to a supported version to receive security patches.
 
 If you discover a security vulnerability in GGUF Loader, please report it responsibly:
 
-- **Send your report to:** security@yourdomain.com (replace with your contact email)
+- **Send your report to:** hossainnazary475@gmail.com (replace with your contact email)
 - **Expected response time:** Within 3 business days, we will acknowledge your report.
 - **Process:**
   - We will assess and validate the vulnerability.
