@@ -11,6 +11,7 @@ def detect_persian_text(text: str) -> bool:
     if not text.strip():
         return False
 
+    
     persian_chars = 0
     total_chars = 0
 
