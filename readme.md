@@ -16,7 +16,7 @@ A beginner-friendly, privacy-first desktop application for running large languag
 | **Phase 3: Power User Features** | Q4 2025 | 📋 Planned | - GPU acceleration (Auto/Manual)<br>- Model browser + drag-and-run<br>- Prompt builder with reusable templates<br>- Dark/light theme toggle |
 | **Phase 4: AI Automation Toolkit** | Q4 2025 – Q1 2026 | 🔬 Research | - RAG pipeline (Retrieval-Augmented Generation)<br>- Multi-document summarization<br>- Contract/book intelligence<br>- Agent workflows (write → summarize → reply) |
 | **Phase 5: Cross-Platform & Sync** | 2026 | 🎯 Vision | - macOS and Linux support<br>- Auto-updating model index<br>- Cross-device config sync<br>- Voice command system (whisper.cpp integration) |
-| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace (like Blender)<br>- Addon rating and discovery<br>- Developer CLI & SDK<br>- Community themes, extensions, and templates |
+| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace <br>- Addon rating and discovery<br>- Developer CLI & SDK<br>- Community themes, extensions, and templates |
 
 
 *[View detailed roadmap](#roadmap)*
@@ -384,7 +384,7 @@ GGUF Loader is evolving rapidly. Here's a transparent view of our product direct
 | **Phase 3: Power User Features** | Q4 2025 | 📋 Planned | - GPU optimization support<br>- Drag-and-run model browser<br>- Prompt template builder<br>- Dark/light mode toggle |
 | **Phase 4: AI Automation Toolkit** | Q4 2025 – Q1 2026 | 🔬 Research | - RAG pipeline support<br>- Contract & book intelligence<br>- Multi-document summarization<br>- Agent workflows (e.g. summarize → reply → save) |
 | **Phase 5: Cross-Platform & Sync** | 2026 | 🎯 Vision | - macOS and Linux builds<br>- Config sync across devices<br>- Auto-updating local model index<br>- Voice integration via whisper.cpp |
-| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace (like Blender)<br>- Community rating and discovery<br>- Plugin SDK & CLI tools<br>- Themes, templates, and contributions |
+| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace <br>- Community rating and discovery<br>- Plugin SDK & CLI tools<br>- Themes, templates, and contributions |
 
 ---
 
