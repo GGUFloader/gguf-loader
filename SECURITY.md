@@ -6,10 +6,7 @@ We provide security updates and fixes for the following versions of the project:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | ✅ Yes             |
-| 5.0.x   | ❌ No              |
-| 4.0.x   | ✅ Yes             |
-| < 4.0   | ❌ No              |
+| 1.0  | ✅ Yes             |
 
 Please upgrade to a supported version to receive security patches.
 
