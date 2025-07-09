@@ -7,6 +7,10 @@
 ![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
 ![Downloads](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
 ![License](https://img.shields.io/github/license/ggufloader/gguf-loader)
+![Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
+![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
+![Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
+
 ---
 
 
