@@ -24,6 +24,7 @@ def add_dll_folder():
         dll_path = os.path.join(base_path, "llama_cpp", "lib")
         os.add_dll_directory(dll_path)
 
+
 def main():
     add_dll_folder()
 
