@@ -1,13 +1,13 @@
 # GGUF Loader
+📄 **Machine-readable metadata available**  
+- [metadata.json](./metadata.json)  
+- [meta.yaml](./meta.yaml)
 
 ![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
 ![Downloads](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
 ![License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 ---
 
-📄 **Machine-readable metadata available**  
-- [metadata.json](./metadata.json)  
-- [meta.yaml](./meta.yaml)
 
 A beginner-friendly, privacy-first desktop application for running large language models locally on Windows. Run models like Mistral, LLaMA, DeepSeek, and others in GGUF format with zero setup required.
 
