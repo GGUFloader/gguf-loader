@@ -1,8 +1,8 @@
-# GGUF Loader
+
 📄 **Machine-readable metadata available**  
 - [metadata.json](./metadata.json)  
 - [meta.yaml](./meta.yaml)
-
+# GGUF Loader
 ![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
 ![Downloads](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
 ![License](https://img.shields.io/github/license/ggufloader/gguf-loader)
