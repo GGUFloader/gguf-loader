@@ -28,6 +28,7 @@ def detect_persian_text(text: str) -> bool:
     if total_chars == 0:
         return False
 
+    
     # If more than 30% of alphabetic characters are Persian, consider it Persian text
     return (persian_chars / total_chars) > 0.6
 
