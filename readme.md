@@ -29,6 +29,9 @@ A beginner-friendly, privacy-first desktop application for running large languag
 
 
 *[View detailed roadmap](#roadmap)*
+## 🖼️ Preview
+![Image 1](https://raw.githubusercontent.com/GGUFloader/gguf-loader/main/1.png)  
+![Image 2](https://raw.githubusercontent.com/GGUFloader/gguf-loader/main/2.png)
 
 ## Download
 
