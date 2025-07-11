@@ -89,21 +89,27 @@ GGUF Loader eliminates the complexity of running local LLMs by providing a simpl
 | **Optimized Performance** | Built on llama.cpp for efficient local inference |
 | **Intuitive Interface** | Clean, modern GUI designed for both beginners and advanced users |
 | **Flexible Quantization** | Support for 4-bit, 5-bit, and 8-bit quantized models |
-| **Windows Native** | Optimized for Windows 10 and 11 with native performance |
 
 
 ## System Requirements
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| **Operating System** | Windows 10 (64-bit) | Windows 11 |
+| **Operating System** | Windows, Linux, and macOS. |
 | **Memory** | 8 GB RAM | 16 GB RAM or more |
 | **Processor** | AVX2-compatible CPU | Modern multi-core processor |
 | **Graphics** | Not required | NVIDIA RTX or AMD GPU (optional) |
 | **Storage** | 1 GB (application) + 5-30 GB (models) | SSD recommended |
 
 ## Installation
+```bash
+pip install ggufloader
+```
 
+```bash
+ggufloader
+```
+windows user can download exe file:
 1. Download the latest installer from the [releases page](https://github.com/ggufloader/gguf-loader/releases)
 2. Run the downloaded `.exe` file
 3. Follow the installation prompts
