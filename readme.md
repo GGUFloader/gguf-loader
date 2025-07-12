@@ -4,8 +4,6 @@
 - [meta.yaml](./meta.yaml)
 
 # GGUF Loader
-![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
-![GitHub Downloads](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
 ![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 ![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
@@ -14,7 +12,6 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ggufloader)](https://pypi.org/project/ggufloader/)
-[![PyPI - Status](https://img.shields.io/pypi/status/ggufloader)](https://pypi.org/project/ggufloader/)
 
 
 
