@@ -12,7 +12,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ggufloader)](https://pypi.org/project/ggufloader/)
-
+[![PyPI Downloads](https://static.pepy.tech/badge/ggufloader)](https://pepy.tech/projects/ggufloader)
 
 
 ---
