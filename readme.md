@@ -12,7 +12,6 @@
 ![Open Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
 
 [![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Status](https://img.shields.io/pypi/status/ggufloader)](https://pypi.org/project/ggufloader/)
