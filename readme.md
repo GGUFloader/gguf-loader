@@ -5,17 +5,18 @@
 
 # GGUF Loader
 ![GitHub stars](https://img.shields.io/github/stars/ggufloader/gguf-loader?style=social)
-![Downloads](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
-![License](https://img.shields.io/github/license/ggufloader/gguf-loader)
-![Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
+![GitHub Downloads](https://img.shields.io/github/downloads/ggufloader/gguf-loader/total?color=blue)
+![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
+![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 ![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
-![Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
+![Open Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
 
-![PyPI - Version](https://img.shields.io/pypi/v/gguf-loader)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/gguf-loader)
-![PyPI - Wheel](https://img.shields.io/pypi/wheel/gguf-loader)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/gguf-loader)
-![PyPI - Status](https://img.shields.io/pypi/status/gguf-loader)
+[![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Status](https://img.shields.io/pypi/status/ggufloader)](https://pypi.org/project/ggufloader/)
+
 
 
 ---
