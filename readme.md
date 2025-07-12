@@ -11,6 +11,13 @@
 ![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
 ![Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
 
+![PyPI - Version](https://img.shields.io/pypi/v/gguf-loader)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/gguf-loader)
+![PyPI - Wheel](https://img.shields.io/pypi/wheel/gguf-loader)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/gguf-loader)
+![PyPI - Status](https://img.shields.io/pypi/status/gguf-loader)
+
+
 ---
 
 
