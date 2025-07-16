@@ -2,7 +2,6 @@
 Utility functions for the AI chat application
 """
 from PySide6.QtGui import QFontDatabase
-
 def detect_persian_text(text: str) -> bool:
     """
     Detect if text contains Persian characters
