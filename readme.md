@@ -46,7 +46,7 @@ Works on Windows, Linux, and macOS.
 
 
 *[View detailed roadmap](#roadmap)*
-
+## Watch Demo Video
 [![Watch the video](https://img.youtube.com/vi/DuqDRkfGdcI/hqdefault.jpg)](https://youtu.be/DuqDRkfGdcI?si=GoEzFHFqjBgkySez)
 
 ## 🖼️ Preview
