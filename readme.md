@@ -8,7 +8,7 @@
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 ![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
 ![Open Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
-[Download GGUFLoader-v1.0.0-Setup.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v1.0.0/GGUFLoader-v1.0.0-Setup.exe)
+![EXE Downloads](https://img.shields.io/github/downloads/GGUFloader/gguf-loader/GGUFLoader-v1.0.0-Setup.exe?label=Windows%20EXE%20downloads)  
 
 [![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
