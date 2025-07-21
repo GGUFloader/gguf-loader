@@ -8,7 +8,7 @@
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 ![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
 ![Open Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
-[Download Latest Version](https://github.com/GGUFloader/gguf-loader/releases/latest)  
+[Download Latest Version](https://github.com/GGUFloader/gguf-loader/releases)  
 
 [![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
