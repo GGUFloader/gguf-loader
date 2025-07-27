@@ -1,3 +1,80 @@
+
+📄 **Machine-readable metadata available**  
+- [metadata.json](./metadata.json)  
+- [meta.yaml](./meta.yaml)
+
+# GGUF Loader
+![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
+![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
+![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
+![Open Issues](https://img.shields.io/github/issues/ggufloader/gguf-loader)
+
+[![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI Downloads](https://static.pepy.tech/badge/ggufloader)](https://pepy.tech/projects/ggufloader)
+
+
+---
+
+
+A beginner-friendly, privacy-first desktop application for running large language models locally on Windows. Run models like Mistral, LLaMA, DeepSeek, and others in GGUF format with zero setup required.
+
+## 🚀 Install in One Line
+
+```bash
+pip install ggufloader
+```
+
+```bash
+ggufloader
+```
+
+Works on Windows, Linux, and macOS.
+## 🔽 Download GGUF Models
+
+> ⚡ Click a link below to download the model file directly (no Hugging Face page in between).
+
+### 🧠 Mistral-7B Instruct
+
+- [⬇️ Download Q4_0 (4.23 GB)](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_0.gguf)
+- [⬇️ Download Q6_K (6.23 GB)](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q6_K.gguf)
+
+### 🧠 Qwen 1.5-7B Chat
+
+- [⬇️ Download Q4_K (4.88 GB)](https://huggingface.co/TheBloke/Qwen1.5-7B-Chat-GGUF/resolve/main/qwen1_5-7b-chat-q4_k.gguf)
+- [⬇️ Download Q6_K (6.83 GB)](https://huggingface.co/TheBloke/Qwen1.5-7B-Chat-GGUF/resolve/main/qwen1_5-7b-chat-q6_k.gguf)
+
+### 🧠 DeepSeek 7B Chat
+
+- [⬇️ Download Q4_0 (4.87 GB)](https://huggingface.co/TheBloke/DeepSeek-7B-Chat-GGUF/resolve/main/deepseek-7b-chat.Q4_0.gguf)
+- [⬇️ Download Q8_0 (9.33 GB)](https://huggingface.co/TheBloke/DeepSeek-7B-Chat-GGUF/resolve/main/deepseek-7b-chat.Q8_0.gguf)
+
+### 🧠 LLaMA 3 8B Instruct
+
+- [⬇️ Download Q4_0 (4.68 GB)](https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF/resolve/main/llama-3-8b-instruct.Q4_0.gguf)
+- [⬇️ Download Q6_K (6.91 GB)](https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF/resolve/main/llama-3-8b-instruct.Q6_K.gguf)
+
+---
+
+### 🗂️ More Model Collections
+
+- [🧠 TheBloke’s GGUF Model Collection](https://huggingface.co/collections/TheBloke/bloke-gguf-models-65d89a02c470bc295c09e1a4)
+- [🌍 GGUF Community Collection](https://huggingface.co/collections/ggml/gguf-64e5b4efc8a2097c3643d8b2)
+
+
+## Development Roadmap
+
+| **Phase** | **Timeline** | **Status** | **Key Milestones & Features** |
+|----------|--------------|------------|--------------------------------|
+| **Phase 1: Core Foundation** | ✅ Q3 2025 | 🚀 In Progress | - Zero-setup installer<br>- Offline model loading (GGUF)<br>- Intuitive GUI (PySide6)<br>- Built-in tokenizer viewer<br>- Basic file summarizer (TXT/PDF) |
+| **Phase 2: Addon Ecosystem** | 🔄 Q3–Q4 2025 | 🧪 In Development | - Addon manager + sidebar UI (✅ started)<br>- Addon popup architecture<br>- Example addon templates<br>- Addon activation/deactivation<br>- Addon SDK for easy integration |
+| **Phase 3: Power User Features** | Q4 2025 | 📋 Planned | - GPU acceleration (Auto/Manual)<br>- Model browser + drag-and-run<br>- Prompt builder with reusable templates<br>- Dark/light theme toggle |
+| **Phase 4: AI Automation Toolkit** | Q4 2025 – Q1 2026 | 🔬 Research | - RAG pipeline (Retrieval-Augmented Generation)<br>- Multi-document summarization<br>- Contract/book intelligence<br>- Agent workflows (write → summarize → reply) |
+| **Phase 5: Cross-Platform & Sync** | 2026 | 🎯 Vision | - macOS and Linux support<br>- Auto-updating model index<br>- Cross-device config sync<br>- Voice command system (whisper.cpp integration) |
+| **Phase 6: Public Ecosystem** | 2026+ | 🌐 Long-Term | - Addon marketplace <br>- Addon rating and discovery<br>- Developer CLI & SDK<br>- Community themes, extensions, and templates |
+
+
 # GGUF Loader Documentation
 
 Welcome to the GGUF Loader documentation! This guide will help you get started with GGUF Loader 2.0.0 and its powerful addon system.
