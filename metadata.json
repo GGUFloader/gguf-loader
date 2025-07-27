@@ -1,0 +1,50 @@
+{
+  "name": "GGUF Loader",
+  "type": "software",
+  "description": "Run LLaMA, Mistral, DeepSeek and other GGUF models offline on Windows. No Python. No setup. Just drag-and-drop.",
+  "platform": "Windows",
+  "license": "MIT",
+  "version": "1.0.0",
+  "website": "https://ggufloader.github.io",
+  "repository": "https://github.com/ggufloader/gguf-loader",
+  "tags": [
+    "offline AI",
+    "LLM",
+    "GGUF",
+    "drag-and-drop",
+    "Windows",
+    "local AI",
+    "no Python",
+    "air-gapped",
+    "secure AI"
+  ],
+  "models_supported": [
+    "Mistral",
+    "LLaMA 2",
+    "LLaMA 3",
+    "DeepSeek",
+    "Gemma",
+    "TinyLLaMA"
+  ],
+  "author": {
+    "name": "Hussain Nazary",
+    "email": "hossainnazary475@gmail.com",
+    "url": "https://www.linkedin.com/in/hussain-nazary-188b4385"
+  },
+  "sections": [
+    "Overview",
+    "Key Features",
+    "System Requirements",
+    "Installation",
+    "Quick Start",
+    "Supported Models",
+    "Usage Guide",
+    "Configuration",
+    "Performance Optimization",
+    "Security & Privacy",
+    "Troubleshooting",
+    "Roadmap",
+    "Contributing",
+    "License"
+  ]
+}
