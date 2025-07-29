@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-
 from config import (
     GPU_OPTIONS, DEFAULT_CONTEXT_SIZES, FONT_FAMILY, BUBBLE_FONT_SIZE
 )
