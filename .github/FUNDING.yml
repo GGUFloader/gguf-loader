@@ -1,14 +1,14 @@
 # These are supported funding model platforms
 github: ggufloader
-patreon:ggufloader
-open_collective:ggufloader
-ko_fi:ggufloader
-tidelift:ggufloader
-community_bridge:ggufloader
-liberapay:ggufloader
-issuehunt:ggufloader
-lfx_crowdfunding:ggufloader
-polar:ggufloader
+patreon: ggufloader
+open_collective: ggufloader
+ko_fi: ggufloader
+tidelift: ggufloader
+community_bridge: ggufloader
+liberapay: ggufloader
+issuehunt: ggufloader
+lfx_crowdfunding: ggufloader
+polar: ggufloader
 buy_me_a_coffee: ggufloader
-thanks_dev:ggufloader
+thanks_dev: ggufloader
 custom: ['https://ggufloader.github.io']
