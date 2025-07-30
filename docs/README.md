@@ -29,6 +29,7 @@ pip install ggufloader
 ```bash
 ggufloader
 ```
+[![Watch the video](https://img.youtube.com/vi/0brsKUK4FtY/0.jpg)](https://www.youtube.com/watch?v=0brsKUK4FtY)
 
 Works on Windows, Linux, and macOS.
 ## 🔽 Download GGUF Models
