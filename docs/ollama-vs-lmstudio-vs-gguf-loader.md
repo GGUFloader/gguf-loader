@@ -82,8 +82,5 @@ While **LM Studio** and **GGUF Loader** natively support GGUF models, **Ollama**
 
 ---
 
-For a visual comparison, you might find this video helpful:
-
-[Ollama Vs. LM Studio - YouTube](https://www.youtube.com/watch?v=QGtkaDWJZlA)
 
 Let me know if you need further assistance or information on setting up any of these tools!
