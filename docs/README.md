@@ -29,7 +29,7 @@ pip install ggufloader
 ```bash
 ggufloader
 ```
-## 🧩 How to Add Floating Tools to Any Local LLM App
+## 🧩 🎬 Demo Video: Addon System + Floating Tool in Local LLM (v2.0.1 Update)
 
 [![Watch the video: Add Floating Tools to Local AI](https://img.youtube.com/vi/0brsKUK4FtY/maxresdefault.jpg)](https://www.youtube.com/watch?v=0brsKUK4FtY)
 
