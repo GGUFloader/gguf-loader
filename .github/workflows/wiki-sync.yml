@@ -1,0 +1,36 @@
+name: Sync Docs to Wiki
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # daily at 3AM UTC
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout wiki repo
+        uses: actions/checkout@v4
+        with:
+          repository: GGUFloader/gguf-loader.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy docs folder to wiki
+        run: |
+          rm -rf wiki/*
+          cp -r docs/* wiki/
+
+      - name: Commit and push changes to wiki
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "Sync docs to wiki $(date +'%Y-%m-%d')"
+          git push
