@@ -29,7 +29,12 @@ pip install ggufloader
 ```bash
 ggufloader
 ```
-[![Watch the video](https://img.youtube.com/vi/0brsKUK4FtY/0.jpg)](https://www.youtube.com/watch?v=0brsKUK4FtY)
+## 🧩 How to Add Floating Tools to Any Local LLM App
+
+[![Watch the video: Add Floating Tools to Local AI](https://img.youtube.com/vi/0brsKUK4FtY/maxresdefault.jpg)](https://www.youtube.com/watch?v=0brsKUK4FtY)
+
+> Discover how to supercharge your local AI workflows using the new floating addon system! No coding needed. Works offline.
+
 
 Works on Windows, Linux, and macOS.
 ## 🔽 Download GGUF Models
