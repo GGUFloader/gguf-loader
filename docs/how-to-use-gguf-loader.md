@@ -1,6 +1,6 @@
 # How to Use GGUF Loader
 
-This guide explains how to load and use your AI models with GGUF Loader, including using the floating button and addons.
+This guide explains how to load your AI models and use the floating button feature for seamless local AI interaction.
 
 ## Loading a Model
 
@@ -13,27 +13,30 @@ This guide explains how to load and use your AI models with GGUF Loader, includi
 
 4. Select the folder (not individual files) and click **OK**.
 
-5. GGUF Loader will load the model from that folder and prepare it for use.
+5. GGUF Loader will load the model from the selected folder.
 
-## Using the Floating Button
+## Floating Button Feature
 
-- Once a model is loaded, activate the floating button from the app interface.  
-- This button allows you to chat with your local AI assistant anytime, anywhere on your desktop.
+- As soon as a model loads, the **floating button activates automatically**.
+
+- Whenever you **select any text anywhere on your desktop**, the floating button will appear near your selection.
+
+- Click the floating button to instantly interact with your local AI assistant—no need to switch apps!
 
 ## Addons and Plugins
 
-- Enhance GGUF Loader’s features by installing or creating addons.  
-- Check the [Addon Guide](creating-addons-in-gguf-loader.md) for detailed instructions.
+- Extend GGUF Loader’s functionality by installing or creating addons.  
+- See the [Addon Guide](creating-addons-in-gguf-loader.md) for details.
 
 ## Tips
 
-- To use GPU acceleration, configure backend settings before loading models.  
-- If the Load Model button doesn’t open a window, check OS permissions and app updates.
+- Ensure your model is loaded to enable the floating button.  
+- If the button does not appear on text selection, check app permissions or restart GGUF Loader.
 
-## Need More Help?
+## Need Help?
 
 Visit the [Frequently Asked Questions](frequently-asked-questions-gguf.md) page or join the community Discord.
 
 ---
 
-Thank you for using GGUF Loader — your gateway to powerful local AI!
+Thank you for choosing GGUF Loader for your local AI needs!
