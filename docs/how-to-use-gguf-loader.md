@@ -1,33 +1,39 @@
 # How to Use GGUF Loader
 
-Welcome to the complete guide on how to use GGUF Loader, your powerful local AI model loader and assistant. This page walks you through the essential steps to get started, load models, and leverage key features like the floating button and addon system.
+This guide explains how to load and use your AI models with GGUF Loader, including using the floating button and addons.
 
-## Getting Started
+## Loading a Model
 
-1. **Install GGUF Loader**  
-   Download the latest release from the [GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases) page and follow the installation instructions.
+1. Open GGUF Loader.
 
-2. **Load Your First Model**  
-   - Place your GGUF format models into the `models` directory.  
-   - Launch GGUF Loader and select your model from the dropdown menu.
+2. Click the **Load Model** button.
 
-3. **Using the Floating Button**  
-   Activate the floating button to chat with your local AI anytime, anywhere on your desktop.
+3. A file browser window will open.  
+   Navigate to the **folder** where your GGUF model files are stored.
 
-4. **Addons and Plugins**  
-   Extend functionality by creating or installing addons. See the [Addon Guide](creating-addons-in-gguf-loader.md) for details.
+4. Select the folder (not individual files) and click **OK**.
 
-## Tips and Tricks
+5. GGUF Loader will load the model from that folder and prepare it for use.
 
-- For GPU acceleration, configure your backend in settings.  
-- Check the FAQ for common troubleshooting: [Frequently Asked Questions](frequently-asked-questions-gguf.md)  
+## Using the Floating Button
 
-## Further Resources
+- Once a model is loaded, activate the floating button from the app interface.  
+- This button allows you to chat with your local AI assistant anytime, anywhere on your desktop.
 
-- Official GitHub: [GGUF Loader](https://github.com/GGUFloader/gguf-loader)  
-- Community Discord: *Link here*  
-- Related tools: LM Studio, Ollama
+## Addons and Plugins
+
+- Enhance GGUF Loader’s features by installing or creating addons.  
+- Check the [Addon Guide](creating-addons-in-gguf-loader.md) for detailed instructions.
+
+## Tips
+
+- To use GPU acceleration, configure backend settings before loading models.  
+- If the Load Model button doesn’t open a window, check OS permissions and app updates.
+
+## Need More Help?
+
+Visit the [Frequently Asked Questions](frequently-asked-questions-gguf.md) page or join the community Discord.
 
 ---
 
-Thank you for using GGUF Loader! For detailed technical info, explore other wiki pages or open an issue for help.
+Thank you for using GGUF Loader — your gateway to powerful local AI!
