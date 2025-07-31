@@ -20,6 +20,11 @@
 
 A beginner-friendly, privacy-first desktop application for running large language models locally on Windows. Run models like Mistral, LLaMA, DeepSeek, and others in GGUF format with zero setup required.
 
+## Download EXE file for Windows
+[![Download GGUF Loader v2.0.1](https://img.shields.io/badge/Download%20GGUF%20Loader-v2.0.1-blue?style=for-the-badge&logo=github)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.0.1/ggufloader-2.0.1-setup.exe)
+
+
+
 ## 🚀 Install in One Line
 
 ```bash
