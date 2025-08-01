@@ -37,7 +37,7 @@ ggufloader
 ```
 ## 🧩 🎬 Demo Video: Addon System + Floating Tool in Local LLM (v2.0.1 Update)
 
-[![Watch the video: Add Floating Tools to Local AI](https://img.youtube.com/vi/0brsKUK4FtY/maxresdefault.jpg)](https://www.youtube.com/watch?v=0brsKUK4FtY)
+[![Watch the video: Add Floating Tools to Local AI](https://img.youtube.com/vi/0brsKUK4FtY/maxresdefault.jpg)](https://www.youtube.com/embed/5lQui7EeUe0?si=CeScD6yc3-Q5R4qz)
 
 > Discover how to supercharge your local AI workflows using the new floating addon system! No coding needed. Works offline.
 
