@@ -73,8 +73,8 @@ Works on Windows, Linux, and macOS.
 
 ### 🗂️ More Model Collections
 
-- [🧠 TheBloke’s GGUF Model Collection](https://huggingface.co/collections/TheBloke/bloke-gguf-models-65d89a02c470bc295c09e1a4)
-- [🌍 GGUF Community Collection](https://huggingface.co/collections/ggml/gguf-64e5b4efc8a2097c3643d8b2)
+- [🧠 TheBloke’s GGUF Model Collection](https://local-ai-zone.github.io)
+- [🌍 GGUF Community Collection](https://local-ai-zone.github.io)
 
 
 ## Development Roadmap
