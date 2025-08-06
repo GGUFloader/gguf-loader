@@ -54,23 +54,13 @@ Works on Windows, Linux, and macOS.
 
 #### 🧠 GPT-OSS 120B (Dense)
 
-- [⬇️ Download Q4_K (46.2 GB)](https://huggingface.co/gpt-oss/gpt-oss-120b-GGUF/resolve/main/gpt-oss-120b.Q4_K.gguf)
-- [⬇️ Download Q5_K_M (58.1 GB)](https://huggingface.co/gpt-oss/gpt-oss-120b-GGUF/resolve/main/gpt-oss-120b.Q5_K_M.gguf)
+- [⬇️ Download Q4_K (46.2 GB)](https://huggingface.co/lmstudio-community/gpt-oss-120b-GGUF/resolve/main/gpt-oss-120b-MXFP4-00001-of-00002.gguf)
+
 
 #### 🧠 GPT-OSS 20B (Dense)
 
-- [⬇️ Download Q4_K (7.34 GB)](https://huggingface.co/gpt-oss/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b.Q4_K.gguf)
-- [⬇️ Download Q6_K (9.63 GB)](https://huggingface.co/gpt-oss/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b.Q6_K.gguf)
+- [⬇️ Download Q4_K (7.34 GB)](https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-MXFP4.gguf)
 
-#### 🧠 GPT-OSS 117B-MoE (Mixture of Experts)
-
-- [⬇️ Download Q4_0 (28.2 GB)](https://huggingface.co/gpt-oss/gpt-oss-117b-moe-GGUF/resolve/main/gpt-oss-117b-moe.Q4_0.gguf)
-- [⬇️ Download Q6_K (37.8 GB)](https://huggingface.co/gpt-oss/gpt-oss-117b-moe-GGUF/resolve/main/gpt-oss-117b-moe.Q6_K.gguf)
-
-#### 🧠 GPT-OSS 21B-MoE (Mixture of Experts)
-
-- [⬇️ Download Q4_K_M (7.83 GB)](https://huggingface.co/gpt-oss/gpt-oss-21b-moe-GGUF/resolve/main/gpt-oss-21b-moe.Q4_K_M.gguf)
-- [⬇️ Download Q6_K (10.9 GB)](https://huggingface.co/gpt-oss/gpt-oss-21b-moe-GGUF/resolve/main/gpt-oss-21b-moe.Q6_K.gguf)
 
 
 ---
@@ -101,7 +91,6 @@ Works on Windows, Linux, and macOS.
 
 - [🧠 TheBloke’s GGUF Model Collection](https://local-ai-zone.github.io)
 - [🌍 GGUF Community Collection](https://local-ai-zone.github.io)
-
 
 ## Development Roadmap
 
