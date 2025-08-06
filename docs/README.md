@@ -37,7 +37,7 @@ ggufloader
 ```
 ## 🧩 🎬 Demo Video: Addon System + Floating Tool in Local LLM (v2.0.1 Update)
 
-
+[![Watch the video](https://img.youtube.com/vi/5lQui7EeUe0/maxresdefault.jpg)](https://www.youtube.com/watch?v=5lQui7EeUe0)
 
 
 
