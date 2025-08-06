@@ -44,7 +44,7 @@ ggufloader
 > Discover how to supercharge your local AI workflows using the new floating addon system! No coding needed. Works offline.
 
 
-Works on Windows, Linux, and macOS.
+Works on Windows, Linux
 ## 🔽 Download GGUF Models
 
 > ⚡ Click a link below to download the model file directly (no Hugging Face page in between).
