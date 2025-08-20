@@ -12,11 +12,60 @@ from ui.ai_chat_window import AIChat
 from resource_manager import find_icon, get_dll_path
 
 def add_dll_folder():
-    """Add DLL directory for llama.cpp when needed."""
-    dll_path = get_dll_path()
-    if dll_path and os.path.exists(dll_path):
-        os.add_dll_directory(dll_path)
-
+    """Add DLL/library directory for llama.cpp when needed (cross-platform)."""
+    try:
+        # Import here to avoid circular imports
+        from resource_manager import get_dll_path
+        
+        dll_path = get_dll_path()
+        if not dll_path or not os.path.exists(dll_path):
+            logger.debug("No valid DLL path found")
+            return
+            
+        system_name = platform.system()
+        logger.debug(f"Setting up library path for {system_name}")
+        
+        if system_name == "Windows":
+            # Windows-specific DLL directory handling
+            if hasattr(os, 'add_dll_directory'):
+                os.add_dll_directory(dll_path)
+                logger.info(f"✅ Added Windows DLL directory: {dll_path}")
+            else:
+                logger.warning("os.add_dll_directory not available on this Python version")
+                
+        elif system_name == "Linux":
+            # Linux: use LD_LIBRARY_PATH
+            env_var = "LD_LIBRARY_PATH"
+            current_path = os.environ.get(env_var, "")
+            path_components = current_path.split(os.pathsep) if current_path else []
+            
+            if dll_path not in path_components:
+                path_components.insert(0, dll_path)  # Add at beginning for priority
+                os.environ[env_var] = os.pathsep.join(path_components)
+                logger.info(f"✅ Added to {env_var}: {dll_path}")
+            else:
+                logger.debug(f"Path already in {env_var}: {dll_path}")
+                
+        elif system_name == "Darwin":
+            # macOS: use DYLD_LIBRARY_PATH
+            env_var = "DYLD_LIBRARY_PATH"
+            current_path = os.environ.get(env_var, "")
+            path_components = current_path.split(os.pathsep) if current_path else []
+            
+            if dll_path not in path_components:
+                path_components.insert(0, dll_path)
+                os.environ[env_var] = os.pathsep.join(path_components)
+                logger.info(f"✅ Added to {env_var}: {dll_path}")
+            else:
+                logger.debug(f"Path already in {env_var}: {dll_path}")
+                
+        else:
+            logger.warning(f"Unsupported platform for automatic library setup: {system_name}")
+            
+    except ImportError as e:
+        logger.warning(f"Could not import get_dll_path: {e}")
+    except Exception as e:
+        logger.warning(f"Could not setup library path: {e}")
 def main():
     # Handle command line arguments
     if len(sys.argv) > 1:
