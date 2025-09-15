@@ -1,0 +1,895 @@
+---
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GGUF Loader - Enterprise-Grade Local AI Deployment Platform</title>
+  <meta name="description" content="GGUF Loader is the easiest way to run GGUF-based LLMs like Mistral, LLaMA, and DeepSeek offline on Windows — no Python, no setup, no internet. Perfect for privacy-first local AI deployments.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "GGUF Loader",
+  "alternateName": "Offline LLM Loader for Windows",
+  "operatingSystem": "Windows 10, Windows 11",
+  "applicationCategory": "DeveloperApplication",
+  "description": "GGUF Loader is the easiest way to run GGUF-based LLMs like Mistral, LLaMA, and DeepSeek offline on Windows — no Python, no setup, no internet. Perfect for privacy-first local AI deployments.",
+  "url": "https://ggufloader.github.io/gguf-loader/",
+  "image": "https://ggufloader.github.io/gguf-loader/docs/apple-touch-icon.png",
+  "downloadUrl": "https://github.com/ggufloader/gguf-loader/releases",
+  "softwareVersion": "1.0.0",
+  "license": "https://opensource.org/licenses/MIT",
+  "creator": {
+    "@type": "Person",
+    "name": "Hussain Nazary",
+    "url": "https://github.com/hussainnazary2"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.8",
+    "reviewCount": "120",
+    "bestRating": "5",
+    "worstRating": "1"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GGUF Loader",
+    "url": "https://github.com/ggufloader"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+  <!-- Favicons -->
+  <meta name="theme-color" content="#0a74da" />
+
+  <!-- Misc -->
+  <meta http-equiv="Content-Language" content="en" />
+  <meta name="format-detection" content="telephone=no" />
+  
+  <!-- Security -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://*; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="X-Frame-Options" content="DENY" />
+  
+  <!-- DNS Prefetch -->
+  <link rel="dns-prefetch" href="//github.com" />
+  <link rel="dns-prefetch" href="//huggingface.co" />
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+      color: #333;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    
+    .hero {
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      padding: clamp(2rem, 8vw, 4rem) clamp(1rem, 4vw, 2rem);
+      text-align: center;
+      position: relative;
+      min-height: 60vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+      opacity: 0.3;
+      pointer-events: none;
+    }
+    
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 90%;
+      width: 100%;
+    }
+    
+    .hero h1 {
+      font-size: clamp(2rem, 8vw, 4rem);
+      font-weight: 700;
+      margin-bottom: clamp(1rem, 3vw, 1.5rem);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      background: linear-gradient(45deg, #ffffff, #e0e0e0);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .hero-subtitle {
+      font-size: clamp(1rem, 4vw, 1.25rem);
+      font-weight: 300;
+      margin-bottom: clamp(1rem, 3vw, 2rem);
+      opacity: 0.9;
+    }
+    
+    .cta-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: linear-gradient(45deg, #000000, #333333);
+      color: white;
+      padding: clamp(0.8rem, 2vw, 1rem) clamp(1.5rem, 4vw, 2rem);
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+      border: none;
+      cursor: pointer;
+      max-width: 100%;
+    }
+    
+    .cta-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(255, 107, 107, 0.6);
+      background: linear-gradient(45deg, #333333, #555555);
+    }
+    
+    .container {
+      max-width: min(1200px, 95%);
+      margin: 0 auto;
+      padding: 0 clamp(1rem, 3vw, 2rem);
+    }
+    
+    .section {
+      background: white;
+      margin: clamp(1rem, 3vw, 2rem) 0;
+      padding: clamp(2rem, 6vw, 4rem) clamp(1rem, 4vw, 2rem);
+      border-radius: clamp(10px, 2vw, 20px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #e0e0e0;
+      width: 100%;
+    }
+    
+    .section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #000000, #333333);
+    }
+    
+    .section-title {
+      font-size: clamp(1.75rem, 5vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: clamp(1rem, 3vw, 2rem);
+      color: #2c3e50;
+      text-align: center;
+      line-height: 1.2;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: clamp(1rem, 3vw, 2rem);
+      margin-top: clamp(1.5rem, 4vw, 3rem);
+    }
+    
+    .feature-card {
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      padding: clamp(1.5rem, 4vw, 2rem);
+      border-radius: clamp(10px, 2vw, 15px);
+      text-align: center;
+      transition: transform 0.3s ease;
+      border: 2px solid #e0e0e0;
+      width: 100%;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-5px);
+      border-color: #000000;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .feature-icon {
+      font-size: clamp(2rem, 5vw, 3rem);
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      display: block;
+    }
+    
+    .feature-title {
+      font-size: clamp(1.25rem, 3vw, 1.5rem);
+      font-weight: 600;
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      color: #2c3e50;
+      line-height: 1.3;
+    }
+    
+    .feature-description {
+      color: #6c757d;
+      line-height: 1.6;
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+    }
+    
+    .use-cases {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+      gap: clamp(1rem, 3vw, 1.5rem);
+      margin-top: clamp(1rem, 3vw, 2rem);
+    }
+    
+    .use-case {
+      background: linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%);
+      color: white;
+      padding: clamp(1.5rem, 4vw, 2rem);
+      border-radius: clamp(10px, 2vw, 15px);
+      text-align: center;
+      transition: transform 0.3s ease;
+      border: 2px solid #333333;
+      width: 100%;
+    }
+    
+    .use-case:hover {
+      transform: scale(1.02);
+      border-color: #666666;
+    }
+    
+    .use-case-title {
+      font-size: clamp(1.1rem, 3vw, 1.25rem);
+      font-weight: 600;
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      line-height: 1.3;
+    }
+    
+    .use-case p {
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+      line-height: 1.5;
+    }
+    
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+      gap: clamp(1rem, 3vw, 2rem);
+      margin-top: clamp(1.5rem, 4vw, 3rem);
+    }
+    
+    .step {
+      text-align: center;
+      position: relative;
+      padding: clamp(1rem, 3vw, 1.5rem);
+    }
+    
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(50px, 10vw, 60px);
+      height: clamp(50px, 10vw, 60px);
+      background: linear-gradient(45deg, #000000, #333333);
+      color: white;
+      font-size: clamp(1.2rem, 3vw, 1.5rem);
+      font-weight: 700;
+      border-radius: 50%;
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      border: 3px solid #ffffff;
+    }
+    
+    .step-title {
+      font-size: clamp(1.1rem, 3vw, 1.25rem);
+      font-weight: 600;
+      margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
+      color: #2c3e50;
+      line-height: 1.3;
+    }
+    
+    .step-description {
+      color: #6c757d;
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+      line-height: 1.5;
+    }
+    
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: clamp(1rem, 3vw, 1.5rem);
+      margin-top: clamp(1rem, 3vw, 2rem);
+    }
+    
+    .model-card {
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: clamp(10px, 2vw, 15px);
+      padding: clamp(1.5rem, 4vw, 2rem);
+      transition: all 0.3s ease;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      width: 100%;
+    }
+    
+    .model-card:hover {
+      border-color: #000000;
+      transform: translateY(-3px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    .model-name {
+      font-size: clamp(1.1rem, 3vw, 1.25rem);
+      font-weight: 600;
+      margin-bottom: clamp(0.25rem, 1vw, 0.5rem);
+      color: #2c3e50;
+      line-height: 1.3;
+    }
+    
+    .model-description {
+      color: #6c757d;
+      font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+      line-height: 1.5;
+    }
+    
+    .faq-container {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(1rem, 3vw, 1.5rem);
+      margin-top: clamp(1rem, 3vw, 2rem);
+    }
+    
+    .faq-item {
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      border: 1px solid rgba(102, 126, 234, 0.1);
+      border-radius: clamp(10px, 2vw, 15px);
+      padding: clamp(1.5rem, 4vw, 2rem);
+      transition: all 0.3s ease;
+      width: 100%;
+    }
+    
+    .faq-item:hover {
+      border-color: #000000;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .faq-question {
+      font-size: clamp(1.1rem, 3vw, 1.25rem);
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      line-height: 1.3;
+    }
+    
+    .faq-answer {
+      color: #495057;
+      line-height: 1.6;
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+    }
+    
+    .faq-answer a {
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .faq-answer a:hover {
+      text-decoration: underline;
+    }
+    
+    .contact-container {
+      background: linear-gradient(135deg, #f0f0f0 0%, #ffffff 100%);
+      border: 1px solid rgba(253, 203, 110, 0.3);
+      border-radius: clamp(10px, 2vw, 15px);
+      padding: clamp(1.5rem, 4vw, 2.5rem);
+      text-align: center;
+      margin-top: clamp(1rem, 3vw, 2rem);
+      width: 100%;
+    }
+    
+    .contact-content {
+      max-width: 100%;
+      margin: 0 auto;
+    }
+    
+    .contact-text {
+      font-size: clamp(1rem, 3vw, 1.1rem);
+      color: #2d3436;
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      line-height: 1.6;
+    }
+    
+    .contact-info {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: clamp(8px, 2vw, 10px);
+      padding: clamp(1rem, 3vw, 1.5rem);
+      margin-top: clamp(1rem, 3vw, 2rem);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(0.5rem, 2vw, 1rem);
+    }
+    
+    .contact-label {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+    }
+    
+    .contact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      padding: clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem);
+      border-radius: clamp(6px, 1.5vw, 8px);
+      transition: all 0.3s ease;
+      background: linear-gradient(45deg, #000000, #333333);
+      border: 2px solid #000000;
+      max-width: 100%;
+    }
+    
+    .contact-link:hover {
+      background: linear-gradient(45deg, #333333, #555555);
+      border-color: #333333;
+      text-decoration: none;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .contact-icon {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+    }
+    
+    .contact-email {
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 600;
+      padding: clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1rem);
+      border-radius: clamp(6px, 1.5vw, 8px);
+      transition: all 0.3s ease;
+      display: inline-block;
+      max-width: 100%;
+      word-break: break-word;
+    }
+    
+    .contact-email:hover {
+      background: rgba(0, 102, 204, 0.1);
+      text-decoration: none;
+      transform: translateY(-1px);
+    }
+    
+    .faq-answer code {
+      background: #dee2e6;
+      color: #495057;
+      padding: clamp(0.1rem, 0.5vw, 0.2rem) clamp(0.3rem, 1vw, 0.4rem);
+      border-radius: 4px;
+      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      font-family: 'Courier New', monospace;
+    }
+    
+    .coming-soon {
+      background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+      color: #2d3436;
+      padding: clamp(2rem, 5vw, 3rem);
+      border-radius: clamp(10px, 2vw, 15px);
+      text-align: center;
+      margin-top: clamp(1rem, 3vw, 2rem);
+      width: 100%;
+    }
+    
+    .coming-soon h2 {
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      margin-bottom: clamp(0.5rem, 2vw, 1rem);
+      line-height: 1.3;
+    }
+    
+    .coming-soon p {
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+      line-height: 1.5;
+    }
+    
+    .footer {
+      background: #1a1a1a;
+      color: white;
+      padding: clamp(2rem, 5vw, 3rem) clamp(1rem, 3vw, 2rem);
+      text-align: center;
+      margin-top: clamp(2rem, 5vw, 4rem);
+    }
+    
+    .footer p {
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+      line-height: 1.6;
+    }
+    
+    .footer a {
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 500;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.3s ease;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+      border-bottom-color: #ffffff;
+    }
+    
+    /* Video Container */
+    .video-container {
+      width: 100%;
+      text-align: center;
+      margin-top: clamp(1rem, 3vw, 2rem);
+    }
+    
+    .video-container video {
+      width: 100%;
+      max-width: min(800px, 100%);
+      height: auto;
+      border-radius: clamp(8px, 2vw, 12px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    /* Enhanced Media Queries */
+    @media (max-width: 768px) {
+      .hero {
+        min-height: 50vh;
+        padding: clamp(1.5rem, 6vw, 2rem) clamp(1rem, 3vw, 1.5rem);
+      }
+      
+      .features-grid,
+      .use-cases,
+      .steps,
+      .models-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .contact-info {
+        gap: clamp(0.75rem, 2vw, 1rem);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero {
+        min-height: 45vh;
+        padding: clamp(1rem, 5vw, 1.5rem) clamp(0.75rem, 2vw, 1rem);
+      }
+      
+      .container {
+        padding: 0 clamp(0.75rem, 2vw, 1rem);
+      }
+      
+      .section {
+        margin: clamp(0.75rem, 2vw, 1rem) 0;
+      }
+      
+      .cta-primary {
+        padding: clamp(0.7rem, 2vw, 0.8rem) clamp(1.2rem, 3vw, 1.5rem);
+        font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+      }
+    }
+
+    @media (max-width: 320px) {
+      .hero-content {
+        max-width: 95%;
+      }
+      
+      .section {
+        padding: clamp(1rem, 4vw, 1.5rem) clamp(0.75rem, 2vw, 1rem);
+      }
+      
+      .contact-link,
+      .contact-email {
+        font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        padding: clamp(0.5rem, 1.5vw, 0.6rem) clamp(0.8rem, 2vw, 1rem);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="hero-content">
+      <h1>GGUF Loader</h1>
+      <p class="hero-subtitle">Enterprise-Grade Local AI Deployment Platform</p>
+      <p style="margin-bottom: 2rem; font-size: clamp(1rem, 3vw, 1.1rem); opacity: 0.9;">Deploy Mistral, LLaMA, DeepSeek, and other GGUF-format models with zero-configuration setup. Complete offline AI infrastructure for Windows environments.</p>
+      <a class="cta-primary" href="https://github.com/hussainnazary2/gguf-loader/releases">
+        <span>⬇️</span>
+        Download GGUF Loader
+      </a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="section">
+      <h2 class="section-title">Core Capabilities</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon">🧠</span>
+          <h3 class="feature-title">Multi-Model Support</h3>
+          <p class="feature-description">Deploy Mistral, LLaMA, DeepSeek, TinyLLaMA, and other leading GGUF-format models with seamless integration</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔒</span>
+          <h3 class="feature-title">Complete Offline Operation</h3>
+          <p class="feature-description">Zero external dependencies. No internet connectivity or API keys required for full functionality</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🖥️</span>
+          <h3 class="feature-title">Professional Windows GUI</h3>
+          <p class="feature-description">Intuitive interface designed for enterprise environments. No command-line expertise required</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">⚡</span>
+          <h3 class="feature-title">Optimized Performance</h3>
+          <p class="feature-description">Lightweight architecture with optimized resource utilization for maximum efficiency</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🛡️</span>
+          <h3 class="feature-title">Privacy-First Architecture</h3>
+          <p class="feature-description">All data processing occurs locally. Complete data sovereignty and GDPR compliance</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🚀</span>
+          <h3 class="feature-title">Zero-Configuration Setup</h3>
+          <p class="feature-description">Instant deployment with no technical configuration. Ready to use out of the box</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Enterprise Use Cases</h2>
+      <div class="use-cases">
+        <div class="use-case">
+          <h3 class="use-case-title">Intelligent Business Assistant</h3>
+          <p>Deploy sophisticated AI assistants for internal operations, customer service, and workflow automation</p>
+        </div>
+        <div class="use-case">
+          <h3 class="use-case-title">Secure Environment Deployment</h3>
+          <p>Implement AI solutions in air-gapped networks, government facilities, and high-security environments</p>
+        </div>
+        <div class="use-case">
+          <h3 class="use-case-title">Compliance-Critical Industries</h3>
+          <p>Enable AI capabilities in healthcare, legal, and financial sectors with complete data control</p>
+        </div>
+        <div class="use-case">
+          <h3 class="use-case-title">Research & Development</h3>
+          <p>Accelerate AI experimentation and model evaluation without cloud dependencies</p>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <h2 class="section-title">Implementation Process</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3 class="step-title">Download & Install</h3>
+          <p class="step-description">Single-click installation with automatic dependency resolution</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3 class="step-title">Load GGUF Model</h3>
+          <p class="step-description">Import your preferred model from HuggingFace or local storage</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3 class="step-title">Deploy & Operate</h3>
+          <p class="step-description">Begin AI operations immediately with full offline functionality</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Recommended Model Configurations</h2>
+      <div class="models-grid">
+        <a href="https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF" class="model-card">
+          <h3 class="model-name">Mistral 7B Instruct</h3>
+          <p class="model-description">High-performance general-purpose model optimized for instruction following and complex reasoning tasks</p>
+        </a>
+        <a href="https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF" class="model-card">
+          <h3 class="model-name">LLaMA 3 Instruct</h3>
+          <p class="model-description">Advanced language model with superior comprehension and generation capabilities</p>
+        </a>
+        <a href="https://huggingface.co/TheBloke/Deepseek-Coder-6.7B-GGUF" class="model-card">
+          <h3 class="model-name">DeepSeek Coder</h3>
+          <p class="model-description">Specialized coding assistant for software development and technical documentation</p>
+        </a>
+      </div>
+    </div>
+
+    <div class="section">
+  <h2 class="section-title">🎬 Watch GGUF Loader in Action</h2>
+  <div style="text-align: center;">
+    <iframe
+      width="100%"
+      height="400"
+      src="https://www.youtube.com/embed/DuqDRkfGdcI"
+      title="GGUF Loader demonstration video"
+      frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen
+      style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-top: 20px; max-width: 800px;"
+    ></iframe>
+  </div>
+</div>
+
+
+    <div class="section">
+      <h2 class="section-title">❓ Frequently Asked Questions</h2>
+      <div class="faq-container">
+        <div class="faq-item">
+          <h3 class="faq-question">🧠 What is GGUF Loader?</h3>
+          <p class="faq-answer">GGUF Loader is a professional, offline Windows application that enables you to deploy local LLM models like Mistral, LLaMA, or DeepSeek with zero configuration, no Python dependencies, and complete offline operation.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">📦 What is GGUF?</h3>
+          <p class="faq-answer">GGUF is an optimized model file format used by <code>llama.cpp</code>. It's specifically designed for efficient local deployment of large language models (LLMs) on enterprise hardware.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">💻 Do I need Python or command line expertise?</h3>
+          <p class="faq-answer">No technical expertise required. GGUF Loader provides a comprehensive GUI interface designed for business users — simply double-click to launch and begin operations.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🌐 Does it operate completely offline?</h3>
+          <p class="faq-answer">Yes. Once deployed, the application runs entirely offline with no external dependencies. Your data remains completely secure and never leaves your infrastructure.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🧩 What models are supported?</h3>
+          <p class="faq-answer">You can deploy any model in GGUF format — including Mistral-7B, LLaMA 3, DeepSeek, TinyLLaMA, and other enterprise-grade language models.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">📁 Where can I source GGUF models?</h3>
+          <p class="faq-answer">GGUF models are available from <a href="https://huggingface.co/TheBloke" target="_blank">TheBloke's Hugging Face repository</a> and other professional model hubs with enterprise licensing.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🚀 Can this support custom AI assistant development?</h3>
+          <p class="faq-answer">Absolutely. GGUF Loader is ideal for rapid prototyping, enterprise AI assistant development, and creating fully private AI solutions within your organization.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🪟 What platforms are supported?</h3>
+          <p class="faq-answer">Currently optimized for Windows enterprise environments. Mac and Linux support is planned for future releases based on enterprise demand.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">🤝 Is the source code available?</h3>
+          <p class="faq-answer">Yes, GGUF Loader is fully open source with enterprise-friendly licensing. View the complete source code on <a href="https://github.com/hussainnazary2/gguf-loader" target="_blank">GitHub</a>.</p>
+        </div>
+        <div class="faq-item">
+          <h3 class="faq-question">📨 Enterprise support and consulting</h3>
+          <p class="faq-answer">For enterprise deployment assistance and custom solutions, please <a href="mailto:hossainnazary475@gmail.com">contact our development team</a> or submit an issue on GitHub.</p>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <h2 class="section-title">📬 Contact & Support</h2>
+      <div class="contact-container">
+        <div class="contact-content">
+          <p class="contact-text">Have questions about enterprise deployment or need technical support?</p>
+          <p class="contact-text">We're here to help you succeed with your AI implementation.</p>
+          <div class="contact-info">
+            <span class="contact-label">Business Inquiries:</span>
+            <a href="mailto:hossainnazary475@gmail.com" class="contact-email">hossainnazary475@gmail.com</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">📬 Connect with Me</h2>
+      <div class="contact-container">
+        <div class="contact-content">
+          <p class="contact-text">Got questions or want to collaborate?</p>
+          <p class="contact-text">Let's connect and explore opportunities together.</p>
+          <div class="contact-info">
+            <span class="contact-label">Professional Network:</span>
+            <a href="https://www.linkedin.com/in/hussain-nazary-188b4385/" target="_blank" class="contact-link">
+              <span class="contact-icon">💼</span>
+              Connect on LinkedIn
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">🧭 GGUF Loader Roadmap</h2>
+      <p style="text-align: center; font-size: clamp(0.9rem, 2.5vw, 1.1rem); margin-bottom: clamp(1.5rem, 3vw, 2.5rem); color: #6c757d; max-width: 100%; word-wrap: break-word;">This roadmap outlines our vision and step-by-step plans to make GGUF Loader the most user-friendly local AI platform for everyone — from beginners to researchers.</p>
+      
+      <div class="roadmap-philosophy" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); padding: clamp(1.5rem, 4vw, 2.5rem); border-radius: clamp(8px, 2vw, 15px); margin-bottom: clamp(1.5rem, 3vw, 2.5rem); border: 2px solid #e0e0e0; width: 100%; box-sizing: border-box;">
+        <h3 style="font-size: clamp(1.2rem, 3.5vw, 1.8rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #2c3e50; text-align: center;">🌱 Philosophy</h3>
+        <p style="font-size: clamp(0.9rem, 2.5vw, 1.1rem); line-height: 1.6; color: #495057; text-align: center; max-width: 100%; word-wrap: break-word;">We believe everyone should have the right to powerful AI tools — locally, securely, and without needing to code. GGUF Loader brings this to life: no Python, no internet, just click-and-run intelligence on your own machine.</p>
+      </div>
+
+      <div class="roadmap-phases" style="margin-bottom: clamp(1.5rem, 3vw, 2.5rem);">
+        <h3 style="font-size: clamp(1.3rem, 3.5vw, 1.9rem); margin-bottom: clamp(1rem, 2.5vw, 1.8rem); color: #2c3e50; text-align: center;">🚀 Roadmap Phases</h3>
+        
+        <div class="phases-container" style="display: flex; flex-direction: column; gap: clamp(1rem, 2.5vw, 1.8rem); width: 100%;">
+          <div class="phase-card completed" style="background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); padding: clamp(1.2rem, 3vw, 1.8rem); border-radius: clamp(8px, 2vw, 12px); border: 2px solid #28a745; width: 100%; box-sizing: border-box;">
+            <h4 style="font-size: clamp(1.1rem, 2.8vw, 1.4rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #155724; word-wrap: break-word;">✅ Phase 1: Foundation (Completed)</h4>
+            <div class="phase-items" style="display: flex; flex-direction: column; gap: clamp(0.3rem, 1vw, 0.5rem);">
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">🖥️ Offline LLM execution via GGUF (Mistral, LLaMA, DeepSeek...)</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">📦 Portable, standalone Windows app — no installation needed</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">🧑‍🎓 Beginner-friendly GUI</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">🔒 100% offline mode — no internet required</div>
+            </div>
+          </div>
+
+          <div class="phase-card in-progress" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); padding: clamp(1.2rem, 3vw, 1.8rem); border-radius: clamp(8px, 2vw, 12px); border: 2px solid #ffc107; width: 100%; box-sizing: border-box;">
+            <h4 style="font-size: clamp(1.1rem, 2.8vw, 1.4rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #856404; word-wrap: break-word;">🚧 Phase 2: Productivity & Flexibility (In Progress)</h4>
+            <div class="phase-items" style="display: flex; flex-direction: column; gap: clamp(0.3rem, 1vw, 0.5rem);">
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">Addon manager + sidebar UI (✅ started)</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">Addon SDK for easy integration</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">Example addon templates</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">Addon activation/deactivation</div>
+            </div>
+          </div>
+
+          <div class="phase-card planned" style="background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%); padding: clamp(1.2rem, 3vw, 1.8rem); border-radius: clamp(8px, 2vw, 12px); border: 2px solid #17a2b8; width: 100%; box-sizing: border-box;">
+            <h4 style="font-size: clamp(1.1rem, 2.8vw, 1.4rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #0c5460; word-wrap: break-word;">📅 Phase 3: Ecosystem & Collaboration (Planned)</h4>
+            <div class="phase-items" style="display: flex; flex-direction: column; gap: clamp(0.3rem, 1vw, 0.5rem);">
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">⚡ Toggle CPU/GPU usage, performance optimization</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">📚 Book/document chunking + summarization feature</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">☁️ Local sync features (LAN or folder sync)</div>
+              <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">🛠️ Custom temperature/context size for advanced users</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="status-section" style="text-align: center; margin-top: clamp(1.5rem, 3vw, 2.5rem); width: 100%;">
+          <p style="font-size: clamp(0.9rem, 2.5vw, 1.1rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #2c3e50; font-weight: 600;">Current Status:</p>
+          <div class="status-badges" style="display: flex; justify-content: center; gap: clamp(0.4rem, 1.5vw, 0.8rem); flex-wrap: wrap; width: 100%;">
+            <span style="background: #ffc107; color: #856404; padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.6rem, 1.5vw, 0.8rem); border-radius: clamp(12px, 2.5vw, 16px); font-size: clamp(0.75rem, 1.8vw, 0.85rem); font-weight: 600; white-space: nowrap;">Phase 2</span>
+            <span style="background: #007bff; color: white; padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.6rem, 1.5vw, 0.8rem); border-radius: clamp(12px, 2.5vw, 16px); font-size: clamp(0.75rem, 1.8vw, 0.85rem); font-weight: 600; white-space: nowrap;">Windows Platform</span>
+            <span style="background: #28a745; color: white; padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.6rem, 1.5vw, 0.8rem); border-radius: clamp(12px, 2.5vw, 16px); font-size: clamp(0.75rem, 1.8vw, 0.85rem); font-weight: 600; white-space: nowrap;">Active Development</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-section" style="display: flex; flex-direction: column; gap: clamp(1.5rem, 3vw, 2rem); width: 100%;">
+        <div class="help-section" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); padding: clamp(1.2rem, 3vw, 1.8rem); border-radius: clamp(8px, 2vw, 12px); border: 2px solid #e0e0e0; width: 100%; box-sizing: border-box;">
+          <h4 style="font-size: clamp(1.1rem, 2.8vw, 1.4rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #2c3e50; text-align: center;">🤝 How to Help</h4>
+          <div style="display: flex; flex-direction: column; gap: clamp(0.3rem, 1vw, 0.5rem);">
+            <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">⭐ Star the project on GitHub</div>
+            <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">🐞 Report bugs and suggest features</div>
+            <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">💬 Share GGUF Loader with others</div>
+            <div style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); color: #495057; padding: clamp(0.2rem, 0.5vw, 0.3rem) 0; word-wrap: break-word; line-height: 1.5;">🔧 Contribute code, UI, or translations</div>
+          </div>
+        </div>
+
+        <div class="vision-section" style="background: linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%); color: white; padding: clamp(1.2rem, 3vw, 1.8rem); border-radius: clamp(8px, 2vw, 12px); border: 2px solid #333333; width: 100%; box-sizing: border-box;">
+          <h4 style="font-size: clamp(1.1rem, 2.8vw, 1.4rem); margin-bottom: clamp(0.8rem, 2vw, 1.2rem); color: #ffffff; text-align: center;">🔭 Long-Term Vision</h4>
+          <p style="font-size: clamp(0.85rem, 2.2vw, 0.95rem); line-height: 1.6; margin: 0; text-align: center; word-wrap: break-word;">We're building more than a loader. GGUF Loader is the foundation for a future of private, personal AI that you can trust. Think multimodal models (image, audio), speech input, and assistants tailored to your profession — all running entirely on your device.</p>
+        </div>
+      </div>
+    </div>
+
+  <div class="footer">
+    <p style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">© 2025 GGUF Loader. Enterprise AI solutions for modern organizations.</p>
+  </div>
+</body>
+</html>
