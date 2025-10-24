@@ -19,7 +19,7 @@
 
 ---
 
-A beginner-friendly, privacy-first desktop application for running large language models locally on Windows, Linux, and macOS. Load and chat with GGUF format models like Mistral, LLaMA, DeepSeek, and others with zero setup required. Features an extensible addon system including a Smart Floating Assistant that works globally across all applications.
+with its floating button A beginner-friendly, privacy-first desktop application for running large language models locally on Windows, Linux, and macOS. Load and chat with GGUF format models like Mistral, LLaMA, DeepSeek, and others with zero setup required. Features an extensible addon system including a Smart Floating Assistant that works globally across all applications.
 
 ## Download EXE file for Windows
 [![Download GGUF Loader v2.0.1](https://img.shields.io/badge/Download%20GGUF%20Loader-v2.0.1-blue?style=for-the-badge&logo=github)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.0.1/GGUFLoader.2.0.1.exe
