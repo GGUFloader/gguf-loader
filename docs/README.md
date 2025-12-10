@@ -20,6 +20,44 @@
 ---
 
 with its floating button A beginner-friendly, privacy-first desktop application for running large language models locally on Windows, Linux, and macOS. Load and chat with GGUF format models like Mistral, LLaMA, DeepSeek, and others with zero setup required. Features an extensible addon system including a Smart Floating Assistant that works globally across all applications.
+flowchart LR
+  U[User / Application] -->|invoke| CLI[CLI · Library API]
+
+  subgraph Inputs
+    GGUF_file[GGUF file .gguf]
+    Legacy[Legacy formats: ggml, bin, ...]
+  end
+
+  CLI --> GGUF_file
+  CLI --> Legacy
+
+  GGUF_file --> Parser[GGUF Parser<br/>parse metadata & tensor blobs]
+  Legacy --> Converter[Conversion & Quantization Tools]
+  Converter --> GGUF_file
+
+  Parser --> Validator[Validator · Sanity Checks]
+  Validator --> ModelObj[In-memory Model Representation]
+
+  ModelObj --> Mem[Memory Manager<br/>mmap, alloc, pin]
+  Parser --> Cache[Cache · Indexing · Sharding]
+  Cache --> Mem
+
+  Mem --> BackendAdapter[Backend Adapters]
+  BackendAdapter --> LLAMA[llama.cpp / ggml runtime]
+  BackendAdapter --> PYTORCH[PyTorch / Transformers]
+  BackendAdapter --> REMOTE[Remote / RPC Inference]
+
+  CLI --> Tools[CLI Utilities<br/>inspect, info, export]
+  CLI --> Tests[Unit & Integration Tests]
+  Tests --> CI[CI / GitHub Actions]
+
+  ModelObj --> Telemetry[Logging · Metrics]
+
+  style Parser fill:#FFF4C1,stroke:#333
+  style Validator fill:#FFE7A3,stroke:#333
+  style ModelObj fill:#E8F8FF,stroke:#333
+  style BackendAdapter fill:#E6E6FF,stroke:#333
+  style Cache fill:#F2FFE6,stroke:#333
 
 ## Download EXE file for Windows
 [![Download GGUF Loader v2.0.1](https://img.shields.io/badge/Download%20GGUF%20Loader-v2.0.1-blue?style=for-the-badge&logo=github)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.0.1/GGUFLoader.2.0.1.exe
