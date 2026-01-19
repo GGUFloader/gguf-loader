@@ -77,7 +77,9 @@ class UISetupMixin:
     def setup_sidebar(self, parent):
         """Setup the left sidebar with controls"""
         sidebar = QFrame()
-        sidebar.setFixedWidth(320)
+        # Use min/max instead of fixed width for responsive sizing
+        sidebar.setMinimumWidth(280)
+        sidebar.setMaximumWidth(400)
         sidebar.setFrameStyle(QFrame.StyledPanel)
 
         layout = QVBoxLayout(sidebar)
@@ -175,6 +177,41 @@ class UISetupMixin:
         self.dark_mode_cb.toggled.connect(self.toggle_dark_mode)
         layout.addWidget(self.dark_mode_cb)
 
+        # Text size controls
+        text_size_label = QLabel("📝 Text Size")
+        text_size_label.setFont(QFont(FONT_FAMILY, 11))
+        layout.addWidget(text_size_label)
+
+        # Text size control row
+        text_size_row = QWidget()
+        text_size_layout = QHBoxLayout(text_size_row)
+        text_size_layout.setContentsMargins(0, 0, 0, 0)
+        text_size_layout.setSpacing(10)
+
+        # Decrease button
+        self.decrease_font_btn = QPushButton("A-")
+        self.decrease_font_btn.setFixedSize(40, 35)
+        self.decrease_font_btn.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
+        self.decrease_font_btn.clicked.connect(self.decrease_font_size)
+        text_size_layout.addWidget(self.decrease_font_btn)
+
+        # Current size label
+        self.font_size_label = QLabel("14")
+        self.font_size_label.setAlignment(Qt.AlignCenter)
+        self.font_size_label.setMinimumWidth(40)
+        self.font_size_label.setFont(QFont(FONT_FAMILY, 12))
+        text_size_layout.addWidget(self.font_size_label)
+
+        # Increase button
+        self.increase_font_btn = QPushButton("A+")
+        self.increase_font_btn.setFixedSize(40, 35)
+        self.increase_font_btn.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
+        self.increase_font_btn.clicked.connect(self.increase_font_size)
+        text_size_layout.addWidget(self.increase_font_btn)
+
+        text_size_layout.addStretch()
+        layout.addWidget(text_size_row)
+
         # Clear chat button
         self.clear_chat_btn = QPushButton("🗑️ Clear Chat")
         self.clear_chat_btn.setMinimumHeight(35)
@@ -257,3 +294,44 @@ class UISetupMixin:
         input_layout.addLayout(button_layout)
 
         parent_layout.addWidget(input_frame)
+
+    def increase_font_size(self):
+        """Increase chat bubble font size"""
+        if not hasattr(self, 'current_font_size'):
+            self.current_font_size = 14
+        
+        if self.current_font_size < 24:  # Max font size
+            self.current_font_size += 2
+            self._apply_font_size_to_all_bubbles()
+            if hasattr(self, 'font_size_label'):
+                self.font_size_label.setText(str(self.current_font_size))
+
+    def decrease_font_size(self):
+        """Decrease chat bubble font size"""
+        if not hasattr(self, 'current_font_size'):
+            self.current_font_size = 14
+        
+        if self.current_font_size > 10:  # Min font size
+            self.current_font_size -= 2
+            self._apply_font_size_to_all_bubbles()
+            if hasattr(self, 'font_size_label'):
+                self.font_size_label.setText(str(self.current_font_size))
+
+    def _apply_font_size_to_all_bubbles(self):
+        """Apply current font size to all existing chat bubbles"""
+        if not hasattr(self, 'chat_bubbles'):
+            return
+            
+        for container, bubble in self.chat_bubbles:
+            try:
+                bubble.set_font_size(self.current_font_size)
+            except Exception as e:
+                print(f"Error updating bubble font: {e}")
+        
+        # Force layout update
+        if hasattr(self, 'chat_container'):
+            self.chat_container.updateGeometry()
+            self.chat_container.update()
+        
+        if hasattr(self, 'chat_scroll'):
+            self.chat_scroll.update()

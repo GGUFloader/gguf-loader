@@ -56,6 +56,7 @@ class AIChat(QMainWindow, ThemeMixin, UISetupMixin, ModelHandlerMixin,
         self.chat_bubbles = []
         self.current_ai_bubble = None
         self.current_ai_text = ""
+        self.current_font_size = 14  # Default font size for chat bubbles
 
         # Setup UI and apply styles
         self.setup_ui()

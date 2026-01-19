@@ -2,10 +2,10 @@
 Custom chat bubble widget
 """
 
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
 from utils import detect_persian_text
-from config import CHAT_BUBBLE_MIN_WIDTH, CHAT_BUBBLE_MAX_WIDTH, CHAT_BUBBLE_FONT_SIZE
+from config import CHAT_BUBBLE_FONT_SIZE
 
 class ChatBubble(QFrame):
     """Custom chat bubble widget with automatic RTL/LTR detection"""
@@ -21,25 +21,25 @@ class ChatBubble(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 10, 15, 10)
 
+        # Initialize state variables
+        self._is_dark_mode = False
+        self._current_font_size = CHAT_BUBBLE_FONT_SIZE
+
         # Create text label
         self.label = QLabel(text)
         self.label.setWordWrap(True)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
-        # Set bubble sizing
-        self.setMinimumWidth(CHAT_BUBBLE_MIN_WIDTH)
-        self.setMaximumWidth(CHAT_BUBBLE_MAX_WIDTH)
-
-        # Set font size
-        font = self.label.font()
-        font.setPointSize(CHAT_BUBBLE_FONT_SIZE)
-        self.label.setFont(font)
+        # Set bubble sizing - responsive to parent width
+        # Use size policies for responsive design instead of fixed widths
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.setMinimumWidth(200)  # Reasonable minimum for readability
 
         # Set alignment based on RTL/LTR detection
         layout.addWidget(self.label)
         self.update_alignment()
 
-        # Apply default styling
+        # Apply initial styling
         self.update_style(is_dark_mode=False)
 
     def update_text(self, text: str):
@@ -89,65 +89,78 @@ class ChatBubble(QFrame):
             self.label.setLayoutDirection(Qt.LeftToRight)
 
     def update_style(self, is_dark_mode: bool):
-        """Apply styling based on theme"""
+        """Apply styling based on theme and current font size"""
+        self._is_dark_mode = is_dark_mode
+        font_size = getattr(self, '_current_font_size', 14)
+
         if self.is_user:
             if is_dark_mode:
-                self.setStyleSheet("""
-                    QFrame {
+                self.setStyleSheet(f"""
+                    QFrame {{
                         background-color: #2d5a2d;
                         border-radius: 15px;
                         margin: 5px;
-                    }
-                    QLabel { 
+                    }}
+                    QLabel {{ 
                         color: white; 
-                        font-size: 14px; 
+                        font-size: {font_size}px; 
                         padding: 12px 16px;
                         line-height: 1.6;
-                    }
+                    }}
                 """)
             else:
-                self.setStyleSheet("""
-                    QFrame {
+                self.setStyleSheet(f"""
+                    QFrame {{
                         background-color: #dcf8c6;
                         border-radius: 15px;
                         margin: 5px;
-                    }
-                    QLabel { 
+                    }}
+                    QLabel {{ 
                         color: black; 
-                        font-size: 14px; 
+                        font-size: {font_size}px; 
                         padding: 12px 16px;
                         line-height: 1.6;
-                    }
+                    }}
                 """)
         else:
             if is_dark_mode:
-                self.setStyleSheet("""
-                    QFrame {
+                self.setStyleSheet(f"""
+                    QFrame {{
                         background-color: #404040;
                         border-radius: 15px;
                         margin: 5px;
-                    }
-                    QLabel { 
+                    }}
+                    QLabel {{ 
                         color: white; 
-                        font-size: 14px; 
+                        font-size: {font_size}px; 
                         padding: 12px 16px;
                         line-height: 1.6;
-                    }
+                    }}
                 """)
             else:
-                self.setStyleSheet("""
-                    QFrame {
+                self.setStyleSheet(f"""
+                    QFrame {{
                         background-color: #f0f0f0;
                         border-radius: 15px;
                         margin: 5px;
-                    }
-                    QLabel { 
+                    }}
+                    QLabel {{ 
                         color: black; 
-                        font-size: 14px; 
+                        font-size: {font_size}px; 
                         padding: 12px 16px;
                         line-height: 1.6;
-                    }
+                    }}
                 """)
+        
+        # Also ensure the font object matches (for size calculations)
+        font = self.label.font()
+        font.setPointSize(font_size)
+        self.label.setFont(font)
+        
+        # Force update
+        self.label.adjustSize()
+        self.adjustSize()
+        self.update()
 
     def set_rtl_mode(self, is_rtl: bool):
         """Manually set RTL mode"""
@@ -161,3 +174,9 @@ class ChatBubble(QFrame):
     def is_rtl_text(self) -> bool:
         """Check if current text is RTL"""
         return self.is_rtl
+
+    def set_font_size(self, size: int):
+        """Set the font size for this bubble and refresh styles"""
+        self._current_font_size = size
+        # Re-apply the current style mode with new font size
+        self.update_style(self._is_dark_mode)

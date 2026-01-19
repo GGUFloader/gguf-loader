@@ -1,7 +1,7 @@
 """
 Chat Handler Mixin - Handles chat functionality and message processing
 """
-from PySide6.QtWidgets import QMessageBox, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QLabel
+from PySide6.QtWidgets import QMessageBox, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QLabel, QVBoxLayout
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
@@ -65,15 +65,20 @@ class ChatHandlerMixin:
         # Create single AI bubble instance
         self.current_ai_bubble = ChatBubble("", is_user=False)
         self.current_ai_bubble.update_style(self.is_dark_mode)
+        # Apply current font size setting
+        if hasattr(self, 'current_font_size'):
+            self.current_ai_bubble.set_font_size(self.current_font_size)
 
-        # Create container for the bubble
+        # Create container for the bubble with responsive layout
         bubble_container = QWidget()
         bubble_layout = QHBoxLayout(bubble_container)
         bubble_layout.setContentsMargins(0, 0, 0, 0)
+        bubble_layout.setSpacing(0)
 
-        # Add the bubble to layout (left-aligned for AI)
-        bubble_layout.addWidget(self.current_ai_bubble, 0, Qt.AlignmentFlag.AlignTop)
-        bubble_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        # Add the bubble to layout (left-aligned for AI) with stretch for responsiveness
+        # Use stretch factors: bubble takes 3 parts, spacer takes 1 part (~75% width)
+        bubble_layout.addWidget(self.current_ai_bubble, 3, Qt.AlignmentFlag.AlignTop)
+        bubble_layout.addStretch(1)
 
         # Insert before spacer in chat layout
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, bubble_container)
@@ -118,20 +123,25 @@ class ChatHandlerMixin:
         """Add a chat message bubble"""
         bubble = ChatBubble(message, is_user)
         bubble.update_style(self.is_dark_mode)
+        # Apply current font size setting
+        if hasattr(self, 'current_font_size'):
+            bubble.set_font_size(self.current_font_size)
 
-        # Create container with proper alignment
+        # Create container with responsive alignment
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         if is_user:
-            # User messages on the right
-            layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-            layout.addWidget(bubble)
+            # User messages on the right with responsive sizing
+            # Spacer takes 1 part, bubble takes 3 parts (~75% width)
+            layout.addStretch(1)
+            layout.addWidget(bubble, 3)
         else:
-            # AI messages on the left
-            layout.addWidget(bubble)
-            layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+            # AI messages on the left with responsive sizing
+            layout.addWidget(bubble, 3)
+            layout.addStretch(1)
 
         # Insert before spacer
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
