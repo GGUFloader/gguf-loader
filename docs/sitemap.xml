@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 
+                      http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <url>
+    <loc>https://ggufloader.github.io/gguf-loader/</loc>
+    <lastmod>2025-07-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+
+    <video:video>
+      <video:thumbnail_loc>https://img.youtube.com/vi/DuqDRkfGdcI/maxresdefault.jpg</video:thumbnail_loc>
+      <video:title>GGUF Loader — Run Local AI Models with Zero Setup</video:title>
+      <video:description>Watch how GGUF Loader makes running offline Mistral, LLaMA, and DeepSeek models on Windows effortless. No Python. No command line. Just click and run.</video:description>
+      <video:content_loc>https://www.youtube.com/watch?v=DuqDRkfGdcI</video:content_loc>
+      <video:player_loc allow_embed="yes">https://www.youtube.com/embed/DuqDRkfGdcI</video:player_loc>
+      <video:duration>60</video:duration>
+      <video:publication_date>2025-07-06T00:00:00+00:00</video:publication_date>
+      <video:family_friendly>yes</video:family_friendly>
+      <video:requires_subscription>no</video:requires_subscription>
+      <video:uploader info="https://github.com/ggufloader">GGUF Loader Team</video:uploader>
+      <video:live>no</video:live>
+    </video:video>
+  </url>
+
+</urlset>
