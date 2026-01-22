@@ -34,6 +34,11 @@ class SmartFloaterAddon(QObject):
     def _check_text_selection(self):
         """Check if text is currently selected and show/hide button accordingly."""
         try:
+            # TEMPORARILY DISABLED - This was interfering with Ctrl key shortcuts
+            # The pyautogui.hotkey('ctrl', 'c') was sending global Ctrl+C every 500ms
+            # which was blocking normal Ctrl+V, Ctrl+C usage in text inputs
+            return
+            
             # Get currently selected text using clipboard
             app = QApplication.instance()
             clipboard = app.clipboard()
@@ -165,6 +170,8 @@ class SmartFloaterAddon(QObject):
             text_display.setPlainText(self._selected_text)
             text_display.setMaximumHeight(100)
             text_display.setReadOnly(True)
+            text_display.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+            text_display.setContextMenuPolicy(Qt.DefaultContextMenu)
             layout.addWidget(text_display)
             
             # Action buttons
@@ -184,6 +191,8 @@ class SmartFloaterAddon(QObject):
             layout.addWidget(QLabel("Result:"))
             self._result_display = QTextEdit()
             self._result_display.setReadOnly(True)
+            self._result_display.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+            self._result_display.setContextMenuPolicy(Qt.DefaultContextMenu)
             layout.addWidget(self._result_display)
             
             # Show popup

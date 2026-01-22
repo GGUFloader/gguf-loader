@@ -221,6 +221,7 @@ class AddonSidebar(QWidget):
             # Show "no addons" message
             no_addons_label = QLabel("No addons found")
             no_addons_label.setAlignment(Qt.AlignCenter)
+            no_addons_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
             no_addons_label.setStyleSheet("color: #666; font-style: italic;")
             self.button_layout.addWidget(no_addons_label)
         else:

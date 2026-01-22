@@ -255,6 +255,11 @@ class SimpleFloatingAssistant:
     def check_selection(self):
         """Check if text is currently selected (without copying)."""
         try:
+            # TEMPORARILY DISABLED - This was interfering with Ctrl key shortcuts
+            # The pyautogui.hotkey('ctrl', 'c') was sending global Ctrl+C every 500ms
+            # which was blocking normal Ctrl+V, Ctrl+C usage in text inputs
+            return
+            
             # Save current clipboard content
             original_clipboard = pyperclip.paste()
             
@@ -310,6 +315,12 @@ class SimpleFloatingAssistant:
     def _capture_selected_text_for_popup(self):
         """Capture the currently selected text when user clicks the button."""
         try:
+            # TEMPORARILY DISABLED - This was interfering with Ctrl key shortcuts
+            # The pyautogui.hotkey('ctrl', 'c') was sending global Ctrl+C
+            # which was blocking normal Ctrl+V, Ctrl+C usage in text inputs
+            self.selected_text = "Text selection temporarily disabled to fix Ctrl+V issue"
+            return
+            
             # Save current clipboard
             original_clipboard = pyperclip.paste()
             
@@ -395,6 +406,8 @@ class SimpleFloatingAssistant:
         text_area.setPlainText(self.selected_text)
         text_area.setMaximumHeight(80)
         text_area.setReadOnly(True)
+        text_area.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        text_area.setContextMenuPolicy(Qt.DefaultContextMenu)
         layout.addWidget(text_area)
         
         # First row of buttons
@@ -446,6 +459,7 @@ class SimpleFloatingAssistant:
         # Progress info
         progress_info_layout = QVBoxLayout()
         self.progress_label = QLabel("Processing...")
+        self.progress_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.progress_label.setStyleSheet("font-weight: bold; color: #0078d4;")
         progress_info_layout.addWidget(self.progress_label)
         
@@ -460,6 +474,8 @@ class SimpleFloatingAssistant:
         # Result area
         layout.addWidget(QLabel("Result:"))
         self.result_area = QTextEdit()
+        self.result_area.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.result_area.setContextMenuPolicy(Qt.DefaultContextMenu)
         layout.addWidget(self.result_area)
         
         # Copy result button
@@ -763,6 +779,8 @@ class SmartFloaterStatusWidget:
         self.result_area = QTextEdit()
         self.result_area.setMaximumHeight(100)
         self.result_area.setReadOnly(True)
+        self.result_area.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.result_area.setContextMenuPolicy(Qt.DefaultContextMenu)
         layout.addWidget(self.result_area)
         
         # Stop/Start buttons

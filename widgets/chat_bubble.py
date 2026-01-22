@@ -28,7 +28,8 @@ class ChatBubble(QFrame):
         # Create text label
         self.label = QLabel(text)
         self.label.setWordWrap(True)
-        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.label.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         # Set bubble sizing - responsive to parent width
         # Use size policies for responsive design instead of fixed widths

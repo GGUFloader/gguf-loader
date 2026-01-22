@@ -4,10 +4,11 @@ UI Setup Mixin - Handles all UI setup and layout creation
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
     QLabel, QComboBox, QCheckBox, QSplitter, QFrame, QScrollArea,
-    QProgressBar, QSpacerItem, QSizePolicy
+    QProgressBar, QSpacerItem, QSizePolicy, QSlider
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QKeyEvent
+from PySide6.QtGui import QFont, QKeyEvent, QKeySequence
+from PySide6.QtCore import QTimer
 from config import (
     GPU_OPTIONS, DEFAULT_CONTEXT_SIZES, FONT_FAMILY, BUBBLE_FONT_SIZE
 )
@@ -19,18 +20,20 @@ class CustomTextEdit(QTextEdit):
     send_message = Signal()
     
     def keyPressEvent(self, event):
-        """Handle Enter key press"""
+        """Handle Enter key press only, let Qt handle all other shortcuts"""
+        # Only intercept Enter/Return keys - let Qt handle everything else
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             # Check if Shift is pressed
             if event.modifiers() & Qt.ShiftModifier:
-                # Shift+Enter: insert new line
-                self.insertPlainText("\n")
+                # Shift+Enter: insert new line - use default behavior
+                super().keyPressEvent(event)
             else:
                 # Enter only: send message
                 self.send_message.emit()
-                return  # Event handled
-        # For all other keys, use default behavior
-        super().keyPressEvent(event)
+                return  # Event handled, don't call super()
+        else:
+            # For ALL other keys (including Ctrl+V, Ctrl+C, etc.), use default Qt behavior
+            super().keyPressEvent(event)
 
 
 class UISetupMixin:
@@ -60,6 +63,10 @@ class UISetupMixin:
 
         # Set splitter proportions (main sidebar, chat area)
         splitter.setSizes([300, 900])
+        
+        # Setup keyboard shortcuts for text size control
+        # Temporarily disabled to test if shortcuts interfere with text input
+        # self.setup_text_size_shortcuts()
 
     def setup_addon_sidebar(self, parent):
         """Setup the addon sidebar - DISABLED: handled by parent app"""
@@ -127,6 +134,8 @@ class UISetupMixin:
         # Model info
         self.model_info = QLabel("No model loaded")
         self.model_info.setWordWrap(True)
+        self.model_info.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.model_info.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.model_info.setStyleSheet("color: #666; font-style: italic;")
         layout.addWidget(self.model_info)
 
@@ -163,6 +172,8 @@ class UISetupMixin:
         # Status label
         self.status_label = QLabel("Ready to load model")
         self.status_label.setWordWrap(True)
+        self.status_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.status_label.setContextMenuPolicy(Qt.DefaultContextMenu)
         layout.addWidget(self.status_label)
 
     def _setup_appearance_section(self, layout):
@@ -182,35 +193,98 @@ class UISetupMixin:
         text_size_label.setFont(QFont(FONT_FAMILY, 11))
         layout.addWidget(text_size_label)
 
-        # Text size control row
-        text_size_row = QWidget()
-        text_size_layout = QHBoxLayout(text_size_row)
-        text_size_layout.setContentsMargins(0, 0, 0, 0)
+        # Text size slider container
+        text_size_container = QWidget()
+        text_size_layout = QHBoxLayout(text_size_container)
+        text_size_layout.setContentsMargins(0, 5, 0, 5)
         text_size_layout.setSpacing(10)
 
-        # Decrease button
-        self.decrease_font_btn = QPushButton("A-")
-        self.decrease_font_btn.setFixedSize(40, 35)
-        self.decrease_font_btn.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
-        self.decrease_font_btn.clicked.connect(self.decrease_font_size)
-        text_size_layout.addWidget(self.decrease_font_btn)
+        # Small size label
+        small_label = QLabel("A")
+        small_label.setFont(QFont(FONT_FAMILY, 10))
+        small_label.setStyleSheet("color: #666;")
+        small_label.setFixedWidth(15)
+        text_size_layout.addWidget(small_label)
 
-        # Current size label
-        self.font_size_label = QLabel("14")
-        self.font_size_label.setAlignment(Qt.AlignCenter)
-        self.font_size_label.setMinimumWidth(40)
-        self.font_size_label.setFont(QFont(FONT_FAMILY, 12))
-        text_size_layout.addWidget(self.font_size_label)
+        # Text size slider
+        self.text_size_slider = QSlider(Qt.Horizontal)
+        self.text_size_slider.setMinimum(10)  # Min font size
+        self.text_size_slider.setMaximum(24)  # Max font size
+        self.text_size_slider.setValue(14)    # Default font size
+        self.text_size_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.text_size_slider.setTickInterval(2)
+        self.text_size_slider.valueChanged.connect(self.on_text_size_changed)
+        self.text_size_slider.setToolTip("Text Size: 14px (Double-click to reset, Mouse wheel to adjust)")
+        # Add double-click to reset functionality
+        self.text_size_slider.mouseDoubleClickEvent = lambda event: self.reset_font_size()
+        # Enable mouse wheel support
+        self.text_size_slider.wheelEvent = self._slider_wheel_event
+        self.text_size_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #bbb;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #e0e0e0, stop:1 #f0f0f0);
+                height: 8px;
+                border-radius: 4px;
+            }
+            QSlider::sub-page:horizontal {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4a90e2, stop:1 #357abd);
+                border: 1px solid #357abd;
+                height: 8px;
+                border-radius: 4px;
+            }
+            QSlider::add-page:horizontal {
+                background: #e0e0e0;
+                border: 1px solid #bbb;
+                height: 8px;
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #ffffff, stop:1 #e0e0e0);
+                border: 2px solid #4a90e2;
+                width: 18px;
+                margin: -5px 0;
+                border-radius: 9px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #ffffff, stop:1 #f0f0f0);
+                border: 2px solid #357abd;
+            }
+            QSlider::handle:horizontal:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #e0e0e0, stop:1 #d0d0d0);
+                border: 2px solid #2968a3;
+            }
+        """)
+        text_size_layout.addWidget(self.text_size_slider)
 
-        # Increase button
-        self.increase_font_btn = QPushButton("A+")
-        self.increase_font_btn.setFixedSize(40, 35)
-        self.increase_font_btn.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
-        self.increase_font_btn.clicked.connect(self.increase_font_size)
-        text_size_layout.addWidget(self.increase_font_btn)
+        # Large size label
+        large_label = QLabel("A")
+        large_label.setFont(QFont(FONT_FAMILY, 16, QFont.Bold))
+        large_label.setStyleSheet("color: #333;")
+        large_label.setFixedWidth(20)
+        text_size_layout.addWidget(large_label)
 
-        text_size_layout.addStretch()
-        layout.addWidget(text_size_row)
+        # Current size display
+        self.font_size_display = QLabel("14")
+        self.font_size_display.setAlignment(Qt.AlignCenter)
+        self.font_size_display.setMinimumWidth(25)
+        self.font_size_display.setFont(QFont(FONT_FAMILY, 10))
+        self.font_size_display.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 2px 4px;
+                color: #333;
+            }
+        """)
+        text_size_layout.addWidget(self.font_size_display)
+
+        layout.addWidget(text_size_container)
 
         # Clear chat button
         self.clear_chat_btn = QPushButton("🗑️ Clear Chat")
@@ -229,6 +303,8 @@ class UISetupMixin:
 
         about_text = QLabel("Developed by Hussain Nazary\nGithub ID:@hussainnazary2")
         about_text.setWordWrap(True)
+        about_text.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        about_text.setContextMenuPolicy(Qt.DefaultContextMenu)
         about_text.setStyleSheet("color: #666; font-size: 11px;")
         layout.addWidget(about_text)
 
@@ -275,6 +351,7 @@ class UISetupMixin:
         self.input_text.setMaximumHeight(80)
         self.input_text.setFont(QFont(FONT_FAMILY, BUBBLE_FONT_SIZE))
         self.input_text.setLayoutDirection(Qt.LeftToRight)  # Always left-to-right for English
+        self.input_text.setContextMenuPolicy(Qt.DefaultContextMenu)  # Ensure context menu is enabled
         self.input_text.textChanged.connect(self.on_input_text_changed)
         self.input_text.send_message.connect(self.send_message)
 
@@ -295,27 +372,92 @@ class UISetupMixin:
 
         parent_layout.addWidget(input_frame)
 
-    def increase_font_size(self):
-        """Increase chat bubble font size"""
-        if not hasattr(self, 'current_font_size'):
-            self.current_font_size = 14
+    def _slider_wheel_event(self, event):
+        """Handle mouse wheel events on the text size slider"""
+        from PySide6.QtCore import QPoint
         
-        if self.current_font_size < 24:  # Max font size
-            self.current_font_size += 2
-            self._apply_font_size_to_all_bubbles()
-            if hasattr(self, 'font_size_label'):
-                self.font_size_label.setText(str(self.current_font_size))
+        # Get the wheel delta (positive for up, negative for down)
+        delta = event.angleDelta().y()
+        
+        # Adjust slider value based on wheel direction
+        current_value = self.text_size_slider.value()
+        if delta > 0:  # Wheel up - increase font size
+            new_value = min(current_value + 1, self.text_size_slider.maximum())
+        else:  # Wheel down - decrease font size
+            new_value = max(current_value - 1, self.text_size_slider.minimum())
+        
+        self.text_size_slider.setValue(new_value)
+        event.accept()
+
+    def on_text_size_changed(self, value):
+        """Handle text size slider change"""
+        self.current_font_size = value
+        self.font_size_display.setText(str(value))
+        
+        # Add a subtle highlight animation to the display
+        self.font_size_display.setStyleSheet("""
+            QLabel {
+                background-color: #e3f2fd;
+                border: 1px solid #4a90e2;
+                border-radius: 3px;
+                padding: 2px 4px;
+                color: #1976d2;
+                font-weight: bold;
+            }
+        """)
+        
+        # Reset to normal style after a short delay
+        QTimer.singleShot(200, self._reset_font_display_style)
+        
+        self._apply_font_size_to_all_bubbles()
+        
+        # Update tooltip to show current size
+        self.text_size_slider.setToolTip(f"Text Size: {value}px (Double-click to reset, Mouse wheel to adjust)")
+
+    def _reset_font_display_style(self):
+        """Reset the font size display to normal style"""
+        self.font_size_display.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 2px 4px;
+                color: #333;
+            }
+        """)
+
+    def setup_text_size_shortcuts(self):
+        """Setup keyboard shortcuts for text size control"""
+        from PySide6.QtGui import QShortcut, QKeySequence
+        
+        # Use more specific shortcuts that won't interfere with text editing
+        # Ctrl+Plus to increase font size (use Ctrl+Shift+Plus to avoid conflicts)
+        increase_shortcut = QShortcut(QKeySequence("Ctrl+Shift++"), self)
+        increase_shortcut.activated.connect(self.increase_font_size)
+        
+        # Ctrl+Minus to decrease font size (use Ctrl+Shift+Minus to avoid conflicts)
+        decrease_shortcut = QShortcut(QKeySequence("Ctrl+Shift+-"), self)
+        decrease_shortcut.activated.connect(self.decrease_font_size)
+        
+        # Ctrl+0 to reset to default size (keep this one as it's less likely to conflict)
+        reset_shortcut = QShortcut(QKeySequence("Ctrl+Shift+0"), self)
+        reset_shortcut.activated.connect(self.reset_font_size)
+
+    def reset_font_size(self):
+        """Reset font size to default (14px)"""
+        self.text_size_slider.setValue(14)
+
+    def increase_font_size(self):
+        """Increase chat bubble font size (legacy method for compatibility)"""
+        current_value = self.text_size_slider.value()
+        if current_value < self.text_size_slider.maximum():
+            self.text_size_slider.setValue(current_value + 2)
 
     def decrease_font_size(self):
-        """Decrease chat bubble font size"""
-        if not hasattr(self, 'current_font_size'):
-            self.current_font_size = 14
-        
-        if self.current_font_size > 10:  # Min font size
-            self.current_font_size -= 2
-            self._apply_font_size_to_all_bubbles()
-            if hasattr(self, 'font_size_label'):
-                self.font_size_label.setText(str(self.current_font_size))
+        """Decrease chat bubble font size (legacy method for compatibility)"""
+        current_value = self.text_size_slider.value()
+        if current_value > self.text_size_slider.minimum():
+            self.text_size_slider.setValue(current_value - 2)
 
     def _apply_font_size_to_all_bubbles(self):
         """Apply current font size to all existing chat bubbles"""

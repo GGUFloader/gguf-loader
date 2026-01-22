@@ -154,6 +154,7 @@ class ChatHandlerMixin:
         label = QLabel(message)
         label.setAlignment(Qt.AlignCenter)
         label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         font = QFont(FONT_FAMILY, 12)
         font.setItalic(True)
         label.setFont(font)

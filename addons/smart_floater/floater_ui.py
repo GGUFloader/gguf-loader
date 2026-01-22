@@ -486,6 +486,7 @@ class TextProcessorPopup(QDialog):
         # Disable text editing completely
         self.text_area.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | 
                                                Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.text_area.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.text_area.setStyleSheet("""
             QTextEdit {
                 border: 2px solid #ddd;
@@ -581,6 +582,7 @@ class TextProcessorPopup(QDialog):
         self.result_text_area.setMaximumHeight(100)
         self.result_text_area.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | 
                                                       Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.result_text_area.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.result_text_area.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #ddd;
@@ -1055,6 +1057,7 @@ class TextProcessorPopup(QDialog):
         self.error_text_area.setMaximumHeight(80)
         self.error_text_area.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | 
                                                      Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.error_text_area.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.error_text_area.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #fed7d7;
