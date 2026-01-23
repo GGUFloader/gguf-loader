@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
     QLabel, QScrollArea, QFrame, QSpacerItem, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QThread
 from PySide6.QtGui import QFont, QTextCursor
 
 try:
@@ -27,6 +27,52 @@ try:
 except ImportError:
     # Fallback if chat_bubble is not available
     ChatBubble = None
+
+
+class StreamingThread(QThread):
+    """Thread for streaming model responses without blocking UI."""
+    token_received = Signal(str)
+    finished = Signal()
+    error = Signal(str)
+    
+    def __init__(self, model, prompt, max_tokens=8192):
+        super().__init__()
+        self.model = model
+        self.prompt = prompt
+        self.max_tokens = max_tokens
+        self._stop_flag = False
+    
+    def run(self):
+        """Run streaming generation in background thread."""
+        try:
+            stream = self.model(
+                self.prompt,
+                max_tokens=self.max_tokens,
+                stream=True,
+                stop=["User:", "\nUser:", "user:", "\nuser:"],
+                echo=False,
+                temperature=0.7,
+                top_p=0.9,
+                repeat_penalty=1.1,
+                top_k=40
+            )
+            
+            for token_data in stream:
+                if self._stop_flag:
+                    break
+                
+                token = token_data.get('choices', [{}])[0].get('text', '')
+                if token:
+                    self.token_received.emit(token)
+            
+            self.finished.emit()
+            
+        except Exception as e:
+            self.error.emit(f"Generation error: {str(e)}")
+    
+    def stop(self):
+        """Stop the streaming generation."""
+        self._stop_flag = True
 
 
 class FloatingChatWindow(QWidget):
@@ -57,6 +103,8 @@ class FloatingChatWindow(QWidget):
         # Chat state
         self._conversation_history = []
         self._is_generating = False
+        self._current_ai_message_widget = None  # Track current streaming message
+        self._current_response_text = ""  # Accumulate streaming response
         
         # Setup window
         self._setup_window()
@@ -195,6 +243,21 @@ class FloatingChatWindow(QWidget):
         self.clear_btn.clicked.connect(self._clear_chat)
         button_layout.addWidget(self.clear_btn)
         
+        # Stop button (hidden by default)
+        self.stop_btn = QPushButton("⏹ Stop")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        self.stop_btn.clicked.connect(self._stop_generation)
+        self.stop_btn.hide()
+        button_layout.addWidget(self.stop_btn)
+        
         button_layout.addStretch()
         
         # Send button with icon
@@ -273,6 +336,8 @@ class FloatingChatWindow(QWidget):
         self._is_generating = True
         self.input_field.setEnabled(False)
         self.send_btn.setEnabled(False)
+        self.send_btn.hide()
+        self.stop_btn.show()
         
         # Display user message
         self._add_user_message(message)
@@ -286,8 +351,40 @@ class FloatingChatWindow(QWidget):
         # Generate response
         self._generate_response(message)
     
+    def _stop_generation(self):
+        """Stop the current generation."""
+        try:
+            self._is_generating = False
+            
+            # Stop the generator thread if exists
+            if hasattr(self, '_current_generator'):
+                self._current_generator.stop()
+            
+            # Add incomplete message to history if exists
+            if self._current_response_text:
+                self._conversation_history.append({
+                    "role": "assistant",
+                    "content": self._current_response_text + " [stopped]"
+                })
+            
+            # Cleanup
+            self._current_ai_message_widget = None
+            self._current_response_text = ""
+            
+            # Re-enable input
+            self.input_field.setEnabled(True)
+            self.send_btn.setEnabled(True)
+            self.send_btn.show()
+            self.stop_btn.hide()
+            self.input_field.setFocus()
+            
+            self._add_system_message("⏹ Generation stopped")
+            
+        except Exception as e:
+            self._logger.error(f"Error stopping generation: {e}")
+    
     def _generate_response(self, user_message: str):
-        """Generate AI response."""
+        """Generate AI response with streaming."""
         try:
             # Add to conversation history
             self._conversation_history.append({
@@ -298,50 +395,262 @@ class FloatingChatWindow(QWidget):
             # Show "thinking" indicator
             self._add_system_message("🤔 AI is thinking...")
             
-            # Generate response using the main app's chat generator
+            # Initialize streaming response
+            self._current_response_text = ""
+            
+            # Generate response using the main app's chat generator with streaming
             if hasattr(self.gguf_app, 'chat_generator') and self.gguf_app.chat_generator:
                 # Use existing chat generator
-                response = self._generate_with_chat_generator(user_message)
+                self._generate_with_chat_generator_streaming(user_message)
             elif hasattr(self.gguf_app, 'model') and self.gguf_app.model:
-                # Direct model generation
-                response = self._generate_with_model(user_message)
+                # Direct model generation with streaming
+                self._generate_with_model_streaming(user_message)
             else:
-                response = "Error: No model available"
-            
-            # Remove "thinking" message
-            self._remove_last_message()
-            
-            # Display AI response
-            self._add_ai_message(response)
-            
-            # Add to history
-            self._conversation_history.append({
-                "role": "assistant",
-                "content": response
-            })
+                self._remove_last_message()
+                self._add_system_message("Error: No model available")
+                self._is_generating = False
+                self.input_field.setEnabled(True)
+                self.send_btn.setEnabled(True)
             
         except Exception as e:
             self._logger.error(f"Error generating response: {e}")
             self._remove_last_message()
             self._add_system_message(f"❌ Error: {str(e)}")
+            self._is_generating = False
+            self.input_field.setEnabled(True)
+            self.send_btn.setEnabled(True)
+            self.input_field.setFocus()
+    
+    def _generate_with_chat_generator_streaming(self, message: str):
+        """Generate response using chat generator with streaming."""
+        try:
+            from models.chat_generator import ChatGenerator
+            
+            # Remove "thinking" message
+            self._remove_last_message()
+            
+            # Create empty AI message bubble for streaming
+            self._create_streaming_ai_message()
+            
+            # Create chat generator thread
+            generator = ChatGenerator(
+                model=self.gguf_app.model,
+                prompt=message,
+                chat_history=self._conversation_history[:-1],  # Exclude current user message
+                max_tokens=8192,
+                temperature=0.7,
+                top_p=0.9,
+                repeat_penalty=1.1,
+                top_k=40
+            )
+            
+            # Connect signals
+            generator.token_received.connect(self._on_token_received)
+            generator.finished.connect(lambda: self._on_streaming_finished(generator))
+            generator.error.connect(self._on_streaming_error)
+            
+            # Store reference to prevent garbage collection
+            self._current_generator = generator
+            
+            # Start generation
+            generator.start()
+            
+        except Exception as e:
+            self._logger.error(f"Chat generator error: {e}")
+            self._add_system_message(f"❌ Error: {str(e)}")
+            self._is_generating = False
+            self.input_field.setEnabled(True)
+            self.send_btn.setEnabled(True)
+    
+    def _generate_with_model_streaming(self, message: str):
+        """Generate response directly with model using streaming in background thread."""
+        try:
+            # Remove "thinking" message
+            self._remove_last_message()
+            
+            # Create empty AI message bubble for streaming
+            self._create_streaming_ai_message()
+            
+            # Build prompt
+            prompt = self._build_prompt_for_model(message)
+            
+            # Create streaming thread
+            streaming_thread = StreamingThread(
+                model=self.gguf_app.model,
+                prompt=prompt,
+                max_tokens=8192
+            )
+            
+            # Connect signals
+            streaming_thread.token_received.connect(self._on_token_received)
+            streaming_thread.finished.connect(lambda: self._on_streaming_finished(streaming_thread))
+            streaming_thread.error.connect(self._on_streaming_error)
+            
+            # Store reference to prevent garbage collection
+            self._current_generator = streaming_thread
+            
+            # Start generation in background
+            streaming_thread.start()
+            
+        except Exception as e:
+            self._logger.error(f"Model generation error: {e}")
+            self._on_streaming_error(f"Error: {str(e)}")
+    
+    def _build_prompt_for_model(self, message: str) -> str:
+        """Build prompt from conversation history."""
+        prompt = "You are a helpful AI assistant. Answer questions clearly and thoroughly.\n\n"
+        
+        # Add conversation history
+        for msg in self._conversation_history[:-1]:  # Exclude current user message
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            
+            if role == 'user':
+                prompt += f"User: {content}\n"
+            elif role == 'assistant':
+                prompt += f"Assistant: {content}\n"
+        
+        # Add current message
+        prompt += f"User: {message}\nAssistant:"
+        
+        return prompt
+    
+    def _create_streaming_ai_message(self):
+        """Create an empty AI message bubble for streaming updates."""
+        # Create container for left-aligned message
+        msg_container = QWidget()
+        msg_layout = QHBoxLayout(msg_container)
+        msg_layout.setContentsMargins(5, 2, 5, 2)
+        msg_layout.setSpacing(0)
+        
+        if ChatBubble:
+            # Use chat bubble widget
+            bubble = ChatBubble("", is_user=False)
+            bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            bubble.setStyleSheet("""
+                QFrame {
+                    background-color: #e9ecef;
+                    border-radius: 15px;
+                    margin: 2px;
+                }
+                QLabel {
+                    color: #333;
+                    font-size: 13px;
+                    padding: 10px 14px;
+                }
+            """)
+            msg_layout.addWidget(bubble, stretch=2)
+            self._current_ai_message_widget = bubble
+        else:
+            # Fallback to simple label
+            label = QLabel("")
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            label.setStyleSheet("""
+                background-color: #e9ecef;
+                color: #333;
+                padding: 10px 14px;
+                border-radius: 15px;
+                font-size: 13px;
+            """)
+            msg_layout.addWidget(label, stretch=2)
+            self._current_ai_message_widget = label
+        
+        # Add spacer
+        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        msg_layout.addItem(spacer)
+        
+        # Insert before the stretch at the end
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
+        self._scroll_to_bottom()
+    
+    def _on_token_received(self, token: str):
+        """Handle received token from streaming generation."""
+        try:
+            # Accumulate response
+            self._current_response_text += token
+            
+            # Update the message widget
+            if self._current_ai_message_widget:
+                if ChatBubble and isinstance(self._current_ai_message_widget, ChatBubble):
+                    # Update chat bubble
+                    self._current_ai_message_widget.update_text(self._current_response_text)
+                else:
+                    # Update label
+                    self._current_ai_message_widget.setText(self._current_response_text)
+            
+            # Auto-scroll to bottom
+            self._scroll_to_bottom()
+            
+        except Exception as e:
+            self._logger.error(f"Error updating token: {e}")
+    
+    def _on_streaming_finished(self, generator):
+        """Handle streaming generation finished."""
+        try:
+            # Add to history
+            if self._current_response_text:
+                self._conversation_history.append({
+                    "role": "assistant",
+                    "content": self._current_response_text
+                })
+            
+            # Cleanup
+            self._current_ai_message_widget = None
+            self._current_response_text = ""
+            
+            if hasattr(self, '_current_generator'):
+                delattr(self, '_current_generator')
+            
+        except Exception as e:
+            self._logger.error(f"Error finishing streaming: {e}")
         
         finally:
             # Re-enable input
             self._is_generating = False
             self.input_field.setEnabled(True)
             self.send_btn.setEnabled(True)
+            self.send_btn.show()
+            self.stop_btn.hide()
+            self.input_field.setFocus()
+    
+    def _on_streaming_error(self, error_message: str):
+        """Handle streaming generation error."""
+        try:
+            self._logger.error(f"Streaming error: {error_message}")
+            
+            # Remove incomplete message if exists
+            if self._current_ai_message_widget:
+                self._remove_last_message()
+            
+            self._add_system_message(f"❌ {error_message}")
+            
+            # Cleanup
+            self._current_ai_message_widget = None
+            self._current_response_text = ""
+            
+        except Exception as e:
+            self._logger.error(f"Error handling streaming error: {e}")
+        
+        finally:
+            # Re-enable input
+            self._is_generating = False
+            self.input_field.setEnabled(True)
+            self.send_btn.setEnabled(True)
+            self.send_btn.show()
+            self.stop_btn.hide()
             self.input_field.setFocus()
     
     def _generate_with_chat_generator(self, message: str) -> str:
-        """Generate response using chat generator."""
+        """Generate response using chat generator (deprecated - use streaming version)."""
         try:
             # Build conversation context
             conversation = self._conversation_history.copy()
             
-            # Generate
+            # Generate with very high token limit for unlimited length responses
             response = self.gguf_app.chat_generator.generate_response(
                 conversation,
-                max_tokens=512
+                max_tokens=8192  # Very high limit for long responses
             )
             
             return response
@@ -356,11 +665,11 @@ class FloatingChatWindow(QWidget):
             # Simple prompt
             prompt = f"User: {message}\nAssistant:"
             
-            # Generate
+            # Generate with very high token limit for unlimited length responses
             response = self.gguf_app.model(
                 prompt,
-                max_tokens=512,
-                stop=["User:", "\n\n"],
+                max_tokens=8192,  # Very high limit for long responses
+                stop=["User:", "\nUser:"],  # Better stop sequences
                 echo=False
             )
             

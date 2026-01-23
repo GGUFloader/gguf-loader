@@ -1,5 +1,0 @@
-{
-  "method": "mailto",
-  "to_email": "your.email@example.com",
-  "description": "This is the default configuration that opens the user's email client"
-}

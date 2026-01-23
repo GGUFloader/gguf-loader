@@ -1,9 +1,0 @@
-{
-  "method": "smtp",
-  "to_email": "your.email@example.com",
-  "from_email": "your.smtp.email@gmail.com",
-  "password": "your_app_password_here",
-  "smtp_server": "smtp.gmail.com",
-  "smtp_port": 587,
-  "description": "SMTP configuration for direct email sending (requires app password for Gmail)"
-}

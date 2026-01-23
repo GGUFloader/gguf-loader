@@ -1,0 +1,4 @@
+{
+  "endpoint_url": "https://formspree.io/f/YOUR_FORM_ID_HERE",
+  "description": "Replace YOUR_FORM_ID_HERE with your actual FormSpree form ID. See docs/feedback-system.md for setup instructions."
+}

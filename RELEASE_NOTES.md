@@ -1,19 +1,26 @@
-# GGUF Loader v2.0.1 - Windows Executable Release
+# GGUF Loader v2.1.0 - Floating Chat Edition
 
 ## 🚀 What's New
-- **Fixed Project Structure**: Resolved all import issues for seamless execution
-- **Smart Floating Assistant**: Pre-installed addon for enhanced AI interaction
-- **Improved Stability**: Better error handling and resource management
-- **Easy Installation**: Single executable file - no Python installation required
+- **Floating Chat Button**: Facebook Messenger-style floating button that stays on top
+- **Cross-Platform Support**: Works seamlessly on Windows, Linux, and macOS
+- **Draggable Interface**: Move the chat button anywhere on your screen
+- **Custom Icon Support**: Beautiful custom icon for the floating button
+- **Position Memory**: Remembers button position between sessions
+- **Enhanced Animations**: Smooth hover and click effects
+- **Improved Build System**: All icons now properly included in executable
 
 ## 📦 Download
-- **Windows 64-bit**: `gguf-loader-v2.0.1-windows-x64.exe` (Recommended)
+- **Windows 64-bit**: `gguf-loader-v2.1.0-windows-x64.exe` (Recommended)
+- **Linux**: `gguf-loader-v2.1.0-linux-x64` (Coming Soon)
+- **macOS**: `gguf-loader-v2.1.0-macos.dmg` (Coming Soon)
 
 ## ✨ Features
 - **GGUF Model Loading**: Load and run GGUF format AI models locally
-- **Smart Floating Assistant**: Text selection processing with AI
+- **Floating Chat Button**: Always-on-top draggable chat button
+- **Smart Chat Window**: Modern interface with message history
 - **Addon System**: Extensible architecture for custom features
-- **Cross-Platform UI**: Modern PySide6-based interface
+- **Cross-Platform UI**: Modern PySide6-based interface (Windows, Linux, macOS)
+- **Keyboard Shortcuts**: Ctrl+Enter to send messages quickly
 - **Performance Optimized**: Efficient memory and CPU usage
 
 ## 🔧 System Requirements
@@ -24,21 +31,24 @@
 
 ## 🚀 Quick Start
 1. Download the `.exe` file
-2. Run `gguf-loader-v2.0.1-windows-x64.exe`
+2. Run `gguf-loader-v2.1.0-windows-x64.exe`
 3. Load your GGUF model file
-4. Start chatting with AI!
+4. Look for the floating chat button on your screen
+5. Click it to open the chat window and start chatting!
 
 ## 📋 What's Included
 - Main GGUF Loader application
-- Smart Floating Assistant addon
+- Floating Chat addon with custom icon
 - All required dependencies bundled
-- Icon and resource files
+- Icon and resource files (icon.ico, float.png)
+- Complete documentation
 
-## 🐛 Bug Fixes
-- Fixed relative import issues
-- Resolved addon detection problems
-- Improved resource path handling
-- Better error messages and logging
+## 🐛 Bug Fixes & Improvements
+- Fixed icon loading in packaged executables
+- Improved cross-platform window management
+- Enhanced Linux X11 compatibility
+- Better resource path handling
+- Optimized build configuration
 
 ## 💡 For Developers
 If you want to run from source code:
@@ -59,20 +69,21 @@ python run_app.py
 
 ### Release Title:
 ```
-GGUF Loader v2.0.1 - Advanced Model Loader with Smart Floating Assistant
+GGUF Loader v2.1.0 - Floating Chat Edition
 ```
 
 ### Release Tag:
 ```
-v2.0.1
+v2.1.0
 ```
 
 ### Release Description:
 Copy the content above (from "🚀 What's New" to "📞 Support") into your GitHub release description.
 
 ### Files to Upload:
-- `gguf-loader-v2.0.1-windows-x64.exe` (your compiled executable)
-- Optional: `gguf-loader-v2.0.1-source.zip` (source code archive)
+- `gguf-loader-v2.1.0-windows-x64.exe` (your compiled executable)
+- Optional: `gguf-loader-v2.1.0-source.zip` (source code archive)
+- Optional: `float.png` (floating button icon for reference)
 
 ---
 

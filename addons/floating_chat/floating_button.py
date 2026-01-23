@@ -62,65 +62,31 @@ class FloatingChatButton(QWidget):
         self._auto_hide_timer.timeout.connect(self._auto_hide)
     
     def _load_icon(self):
-        """Load the icon.ico file from the project root at highest resolution."""
+        """Load the float.png file from the project root at highest resolution."""
         try:
-            # Try to find icon.ico in the project root
+            # Try to find float.png in the project root
             # Go up from addons/floating_chat to project root
             current_dir = Path(__file__).parent
             project_root = current_dir.parent.parent
-            icon_path = project_root / "icon.ico"
+            icon_path = project_root / "float.png"
             
             if icon_path.exists():
-                # ICO files can contain multiple resolutions
-                # Try to load the highest resolution available
-                icon = QIcon(str(icon_path))
-                
-                if not icon.isNull():
-                    # Get available sizes
-                    available_sizes = icon.availableSizes()
-                    
-                    if available_sizes:
-                        # Get the largest available size
-                        largest_size = max(available_sizes, key=lambda s: s.width() * s.height())
-                        print(f"Loading icon at size: {largest_size.width()}x{largest_size.height()}")
-                        
-                        # Get pixmap at largest size
-                        pixmap = icon.pixmap(largest_size)
-                        
-                        if not pixmap.isNull():
-                            return pixmap
-                    else:
-                        # No sizes available, try loading as regular pixmap
-                        # Request a large size to get best quality
-                        pixmap = icon.pixmap(256, 256)
-                        if not pixmap.isNull():
-                            return pixmap
-                
-                # Fallback: try loading directly as pixmap
+                # Load PNG file directly as pixmap
                 pixmap = QPixmap(str(icon_path))
                 if not pixmap.isNull():
+                    print(f"Loaded float.png at size: {pixmap.width()}x{pixmap.height()}")
                     return pixmap
             
-            # Fallback: try resource_manager
+            # Fallback: try resource_manager for icon.ico as last resort
             try:
                 import sys
                 sys.path.insert(0, str(project_root))
                 from resource_manager import find_icon
                 icon_path = find_icon()
                 if icon_path and os.path.exists(icon_path):
-                    icon = QIcon(icon_path)
-                    if not icon.isNull():
-                        # Get largest size
-                        available_sizes = icon.availableSizes()
-                        if available_sizes:
-                            largest_size = max(available_sizes, key=lambda s: s.width() * s.height())
-                            pixmap = icon.pixmap(largest_size)
-                            if not pixmap.isNull():
-                                return pixmap
-                        # Try large size
-                        pixmap = icon.pixmap(256, 256)
-                        if not pixmap.isNull():
-                            return pixmap
+                    pixmap = QPixmap(icon_path)
+                    if not pixmap.isNull():
+                        return pixmap
             except:
                 pass
             
@@ -165,7 +131,7 @@ class FloatingChatButton(QWidget):
         self._click_animation.setEasingCurve(QEasingCurve.Type.OutBounce)
     
     def paintEvent(self, event):
-        """Custom paint event for modern gradient button design with icon."""
+        """Custom paint event - only draw the float.png image with no background."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
@@ -180,38 +146,31 @@ class FloatingChatButton(QWidget):
             scaled_size
         )
         
-        # Create gradient background
-        if self._is_hovered:
-            # Hover gradient (brighter)
-            gradient = QRadialGradient(center, scaled_size // 2)
-            gradient.setColorAt(0.0, QColor(0, 150, 255, 240))  # Bright blue center
-            gradient.setColorAt(0.7, QColor(0, 120, 220, 220))  # Medium blue
-            gradient.setColorAt(1.0, QColor(0, 100, 200, 200))  # Darker blue edge
-        else:
-            # Normal gradient
-            gradient = QRadialGradient(center, scaled_size // 2)
-            gradient.setColorAt(0.0, QColor(0, 120, 215, 220))  # Blue center
-            gradient.setColorAt(0.7, QColor(0, 100, 190, 200))  # Medium blue
-            gradient.setColorAt(1.0, QColor(0, 80, 170, 180))   # Darker blue edge
-        
-        # Draw button background
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(QPen(QColor(255, 255, 255, 100), 2))
-        painter.drawEllipse(button_rect)
-        
-        # Draw icon if available, otherwise draw chat icon
+        # Draw only the icon if available, otherwise draw chat icon with background
         if self._icon_pixmap and not self._icon_pixmap.isNull():
             self._draw_icon(painter, button_rect)
         else:
+            # Fallback: draw gradient background and chat icon if float.png not found
+            if self._is_hovered:
+                gradient = QRadialGradient(center, scaled_size // 2)
+                gradient.setColorAt(0.0, QColor(0, 150, 255, 240))
+                gradient.setColorAt(0.7, QColor(0, 120, 220, 220))
+                gradient.setColorAt(1.0, QColor(0, 100, 200, 200))
+            else:
+                gradient = QRadialGradient(center, scaled_size // 2)
+                gradient.setColorAt(0.0, QColor(0, 120, 215, 220))
+                gradient.setColorAt(0.7, QColor(0, 100, 190, 200))
+                gradient.setColorAt(1.0, QColor(0, 80, 170, 180))
+            
+            painter.setBrush(QBrush(gradient))
+            painter.setPen(QPen(QColor(255, 255, 255, 100), 2))
+            painter.drawEllipse(button_rect)
             self._draw_chat_icon(painter, button_rect)
-        
-        # Draw subtle shadow
-        self._draw_shadow(painter, button_rect)
     
     def _draw_icon(self, painter, button_rect):
-        """Draw the icon.ico image in the center of the button with high quality."""
-        # Calculate icon size (70% of button size for padding)
-        icon_size = int(button_rect.width() * 0.7)
+        """Draw the float.png image filling the entire button area with high quality."""
+        # Use the full button size for the icon (100% coverage, no padding)
+        icon_size = button_rect.width()
         
         # Calculate icon position (centered)
         icon_x = button_rect.center().x() - icon_size // 2
@@ -245,8 +204,8 @@ class FloatingChatButton(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(QPainter.RenderHint.LosslessImageRendering, True)
         
-        # Draw the icon
-        painter.setOpacity(1.0)  # Full opacity for crisp icon
+        # Draw the icon with full opacity - no background
+        painter.setOpacity(1.0)
         painter.drawPixmap(icon_rect, scaled_pixmap)
         
         painter.restore()

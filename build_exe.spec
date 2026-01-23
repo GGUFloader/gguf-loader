@@ -25,6 +25,7 @@ except Exception as e:
 # Collect all data files
 datas = [
     ('icon.ico', '.'),
+    ('float.png', '.'),  # Floating chat button icon
     ('addons', 'addons'),
     ('docs', 'docs'),
 ]

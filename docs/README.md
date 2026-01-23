@@ -1,9 +1,6 @@
+# GGUF Loader Documentation
 
-📄 **Machine-readable metadata available**  
-- [metadata.json](./metadata.json)  
-- [meta.yaml](./meta.yaml)
-
-# GGUF Loader
+Welcome to GGUF Loader! This documentation will help you get started and make the most of the application.
 ![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 ![Repo Size](https://img.shields.io/github/repo-size/ggufloader/gguf-loader)
