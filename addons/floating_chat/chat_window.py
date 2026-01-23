@@ -197,15 +197,37 @@ class FloatingChatWindow(QWidget):
         
         button_layout.addStretch()
         
-        # Send button
-        self.send_btn = QPushButton("📤 Send")
+        # Send button with icon
+        self.send_btn = QPushButton("➤")  # Send arrow icon
+        self.send_btn.setFixedSize(45, 45)  # Circular button
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 22px;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #106ebe;
+            }
+            QPushButton:pressed {
+                background-color: #005a9e;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
         self.send_btn.clicked.connect(self._send_message)
         button_layout.addWidget(self.send_btn)
         
         input_layout.addLayout(button_layout)
         layout.addWidget(input_frame)
         
-        # Enable Ctrl+Enter to send
+        # Enable Enter to send, Shift+Enter for new line
         self.input_field.installEventFilter(self)
     
     def _connect_to_model(self):
@@ -504,12 +526,17 @@ class FloatingChatWindow(QWidget):
         self._add_system_message(f"❌ Error: {error_message}")
     
     def eventFilter(self, obj, event):
-        """Event filter for Ctrl+Enter to send - allows all other shortcuts."""
+        """Event filter for Enter to send, Shift+Enter for new line."""
         if obj == self.input_field and event.type() == event.Type.KeyPress:
-            # Only intercept Ctrl+Enter for sending
-            if event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-                self._send_message()
-                return True
+            # Enter without Shift sends the message
+            if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+                if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+                    # Shift+Enter: insert new line (default behavior)
+                    return False
+                else:
+                    # Plain Enter: send message
+                    self._send_message()
+                    return True
             # Let all other keys pass through (including Ctrl+V, Ctrl+C, Ctrl+X, Ctrl+A, etc.)
         return super().eventFilter(obj, event)
     
