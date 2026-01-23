@@ -12,7 +12,7 @@ from typing import Optional, Any
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
-    QLabel, QScrollArea, QFrame
+    QLabel, QScrollArea, QFrame, QSpacerItem, QSizePolicy
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QTextCursor
@@ -21,6 +21,12 @@ try:
     from config import FONT_FAMILY
 except ImportError:
     FONT_FAMILY = "Segoe UI"
+
+try:
+    from widgets.chat_bubble import ChatBubble
+except ImportError:
+    # Fallback if chat_bubble is not available
+    ChatBubble = None
 
 
 class FloatingChatWindow(QWidget):
@@ -132,17 +138,28 @@ class FloatingChatWindow(QWidget):
         self.status_label.setStyleSheet("color: #666; font-size: 11px; padding: 2px;")
         layout.addWidget(self.status_label)
         
-        # Chat display area
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setPlaceholderText("Chat messages will appear here...")
-        # Enable text selection and context menu for copying
-        self.chat_display.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse | 
-            Qt.TextInteractionFlag.TextSelectableByKeyboard
-        )
-        self.chat_display.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
-        layout.addWidget(self.chat_display, stretch=1)
+        # Chat display area with scroll
+        self.chat_scroll = QScrollArea()
+        self.chat_scroll.setWidgetResizable(True)
+        self.chat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.chat_scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                background-color: white;
+            }
+        """)
+        
+        # Container for chat bubbles
+        self.chat_container = QWidget()
+        self.chat_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.chat_layout = QVBoxLayout(self.chat_container)
+        self.chat_layout.setContentsMargins(5, 10, 5, 10)
+        self.chat_layout.setSpacing(5)
+        self.chat_layout.addStretch()  # Push messages to top
+        
+        self.chat_scroll.setWidget(self.chat_container)
+        layout.addWidget(self.chat_scroll, stretch=1)
         
         # Input area
         input_frame = QFrame()
@@ -332,53 +349,144 @@ class FloatingChatWindow(QWidget):
             return f"Error: {str(e)}"
     
     def _add_user_message(self, message: str):
-        """Add user message to chat display."""
-        self.chat_display.append(f'<div style="margin: 10px 0; text-align: right;">'
-                                 f'<span style="background-color: #0078d4; color: white; '
-                                 f'padding: 8px 12px; border-radius: 12px; display: inline-block; '
-                                 f'max-width: 70%;">{self._escape_html(message)}</span></div>')
+        """Add user message to chat display (right side)."""
+        # Create container for right-aligned message
+        msg_container = QWidget()
+        msg_layout = QHBoxLayout(msg_container)
+        msg_layout.setContentsMargins(5, 2, 5, 2)
+        msg_layout.setSpacing(0)
+        
+        # Add spacer (30% minimum on left for right-aligned messages)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        msg_layout.addItem(spacer)
+        
+        if ChatBubble:
+            # Use chat bubble widget
+            bubble = ChatBubble(message, is_user=True)
+            bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            bubble.setStyleSheet("""
+                QFrame {
+                    background-color: #0078d4;
+                    border-radius: 15px;
+                    margin: 2px;
+                }
+                QLabel {
+                    color: white;
+                    font-size: 13px;
+                    padding: 10px 14px;
+                }
+            """)
+            msg_layout.addWidget(bubble, stretch=2)  # Takes up to 2/3 of space
+        else:
+            # Fallback to simple label
+            label = QLabel(message)
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            label.setStyleSheet("""
+                background-color: #0078d4;
+                color: white;
+                padding: 10px 14px;
+                border-radius: 15px;
+                font-size: 13px;
+            """)
+            msg_layout.addWidget(label, stretch=2)
+        
+        # Insert before the stretch at the end
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
         self._scroll_to_bottom()
     
     def _add_ai_message(self, message: str):
-        """Add AI message to chat display."""
-        self.chat_display.append(f'<div style="margin: 10px 0;">'
-                                 f'<span style="background-color: #e9ecef; color: #333; '
-                                 f'padding: 8px 12px; border-radius: 12px; display: inline-block; '
-                                 f'max-width: 70%;">{self._escape_html(message)}</span></div>')
+        """Add AI message to chat display (left side)."""
+        # Create container for left-aligned message
+        msg_container = QWidget()
+        msg_layout = QHBoxLayout(msg_container)
+        msg_layout.setContentsMargins(5, 2, 5, 2)
+        msg_layout.setSpacing(0)
+        
+        if ChatBubble:
+            # Use chat bubble widget
+            bubble = ChatBubble(message, is_user=False)
+            bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            bubble.setStyleSheet("""
+                QFrame {
+                    background-color: #e9ecef;
+                    border-radius: 15px;
+                    margin: 2px;
+                }
+                QLabel {
+                    color: #333;
+                    font-size: 13px;
+                    padding: 10px 14px;
+                }
+            """)
+            msg_layout.addWidget(bubble, stretch=2)  # Takes up to 2/3 of space
+        else:
+            # Fallback to simple label
+            label = QLabel(message)
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+            label.setStyleSheet("""
+                background-color: #e9ecef;
+                color: #333;
+                padding: 10px 14px;
+                border-radius: 15px;
+                font-size: 13px;
+            """)
+            msg_layout.addWidget(label, stretch=2)
+        
+        # Add spacer (30% minimum on right for left-aligned messages)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        msg_layout.addItem(spacer)
+        
+        # Insert before the stretch at the end
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
         self._scroll_to_bottom()
     
     def _add_system_message(self, message: str):
-        """Add system message to chat display."""
-        self.chat_display.append(f'<div style="margin: 10px 0; text-align: center;">'
-                                 f'<span style="color: #6c757d; font-size: 11px; font-style: italic;">'
-                                 f'{self._escape_html(message)}</span></div>')
+        """Add system message to chat display (centered)."""
+        # Create container for centered message
+        msg_container = QWidget()
+        msg_layout = QHBoxLayout(msg_container)
+        msg_layout.setContentsMargins(0, 0, 0, 0)
+        msg_layout.addStretch()
+        
+        label = QLabel(message)
+        label.setStyleSheet("""
+            color: #6c757d;
+            font-size: 11px;
+            font-style: italic;
+            padding: 5px;
+        """)
+        msg_layout.addWidget(label)
+        msg_layout.addStretch()
+        
+        # Insert before the stretch at the end
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
         self._scroll_to_bottom()
     
     def _remove_last_message(self):
         """Remove the last message from chat display."""
-        cursor = self.chat_display.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-        cursor.removeSelectedText()
-        cursor.deletePreviousChar()  # Remove the newline
-    
-    def _escape_html(self, text: str) -> str:
-        """Escape HTML special characters."""
-        return (text.replace('&', '&amp;')
-                   .replace('<', '&lt;')
-                   .replace('>', '&gt;')
-                   .replace('"', '&quot;')
-                   .replace("'", '&#39;')
-                   .replace('\n', '<br>'))
+        # Get the last widget before the stretch
+        count = self.chat_layout.count()
+        if count > 1:  # Keep the stretch
+            item = self.chat_layout.takeAt(count - 2)
+            if item and item.widget():
+                item.widget().deleteLater()
     
     def _scroll_to_bottom(self):
         """Scroll chat display to bottom."""
-        scrollbar = self.chat_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        QTimer.singleShot(100, lambda: self.chat_scroll.verticalScrollBar().setValue(
+            self.chat_scroll.verticalScrollBar().maximum()
+        ))
     
     def _clear_chat(self):
         """Clear chat history."""
-        self.chat_display.clear()
+        # Remove all widgets except the stretch
+        while self.chat_layout.count() > 1:
+            item = self.chat_layout.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+        
         self._conversation_history.clear()
         self._add_system_message("Chat cleared")
     
