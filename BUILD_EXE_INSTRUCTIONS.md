@@ -8,6 +8,12 @@ This guide explains how to create a standalone Windows executable (.exe) for the
 2. **Virtual environment** with all dependencies installed
 3. **PyInstaller** (will be installed automatically by the build script)
 
+## Build Structure
+
+The build system uses PyInstaller hooks located in the `build_hooks/` folder:
+- `hook-*.py` - Module collection hooks for each package
+- `runtime_hook_llama.py` - Runtime DLL path setup for llama.cpp
+
 ## Quick Start
 
 ### Option 1: Using the Build Script (Recommended)
