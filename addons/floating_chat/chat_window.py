@@ -136,6 +136,12 @@ class FloatingChatWindow(QWidget):
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
         self.chat_display.setPlaceholderText("Chat messages will appear here...")
+        # Enable text selection and context menu for copying
+        self.chat_display.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | 
+            Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        self.chat_display.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
         layout.addWidget(self.chat_display, stretch=1)
         
         # Input area
@@ -150,6 +156,8 @@ class FloatingChatWindow(QWidget):
         self.input_field.setPlaceholderText("Type your message here...")
         self.input_field.setMaximumHeight(100)
         self.input_field.setMinimumHeight(60)
+        # Ensure context menu is enabled for copy/paste/cut
+        self.input_field.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
         input_layout.addWidget(self.input_field)
         
         # Button row
@@ -388,11 +396,13 @@ class FloatingChatWindow(QWidget):
         self._add_system_message(f"❌ Error: {error_message}")
     
     def eventFilter(self, obj, event):
-        """Event filter for Ctrl+Enter to send."""
+        """Event filter for Ctrl+Enter to send - allows all other shortcuts."""
         if obj == self.input_field and event.type() == event.Type.KeyPress:
+            # Only intercept Ctrl+Enter for sending
             if event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
                 self._send_message()
                 return True
+            # Let all other keys pass through (including Ctrl+V, Ctrl+C, Ctrl+X, Ctrl+A, etc.)
         return super().eventFilter(obj, event)
     
     def closeEvent(self, event):
