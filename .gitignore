@@ -108,6 +108,8 @@ cython_debug/
 
 # Application specific
 config.json
+email_config.json
+feedback_config.json
 *.db
 *.sqlite
 *.sqlite3

@@ -292,6 +292,13 @@ class UISetupMixin:
         self.clear_chat_btn.clicked.connect(self.clear_chat)
         layout.addWidget(self.clear_chat_btn)
 
+        # Feedback button
+        self.feedback_btn = QPushButton("📧 Send Feedback")
+        self.feedback_btn.setMinimumHeight(35)
+        self.feedback_btn.clicked.connect(self.show_feedback_dialog)
+        self.feedback_btn.setToolTip("Share your thoughts, report bugs, or suggest features")
+        layout.addWidget(self.feedback_btn)
+
         # Spacer
         layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 

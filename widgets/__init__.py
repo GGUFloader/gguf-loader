@@ -8,9 +8,11 @@ including addon sidebar, chat bubbles, and collapsible widgets.
 from .addon_sidebar import AddonSidebar
 from .chat_bubble import ChatBubble
 from .collapsible_widget import CollapsibleWidget
+from .feedback_dialog import FeedbackDialog
 
 __all__ = [
     'AddonSidebar',
     'ChatBubble',
-    'CollapsibleWidget'
+    'CollapsibleWidget',
+    'FeedbackDialog'
 ]
