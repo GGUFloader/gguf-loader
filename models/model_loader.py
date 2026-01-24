@@ -32,16 +32,16 @@ class ModelLoader(QThread):
                 self.error.emit("llama-cpp-python is not installed")
                 return
 
-            # Configure GPU layers
-            n_gpu_layers = 20 if self.use_gpu else 0
-            self.progress.emit(f"Initializing {'GPU' if self.use_gpu else 'CPU'} mode...")
+            # Configure GPU layers - RTX 4060 can handle more layers
+            n_gpu_layers = 35 if self.use_gpu else 0
+            self.progress.emit(f"Initializing {'GPU' if self.use_gpu else 'CPU'} mode with {n_gpu_layers} layers...")
 
             # Load the model
             model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.n_ctx,
                 n_gpu_layers=n_gpu_layers,
-                verbose=False
+                verbose=True  # Enable verbose to see GPU usage
             )
 
             self.progress.emit("Model loaded successfully!")
