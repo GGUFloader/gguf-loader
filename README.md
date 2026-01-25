@@ -117,9 +117,9 @@ ggufloader
 - **[FAQ](docs/faq.md)** - Frequently asked questions
 - **[All Documentation](DOCUMENTATION.md)** - Complete documentation index
 
-## 🎬 Demo Video
+## 🎬 Screenshot
 
-[![Watch Demo](https://img.youtube.com/vi/5lQui7EeUe0/maxresdefault.jpg)](https://www.youtube.com/watch?v=5lQui7EeUe0)
+![GGUF Loader Interface](screen.png)
 
 ## 🛠️ System Requirements
 
@@ -127,6 +127,73 @@ ggufloader
 - **RAM:** 4GB minimum (8GB recommended)
 - **Storage:** 2GB free space
 - **GPU:** Optional (CUDA/OpenCL support)
+
+## 🚀 GPU Acceleration (Optional)
+
+GGUF Loader supports GPU acceleration for significantly faster inference speeds. If you have an NVIDIA GPU, follow these steps:
+
+### Prerequisites
+- NVIDIA GPU (GTX 1060 or newer recommended)
+- CUDA Toolkit installed (CUDA 12.x recommended)
+- Latest NVIDIA drivers
+
+### Installation Steps
+
+**Step 1: Run the GPU installation script**
+
+**Option A: Pre-built wheel (Recommended - Fastest)**
+```bash
+# Windows
+install_gpu_llama.bat
+
+# Linux/macOS
+chmod +x install_gpu_llama.sh
+./install_gpu_llama.sh
+```
+
+**Option B: Build from source (requires Visual Studio Build Tools)**
+```bash
+# Windows
+install_gpu_llama_source.bat
+
+# Linux/macOS
+chmod +x install_gpu_llama_source.sh
+./install_gpu_llama_source.sh
+```
+
+**Step 2: Verify GPU support**
+```bash
+python verify_gpu_support.py
+```
+
+**Step 3: Use GPU acceleration**
+1. Launch GGUF Loader
+2. In the "Processing Mode" dropdown, select **"GPU Accelerated"**
+3. Load your model - you'll see "(GPU)" in the status
+4. Start chatting with GPU-accelerated inference!
+
+### Performance Tips
+- **RTX 4060 (8GB):** Can offload 25-40 layers depending on model size
+- **RTX 3060 (12GB):** Can offload 40-50 layers
+- **RTX 4090 (24GB):** Can offload entire models (60+ layers)
+
+### Monitoring GPU Usage
+Run this in a separate terminal while using GGUF Loader:
+```bash
+# Windows
+monitor_gpu.bat
+
+# Linux/macOS
+watch -n 1 nvidia-smi
+```
+
+Watch the "GPU-Util" column increase when generating responses - this confirms GPU acceleration is working!
+
+### Troubleshooting
+- **"pip not recognized"**: The script will automatically activate your virtual environment
+- **Slow speeds**: Try increasing GPU layers in `models/model_loader.py` (default: 35)
+- **Out of memory**: Reduce GPU layers or use a smaller model
+- **No speedup**: Verify CUDA is installed with `nvidia-smi`
 
 ## 🤝 Contributing
 
