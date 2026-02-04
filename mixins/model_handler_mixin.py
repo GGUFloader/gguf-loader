@@ -30,17 +30,6 @@ class ModelHandlerMixin:
             )
             return
 
-        # Unload existing model first
-        if self.model is not None:
-            self.status_label.setText("Unloading previous model...")
-            try:
-                del self.model
-                self.model = None
-                import gc
-                gc.collect()
-            except Exception as e:
-                print(f"Error unloading previous model: {e}")
-
         # Show progress
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # Indeterminate
@@ -64,15 +53,6 @@ class ModelHandlerMixin:
 
     def on_model_loaded(self, model):
         """Handle successful model loading"""
-        # Unload previous model if exists
-        if self.model is not None:
-            try:
-                del self.model
-                import gc
-                gc.collect()
-            except Exception as e:
-                print(f"Error unloading previous model: {e}")
-        
         self.model = model
         self.progress_bar.setVisible(False)
         self.load_model_btn.setEnabled(True)
@@ -82,12 +62,11 @@ class ModelHandlerMixin:
         self.send_btn.setEnabled(has_text)
 
         model_name = Path(self.model_loader.model_path).name
-        gpu_mode = "GPU" if self.model_loader.use_gpu else "CPU"
-        self.model_info.setText(f"✅ Loaded: {model_name} ({gpu_mode})")
-        self.status_label.setText(f"Model ready in {gpu_mode} mode! Start chatting...")
+        self.model_info.setText(f"✅ Loaded: {model_name}")
+        self.status_label.setText("Model ready! Start chatting...")
 
         # Add system message
-        self.add_system_message(f"🤖 AI Assistant loaded in {gpu_mode} mode and ready to help!")
+        self.add_system_message("🤖 AI Assistant loaded and ready to help!")
         
         # Emit signal for addon integration
         if hasattr(self, 'model_loaded'):
