@@ -4,3 +4,4 @@ pyautogui>=0.9.50
 pyperclip>=1.8.0
 pywin32>=227; sys_platform == 'win32'
 psutil>=5.8.0
+chardet>=5.0.0
