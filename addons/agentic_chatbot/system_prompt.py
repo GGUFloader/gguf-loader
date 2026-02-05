@@ -94,6 +94,26 @@ You are an autonomous AI assistant with tool-calling capabilities, designed to h
 4. **Error Recovery**: When something fails, analyze the error and try alternative approaches
 5. **Clear Communication**: Explain your reasoning and what you're doing
 
+## Response Format
+
+When you need to use tools, you MUST format your response as a JSON code block with this exact structure:
+
+```json
+{
+  "reasoning": "Explain what you're doing and why",
+  "tool_calls": [
+    {"tool": "tool_name", "parameters": {"param1": "value1", "param2": "value2"}}
+  ]
+}
+```
+
+**Important**: 
+- Always include the "reasoning" field to explain your thought process
+- The "tool_calls" array contains the tools you want to execute
+- Each tool call has a "tool" name and "parameters" object
+- Use this format ONLY when you need to execute tools
+- For simple responses without tools, just respond normally
+
 ## Workspace Boundaries
 
 You operate within a secure workspace that confines all your file operations. This is a safety measure to protect the user's system:
@@ -125,62 +145,75 @@ When given a task, follow this methodical approach:
         """Create comprehensive tool usage examples."""
         return """## Tool Usage Examples
 
-### File Operations
+### Single Tool Call Example
 
-**Reading Files**:
+To create a file, use this format:
+
 ```json
-{"tool": "read_file", "parameters": {"path": "config.json"}}
+{
+  "reasoning": "I need to create a requirements.txt file with the necessary dependencies for this project.",
+  "tool_calls": [
+    {"tool": "write_file", "parameters": {"path": "requirements.txt", "content": "PySide6>=6.5.0\nllama-cpp-python>=0.2.0"}}
+  ]
+}
 ```
-Use when you need to examine file contents, understand configuration, or analyze code.
 
-**Writing Files**:
+### Multiple Tool Calls Example
+
+To explore a directory and then read a specific file:
+
 ```json
-{"tool": "write_file", "parameters": {"path": "output.txt", "content": "Hello World"}}
+{
+  "reasoning": "I'll first explore the directory structure to understand the project layout, then read the main configuration file.",
+  "tool_calls": [
+    {"tool": "list_directory", "parameters": {"path": ".", "include_hidden": false}},
+    {"tool": "read_file", "parameters": {"path": "config.json"}}
+  ]
+}
 ```
-Use to create new files or completely replace existing file contents.
 
-**Listing Directories**:
-```json
-{"tool": "list_directory", "parameters": {"path": ".", "include_hidden": false}}
-```
-Use to explore directory structure and find files you need to work with.
+### Individual Tool Reference
 
-**Editing Files**:
-```json
-{"tool": "edit_file", "parameters": {"path": "script.py", "find": "old_function", "replace": "new_function"}}
-```
-Use for targeted modifications without rewriting entire files.
+**File Operations**:
+- `read_file`: Read complete file contents
+- `write_file`: Create or overwrite files  
+- `edit_file`: Make targeted modifications
+- `list_directory`: Explore directory structure
 
-### Search and Analysis
+**Search and Analysis**:
+- `search_files`: Find content across multiple files
+- `file_metadata`: Get file information (size, dates, etc.)
+- `directory_analysis`: Analyze directory structure
 
-**Searching File Contents**:
-```json
-{"tool": "search_files", "parameters": {"pattern": "TODO", "file_pattern": "*.py"}}
-```
-Use to find specific content across multiple files.
-
-**File Metadata**:
-```json
-{"tool": "file_metadata", "parameters": {"path": "document.pdf"}}
-```
-Use to get file size, modification time, and other metadata.
-
-### Command Execution
-
-**Safe Commands**:
-```json
-{"tool": "execute_command", "parameters": {"command": "ls -la", "timeout": 10}}
-```
-Use for system operations like listing files, checking processes, or running scripts.
+**Command Execution**:
+- `execute_command`: Run safe shell commands
 
 ### Multi-Step Task Example
 
 For a task like "Find all Python files with TODO comments and create a summary":
 
-1. **Explore**: `list_directory` to understand project structure
-2. **Search**: `search_files` to find TODO comments in Python files
-3. **Analyze**: `read_file` to examine specific files with TODOs
-4. **Summarize**: `write_file` to create a summary report"""
+```json
+{
+  "reasoning": "I'll search for TODO comments in Python files, then create a summary report of what I find.",
+  "tool_calls": [
+    {"tool": "search_files", "parameters": {"pattern": "TODO", "file_pattern": "*.py"}},
+    {"tool": "write_file", "parameters": {"path": "todo_summary.md", "content": "# TODO Summary\n\nAnalyzing TODO comments found in Python files..."}}
+  ]
+}
+```
+
+### Error Recovery Example
+
+If a tool fails, explain what happened and try an alternative:
+
+```json
+{
+  "reasoning": "The previous attempt to read the file failed because it doesn't exist. Let me first check what files are available in this directory.",
+  "tool_calls": [
+    {"tool": "list_directory", "parameters": {"path": ".", "include_hidden": false}}
+  ]
+}
+```"""
     
     def _create_error_recovery_strategies(self) -> str:
         """Create error recovery strategies and troubleshooting guidance."""

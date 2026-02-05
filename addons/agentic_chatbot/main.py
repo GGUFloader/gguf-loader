@@ -569,26 +569,58 @@ def register(parent=None):
     Register function called by the GGUF Loader addon system.
     
     Args:
-        parent: Parent widget (GGUF Loader main window)
+        parent: Parent widget (might be dialog or main window)
         
     Returns:
         QWidget: Status widget for the addon sidebar, or None for background addons
     """
     try:
-        # Get reference to the main GGUF Loader application
-        gguf_app = parent
+        # Find the main GGUF Loader application
+        gguf_app = None
+        
+        # First, try to use parent directly if it's the main app
+        if parent and hasattr(parent, 'model') and hasattr(parent, 'model_loaded'):
+            gguf_app = parent
+        else:
+            # If parent is a dialog or other widget, try to find the main window
+            current_widget = parent
+            while current_widget is not None:
+                # Check if this widget is the main AIChat window
+                if hasattr(current_widget, 'model') and hasattr(current_widget, 'model_loaded'):
+                    gguf_app = current_widget
+                    break
+                
+                # Try parent widget
+                current_widget = current_widget.parent() if hasattr(current_widget, 'parent') else None
+            
+            # If still not found, try to get it from QApplication
+            if gguf_app is None:
+                from PySide6.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app:
+                    # Look through all top-level widgets
+                    for widget in app.topLevelWidgets():
+                        if hasattr(widget, 'model') and hasattr(widget, 'model_loaded'):
+                            gguf_app = widget
+                            break
+        
+        if gguf_app is None:
+            logging.error("Could not find main GGUF Loader application instance")
+            return None
+        
+        logging.info(f"Found GGUF app: {type(gguf_app).__name__}")
         
         # Stop existing addon if running
-        if hasattr(parent, '_agentic_chatbot_addon') and parent._agentic_chatbot_addon:
-            parent._agentic_chatbot_addon.stop()
+        if hasattr(gguf_app, '_agentic_chatbot_addon') and gguf_app._agentic_chatbot_addon:
+            gguf_app._agentic_chatbot_addon.stop()
         
         # Create and start the addon
         addon = AgenticChatbotAddon(gguf_app)
         success = addon.start()
         
         if success:
-            # Store addon reference in parent for lifecycle management
-            parent._agentic_chatbot_addon = addon
+            # Store addon reference in gguf_app for lifecycle management
+            gguf_app._agentic_chatbot_addon = addon
             
             # Create status widget for addon sidebar
             from .status_widget import AgenticChatbotStatusWidget

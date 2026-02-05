@@ -189,6 +189,26 @@ class AgentWindow(QWidget):
         self.model_status_label.setStyleSheet("color: #666; font-size: 12px; padding: 5px;")
         header_layout.addWidget(self.model_status_label)
         
+        # Add refresh button for model status
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setToolTip("Refresh model status")
+        refresh_btn.setMaximumWidth(30)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        refresh_btn.clicked.connect(self._refresh_model_status)
+        header_layout.addWidget(refresh_btn)
+        
         main_layout.addLayout(header_layout)
         
         # Workspace selector section
@@ -435,17 +455,26 @@ class AgentWindow(QWidget):
     def _connect_signals(self):
         """Connect signals from addon components."""
         try:
+            self._logger.debug("Connecting signals...")
+            
             if self.addon and hasattr(self.addon, 'gguf_app'):
+                self._logger.debug("Addon and gguf_app available")
+                
                 # Connect to model status
                 if hasattr(self.addon.gguf_app, 'model_loaded'):
                     self.addon.gguf_app.model_loaded.connect(self._on_model_loaded)
+                    self._logger.debug("Connected to model_loaded signal")
+                else:
+                    self._logger.warning("gguf_app has no model_loaded signal")
                 
                 # Connect to addon signals
                 if hasattr(self.addon, 'tool_call_executed'):
                     self.addon.tool_call_executed.connect(self._on_tool_executed)
+                    self._logger.debug("Connected to tool_call_executed signal")
                 
                 if hasattr(self.addon, 'agent_session_created'):
                     self.addon.agent_session_created.connect(self._on_session_created)
+                    self._logger.debug("Connected to agent_session_created signal")
                 
                 # Connect to agent loop signals if available
                 agent_loop = self.addon.get_agent_loop()
@@ -455,13 +484,26 @@ class AgentWindow(QWidget):
                     agent_loop.response_generated.connect(self._on_response_generated)
                     agent_loop.error_occurred.connect(self._on_agent_error)
                     agent_loop.turn_completed.connect(self._on_turn_completed)
+                    self._logger.debug("Connected to agent loop signals")
+                else:
+                    self._logger.warning("No agent loop available for signal connection")
+            else:
+                self._logger.warning("No addon or gguf_app available for signal connection")
             
             # Connect workspace selector
             if self._workspace_selector:
                 self._workspace_selector.currentTextChanged.connect(self._on_workspace_changed)
+                self._logger.debug("Connected workspace selector signal")
+            
+            # IMPORTANT: Check model status immediately after connecting signals
+            # This handles the case where model was loaded before agent window was created
+            self._logger.debug("Performing initial model status check...")
+            self._update_model_status()
                 
         except Exception as e:
             self._logger.error(f"Error connecting signals: {e}")
+            import traceback
+            self._logger.error(f"Signal connection traceback: {traceback.format_exc()}")
     
     def _initialize_default_workspace(self):
         """Initialize with default workspace options."""
@@ -484,8 +526,31 @@ class AgentWindow(QWidget):
             # Update model status
             self._update_model_status()
             
+            # Set up periodic model status check to handle cases where model is loaded
+            # after agent window is created
+            self._model_check_timer = QTimer()
+            self._model_check_timer.timeout.connect(self._periodic_model_check)
+            self._model_check_timer.start(2000)  # Check every 2 seconds
+            
         except Exception as e:
             self._logger.error(f"Error initializing default workspace: {e}")
+    
+    def _periodic_model_check(self):
+        """Periodically check model status to catch late model loading."""
+        try:
+            # Only check if we think no model is loaded
+            current_text = self.model_status_label.text()
+            if "Not loaded" in current_text or "⚪" in current_text or "🔴" in current_text:
+                self._update_model_status()
+                
+                # If model is now detected, we can reduce the frequency of checks
+                new_text = self.model_status_label.text()
+                if "Ready" in new_text or "🟢" in new_text:
+                    self._logger.debug("Model detected during periodic check - reducing check frequency")
+                    self._model_check_timer.setInterval(10000)  # Check every 10 seconds instead
+                    
+        except Exception as e:
+            self._logger.debug(f"Error in periodic model check: {e}")
     
     def _browse_workspace(self):
         """Open file dialog to browse for workspace directory."""
@@ -554,7 +619,9 @@ class AgentWindow(QWidget):
                 return
             
             # Check if model is available
-            if not self._is_model_loaded():
+            model_loaded = self._is_model_loaded()
+            
+            if not model_loaded:
                 self._add_system_message("⚠️ Please load a model first in the main window.")
                 return
             
@@ -900,20 +967,52 @@ class AgentWindow(QWidget):
         except Exception as e:
             self._logger.error(f"Error setting generating state: {e}")
     
+    def _refresh_model_status(self):
+        """Manually refresh model status - useful for debugging."""
+        try:
+            self._logger.info("Manually refreshing model status...")
+            self._update_model_status()
+            
+            # Also check if we can access the model directly for debugging
+            if self.addon and hasattr(self.addon, 'gguf_app'):
+                if hasattr(self.addon.gguf_app, 'model'):
+                    model = self.addon.gguf_app.model
+                    self._logger.info(f"Direct model check - model: {model}, type: {type(model)}")
+                    if model is not None:
+                        self._add_system_message(f"🔍 Model detected: {type(model).__name__}")
+                    else:
+                        self._add_system_message("🔍 Model is None")
+                else:
+                    self._logger.info("Direct model check - no model attribute")
+                    self._add_system_message("🔍 No model attribute found")
+            else:
+                self._logger.info("Direct model check - no gguf_app")
+                self._add_system_message("🔍 No gguf_app found")
+                
+        except Exception as e:
+            self._logger.error(f"Error refreshing model status: {e}")
+            self._add_system_message(f"❌ Error checking model: {e}")
+    
     def _update_model_status(self):
         """Update model status indicator."""
         try:
-            if self._is_model_loaded():
+            model_loaded = self._is_model_loaded()
+            
+            if model_loaded:
                 self.model_status_label.setText("🟢 Model: Ready")
                 self.model_status_label.setStyleSheet("color: #28a745; font-size: 12px; padding: 5px;")
                 self._send_btn.setEnabled(not self._is_generating)
+                self._logger.debug("Model status updated: Ready")
             else:
                 self.model_status_label.setText("🔴 Model: Not loaded")
                 self.model_status_label.setStyleSheet("color: #dc3545; font-size: 12px; padding: 5px;")
                 self._send_btn.setEnabled(False)
+                self._logger.debug("Model status updated: Not loaded")
                 
         except Exception as e:
             self._logger.error(f"Error updating model status: {e}")
+            self.model_status_label.setText("⚠️ Model: Error")
+            self.model_status_label.setStyleSheet("color: #ffc107; font-size: 12px; padding: 5px;")
     
     def _update_session_status(self, session_id: str, workspace_path: str):
         """Update session status display."""
@@ -938,11 +1037,52 @@ class AgentWindow(QWidget):
     def _is_model_loaded(self) -> bool:
         """Check if model is loaded in the main app."""
         try:
-            return (self.addon and 
-                    hasattr(self.addon, 'gguf_app') and 
-                    hasattr(self.addon.gguf_app, 'model') and 
-                    self.addon.gguf_app.model is not None)
-        except Exception:
+            if not self.addon:
+                self._logger.debug("No addon available")
+                return False
+            
+            if not hasattr(self.addon, 'gguf_app'):
+                self._logger.debug("Addon has no gguf_app attribute")
+                return False
+            
+            gguf_app = self.addon.gguf_app
+            if not gguf_app:
+                self._logger.debug("gguf_app is None")
+                return False
+            
+            if not hasattr(gguf_app, 'model'):
+                self._logger.debug("gguf_app has no model attribute")
+                return False
+            
+            model = gguf_app.model
+            if model is None:
+                self._logger.debug("Model is None")
+                return False
+            
+            # Check for different model types
+            model_type = type(model).__name__
+            
+            # Real llama-cpp-python model (check this first)
+            if model_type == 'Llama':
+                self._logger.debug("Real Llama model detected")
+                return True
+            
+            # Mock object for testing (check after Llama to handle mocks with Llama name)
+            if hasattr(model, '_mock_name') or 'Mock' in str(type(model)):
+                self._logger.debug("Mock model detected")
+                return True
+            
+            # Check for common model methods
+            if hasattr(model, '__call__') or hasattr(model, 'generate') or hasattr(model, '__iter__'):
+                self._logger.debug(f"Model with expected methods detected: {model_type}")
+                return True
+            
+            # If it's not None and we can't identify it, assume it's loaded
+            self._logger.debug(f"Unknown model type detected, assuming loaded: {model_type}")
+            return True
+            
+        except Exception as e:
+            self._logger.debug(f"Exception in _is_model_loaded: {e}")
             return False
     
     def _get_timestamp(self) -> str:
@@ -983,8 +1123,14 @@ class AgentWindow(QWidget):
     def _on_model_loaded(self, model):
         """Handle model loaded signal from main app."""
         try:
+            self._logger.info(f"Model loaded signal received: {model}")
             self._update_model_status()
             self._add_system_message("🟢 Model loaded - agent ready")
+            
+            # Stop the frequent model checking timer since model is now loaded
+            if hasattr(self, '_model_check_timer'):
+                self._model_check_timer.setInterval(10000)  # Reduce to every 10 seconds
+                
         except Exception as e:
             self._logger.error(f"Error handling model loaded: {e}")
     
@@ -1113,6 +1259,11 @@ class AgentWindow(QWidget):
     def closeEvent(self, event):
         """Handle window close event."""
         try:
+            # Stop model check timer
+            if hasattr(self, '_model_check_timer') and self._model_check_timer:
+                self._model_check_timer.stop()
+                self._model_check_timer = None
+            
             self.window_closed.emit()
             super().closeEvent(event)
         except Exception as e:

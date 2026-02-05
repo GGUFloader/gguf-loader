@@ -429,7 +429,7 @@ class AgentLoop(QThread):
         Returns:
             str: Formatted conversation context
         """
-        context = self.system_prompt + "\n\n"
+        context = self._system_prompt + "\n\n" if self._system_prompt else "You are an AI assistant.\n\n"
         
         # Use context manager to get optimized conversation history
         if self._current_session_id:
@@ -650,7 +650,7 @@ class AgentLoop(QThread):
         """
         try:
             # Build context with tool results
-            context = f"{self.system_prompt}\n\n"
+            context = f"{self._system_prompt}\n\n" if self._system_prompt else "You are an AI assistant.\n\n"
             context += f"User Request: {user_message}\n\n"
             context += "Tool Execution Results:\n"
             

@@ -1,7 +1,16 @@
-PySide6>=6.0.0
+# GGUF Loader Requirements
+# Core dependencies for the GGUF Loader application
+
+# GUI Framework
+PySide6>=6.5.0
+
+# AI/ML Dependencies
 llama-cpp-python>=0.2.0
-pyautogui>=0.9.50
-pyperclip>=1.8.0
-pywin32>=227; sys_platform == 'win32'
-psutil>=5.8.0
-chardet>=5.0.0
+
+# Optional GPU acceleration (uncomment if needed)
+# llama-cpp-python[cuda]>=0.2.0  # For CUDA support
+# llama-cpp-python[metal]>=0.2.0  # For Metal support (macOS)
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# pytest-qt>=4.0.0
