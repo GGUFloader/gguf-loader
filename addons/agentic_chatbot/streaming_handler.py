@@ -43,6 +43,14 @@ class StreamingHandler(QObject):
     streaming_error = Signal(str)                   # error_message
     progress_updated = Signal(int, int)             # current, total
     
+    # Enhanced signals for process visibility
+    process_step_started = Signal(str, str)         # step_name, description
+    process_step_completed = Signal(str)            # step_name
+    reasoning_chunk_received = Signal(str)          # reasoning_text
+    tool_call_detected = Signal(dict)               # tool_call_info
+    tool_execution_started = Signal(str, dict)      # tool_name, parameters
+    tool_execution_completed = Signal(str, dict)    # tool_name, result
+    
     def __init__(self, config: Dict[str, Any]):
         """
         Initialize the streaming handler.
@@ -288,6 +296,129 @@ class StreamingHandler(QObject):
             self.finish_streaming()
         
         self._logger.info(f"Streaming {'enabled' if enabled else 'disabled'}")
+    
+    def add_process_step(self, step_name: str, description: str):
+        """
+        Add a process step for visibility.
+        
+        Args:
+            step_name: Name of the process step
+            description: Description of what's happening
+        """
+        try:
+            if not self.enable_streaming:
+                return
+            
+            self._logger.debug(f"Process step started: {step_name} - {description}")
+            self.process_step_started.emit(step_name, description)
+            
+            # Add as a chunk for tracking
+            self.add_chunk(description, 'process_step', {'step_name': step_name})
+            
+        except Exception as e:
+            self._logger.error(f"Error adding process step: {e}")
+    
+    def complete_process_step(self, step_name: str):
+        """
+        Mark a process step as completed.
+        
+        Args:
+            step_name: Name of the completed step
+        """
+        try:
+            if not self.enable_streaming:
+                return
+            
+            self._logger.debug(f"Process step completed: {step_name}")
+            self.process_step_completed.emit(step_name)
+            
+        except Exception as e:
+            self._logger.error(f"Error completing process step: {e}")
+    
+    def add_reasoning_chunk(self, reasoning_text: str):
+        """
+        Add reasoning text chunk for streaming display.
+        
+        Args:
+            reasoning_text: Chunk of reasoning text
+        """
+        try:
+            if not self.enable_streaming:
+                return
+            
+            self.reasoning_chunk_received.emit(reasoning_text)
+            self.add_chunk(reasoning_text, 'reasoning')
+            
+        except Exception as e:
+            self._logger.error(f"Error adding reasoning chunk: {e}")
+    
+    def notify_tool_call_detected(self, tool_name: str, parameters: dict):
+        """
+        Notify that a tool call was detected in the response.
+        
+        Args:
+            tool_name: Name of the tool to be called
+            parameters: Parameters for the tool call
+        """
+        try:
+            if not self.enable_streaming:
+                return
+            
+            tool_info = {
+                'tool_name': tool_name,
+                'parameters': parameters,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            self.tool_call_detected.emit(tool_info)
+            self.add_chunk(f"Tool call detected: {tool_name}", 'tool_detection', tool_info)
+            
+        except Exception as e:
+            self._logger.error(f"Error notifying tool call detected: {e}")
+    
+    def notify_tool_execution_started(self, tool_name: str, parameters: dict):
+        """
+        Notify that tool execution has started.
+        
+        Args:
+            tool_name: Name of the tool being executed
+            parameters: Parameters for the tool execution
+        """
+        try:
+            if not self.enable_streaming:
+                return
+            
+            self.tool_execution_started.emit(tool_name, parameters)
+            self.add_chunk(f"Executing tool: {tool_name}", 'tool_execution_start', {
+                'tool_name': tool_name,
+                'parameters': parameters
+            })
+            
+        except Exception as e:
+            self._logger.error(f"Error notifying tool execution started: {e}")
+    
+    def notify_tool_execution_completed(self, tool_name: str, result: dict):
+        """
+        Notify that tool execution has completed.
+        
+        Args:
+            tool_name: Name of the completed tool
+            result: Result of the tool execution
+        """
+        try:
+            if not self.enable_streaming:
+                return
+            
+            self.tool_execution_completed.emit(tool_name, result)
+            
+            status = result.get('status', 'unknown')
+            self.add_chunk(f"Tool {tool_name} completed: {status}", 'tool_execution_complete', {
+                'tool_name': tool_name,
+                'result': result
+            })
+            
+        except Exception as e:
+            self._logger.error(f"Error notifying tool execution completed: {e}")
     
     def get_stats(self) -> Dict[str, Any]:
         """

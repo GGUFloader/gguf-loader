@@ -68,6 +68,11 @@ class AgentWindow(QWidget):
         self._is_generating = False
         self._tool_execution_history: List[Dict[str, Any]] = []
         
+        # Streaming state
+        self._current_streaming_message: Optional[QLabel] = None
+        self._current_process_step: Optional[str] = None
+        self._streaming_buffer: str = ""
+        
         # UI components
         self._workspace_selector: Optional[QComboBox] = None
         self._chat_scroll: Optional[QScrollArea] = None
@@ -401,6 +406,11 @@ class AgentWindow(QWidget):
         self.current_tool_label.setStyleSheet("color: #666; font-size: 11px;")
         status_layout.addWidget(self.current_tool_label)
         
+        # Current process step
+        self.current_step_label = QLabel("⏸️ Ready")
+        self.current_step_label.setStyleSheet("color: #666; font-size: 11px;")
+        status_layout.addWidget(self.current_step_label)
+        
         tool_layout.addWidget(status_group)
         
         # Tool execution history
@@ -484,6 +494,23 @@ class AgentWindow(QWidget):
                     agent_loop.response_generated.connect(self._on_response_generated)
                     agent_loop.error_occurred.connect(self._on_agent_error)
                     agent_loop.turn_completed.connect(self._on_turn_completed)
+                    
+                    # Connect to streaming handler signals for real-time updates
+                    if hasattr(agent_loop, 'streaming_handler'):
+                        streaming_handler = agent_loop.streaming_handler
+                        streaming_handler.token_received.connect(self._on_token_received)
+                        streaming_handler.chunk_received.connect(self._on_chunk_received)
+                        streaming_handler.streaming_started.connect(self._on_streaming_started)
+                        streaming_handler.streaming_finished.connect(self._on_streaming_finished)
+                        streaming_handler.streaming_error.connect(self._on_streaming_error)
+                        streaming_handler.process_step_started.connect(self._on_process_step_started)
+                        streaming_handler.process_step_completed.connect(self._on_process_step_completed)
+                        streaming_handler.reasoning_chunk_received.connect(self._on_reasoning_chunk_received)
+                        streaming_handler.tool_call_detected.connect(self._on_tool_call_detected)
+                        streaming_handler.tool_execution_started.connect(self._on_tool_execution_started)
+                        streaming_handler.tool_execution_completed.connect(self._on_tool_execution_completed)
+                        self._logger.debug("Connected to streaming handler signals")
+                    
                     self._logger.debug("Connected to agent loop signals")
                 else:
                     self._logger.warning("No agent loop available for signal connection")
@@ -662,8 +689,12 @@ class AgentWindow(QWidget):
                 "timestamp": self._get_timestamp()
             })
             
-            # Show processing indicator
-            self._add_system_message("🤔 Agent is thinking...")
+            # Show processing indicator with streaming support
+            self._add_system_message("🤔 Agent is analyzing your request...")
+            
+            # Create streaming message placeholder
+            self._streaming_buffer = ""
+            self._current_streaming_message = self._create_streaming_message()
             
         except Exception as e:
             self._logger.error(f"Error sending message: {e}")
@@ -1327,3 +1358,255 @@ class AgentWindow(QWidget):
             # Turn completion is already handled by response_generated signal
         except Exception as e:
             self._logger.error(f"Error handling turn completed: {e}")
+    
+    # Streaming signal handlers
+    def _on_token_received(self, token: str):
+        """Handle token received from streaming handler."""
+        try:
+            # Add token to streaming buffer
+            self._streaming_buffer += token
+            
+            # Update current streaming message if it exists
+            if self._current_streaming_message:
+                self._current_streaming_message.setText(self._streaming_buffer)
+                self._scroll_to_bottom()
+                
+        except Exception as e:
+            self._logger.error(f"Error handling token received: {e}")
+    
+    def _on_chunk_received(self, chunk_data: dict):
+        """Handle chunk received from streaming handler."""
+        try:
+            chunk_type = chunk_data.get("chunk_type", "unknown")
+            content = chunk_data.get("content", "")
+            
+            if chunk_type == "reasoning":
+                self._add_reasoning_message(content)
+            elif chunk_type == "process_step":
+                step_name = chunk_data.get("metadata", {}).get("step_name", "unknown")
+                self._update_process_step(step_name, content)
+                
+        except Exception as e:
+            self._logger.error(f"Error handling chunk received: {e}")
+    
+    def _on_streaming_started(self, stream_type: str):
+        """Handle streaming started."""
+        try:
+            self._logger.debug(f"Streaming started: {stream_type}")
+            
+            # Create streaming message placeholder
+            self._streaming_buffer = ""
+            self._current_streaming_message = self._create_streaming_message()
+            
+            # Update UI state
+            self._set_generating_state(True)
+            
+        except Exception as e:
+            self._logger.error(f"Error handling streaming started: {e}")
+    
+    def _on_streaming_finished(self, stream_type: str):
+        """Handle streaming finished."""
+        try:
+            self._logger.debug(f"Streaming finished: {stream_type}")
+            
+            # Finalize streaming message
+            if self._current_streaming_message and self._streaming_buffer:
+                # Convert streaming message to final agent message
+                final_text = self._streaming_buffer.strip()
+                if final_text:
+                    # Remove the streaming message
+                    if self._current_streaming_message.parent():
+                        self._chat_layout.removeWidget(self._current_streaming_message.parent())
+                        self._current_streaming_message.parent().deleteLater()
+                    
+                    # Add as final agent message
+                    self._add_agent_message(final_text)
+            
+            # Reset streaming state
+            self._current_streaming_message = None
+            self._streaming_buffer = ""
+            self._set_generating_state(False)
+            
+        except Exception as e:
+            self._logger.error(f"Error handling streaming finished: {e}")
+    
+    def _on_streaming_error(self, error_message: str):
+        """Handle streaming error."""
+        try:
+            self._add_system_message(f"❌ Streaming error: {error_message}")
+            self._set_generating_state(False)
+            
+            # Reset streaming state
+            self._current_streaming_message = None
+            self._streaming_buffer = ""
+            
+        except Exception as e:
+            self._logger.error(f"Error handling streaming error: {e}")
+    
+    def _on_process_step_started(self, step_name: str, description: str):
+        """Handle process step started."""
+        try:
+            self._current_process_step = step_name
+            self.current_step_label.setText(f"⚙️ {description}")
+            self.current_step_label.setStyleSheet("color: #0078d4; font-size: 11px;")
+            
+            # Add process step to tool history
+            self._add_tool_status(f"Step: {description}", "running")
+            
+        except Exception as e:
+            self._logger.error(f"Error handling process step started: {e}")
+    
+    def _on_process_step_completed(self, step_name: str):
+        """Handle process step completed."""
+        try:
+            if self._current_process_step == step_name:
+                self.current_step_label.setText("✅ Step completed")
+                self.current_step_label.setStyleSheet("color: #28a745; font-size: 11px;")
+                
+                # Reset to ready after a delay
+                QTimer.singleShot(2000, lambda: self._reset_step_status())
+            
+        except Exception as e:
+            self._logger.error(f"Error handling process step completed: {e}")
+    
+    def _on_reasoning_chunk_received(self, reasoning_text: str):
+        """Handle reasoning chunk received."""
+        try:
+            # Add reasoning as a special message type
+            self._add_reasoning_message(reasoning_text)
+            
+        except Exception as e:
+            self._logger.error(f"Error handling reasoning chunk received: {e}")
+    
+    def _on_tool_call_detected(self, tool_info: dict):
+        """Handle tool call detected."""
+        try:
+            tool_name = tool_info.get("tool_name", "unknown")
+            self._add_system_message(f"🔧 Tool call detected: {tool_name}")
+            
+        except Exception as e:
+            self._logger.error(f"Error handling tool call detected: {e}")
+    
+    def _on_tool_execution_started(self, tool_name: str, parameters: dict):
+        """Handle tool execution started."""
+        try:
+            self.show_tool_execution(tool_name, parameters)
+            
+        except Exception as e:
+            self._logger.error(f"Error handling tool execution started: {e}")
+    
+    def _on_tool_execution_completed(self, tool_name: str, result: dict):
+        """Handle tool execution completed."""
+        try:
+            status = result.get("status", "unknown")
+            
+            if status == "success":
+                self.current_tool_label.setText("✅ Tool completed")
+                self.current_tool_label.setStyleSheet("color: #28a745; font-size: 11px;")
+                self._add_tool_status(f"Tool '{tool_name}' completed successfully", "success")
+            else:
+                self.current_tool_label.setText("❌ Tool failed")
+                self.current_tool_label.setStyleSheet("color: #dc3545; font-size: 11px;")
+                error = result.get("error", "Unknown error")
+                self._add_tool_status(f"Tool '{tool_name}' failed: {error}", "error")
+            
+            # Add tool call to chat
+            parameters = result.get("parameters", {})
+            self._add_tool_call_message(tool_name, parameters, result)
+            
+            # Reset to idle after a delay
+            QTimer.singleShot(3000, lambda: self._reset_tool_status())
+            
+        except Exception as e:
+            self._logger.error(f"Error handling tool execution completed: {e}")
+    
+    # Helper methods for streaming UI
+    def _create_streaming_message(self) -> QLabel:
+        """Create a streaming message widget."""
+        try:
+            msg_container = QWidget()
+            msg_layout = QHBoxLayout(msg_container)
+            msg_layout.setContentsMargins(5, 2, 5, 2)
+            msg_layout.setSpacing(0)
+            
+            # Create streaming label
+            streaming_label = QLabel("🤔 Thinking...")
+            streaming_label.setWordWrap(True)
+            streaming_label.setStyleSheet("""
+                background-color: #f8f9fa;
+                color: #333;
+                padding: 10px 14px;
+                border-radius: 15px;
+                border: 2px dashed #0078d4;
+                font-size: 13px;
+            """)
+            msg_layout.addWidget(streaming_label, stretch=2)
+            
+            # Add spacer for left alignment
+            spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+            msg_layout.addItem(spacer)
+            
+            # Insert before the stretch at the end
+            self._chat_layout.insertWidget(self._chat_layout.count() - 1, msg_container)
+            self._scroll_to_bottom()
+            
+            return streaming_label
+            
+        except Exception as e:
+            self._logger.error(f"Error creating streaming message: {e}")
+            return None
+    
+    def _add_reasoning_message(self, reasoning_text: str):
+        """Add reasoning message to chat display."""
+        try:
+            msg_container = QWidget()
+            msg_layout = QHBoxLayout(msg_container)
+            msg_layout.setContentsMargins(5, 2, 5, 2)
+            msg_layout.setSpacing(0)
+            
+            # Reasoning icon
+            icon_label = QLabel("🧠")
+            icon_label.setStyleSheet("font-size: 16px; padding: 5px;")
+            msg_layout.addWidget(icon_label)
+            
+            # Reasoning text
+            reasoning_label = QLabel(f"Reasoning: {reasoning_text}")
+            reasoning_label.setWordWrap(True)
+            reasoning_label.setStyleSheet("""
+                background-color: #fff3cd;
+                color: #856404;
+                padding: 8px 12px;
+                border-radius: 12px;
+                border-left: 4px solid #ffc107;
+                font-size: 12px;
+                font-style: italic;
+            """)
+            msg_layout.addWidget(reasoning_label, stretch=2)
+            
+            # Add spacer for left alignment
+            spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+            msg_layout.addItem(spacer)
+            
+            # Insert before the stretch at the end
+            self._chat_layout.insertWidget(self._chat_layout.count() - 1, msg_container)
+            self._scroll_to_bottom()
+            
+        except Exception as e:
+            self._logger.error(f"Error adding reasoning message: {e}")
+    
+    def _update_process_step(self, step_name: str, description: str):
+        """Update the current process step display."""
+        try:
+            self.current_step_label.setText(f"⚙️ {description}")
+            self.current_step_label.setStyleSheet("color: #0078d4; font-size: 11px;")
+            
+        except Exception as e:
+            self._logger.error(f"Error updating process step: {e}")
+    
+    def _reset_step_status(self):
+        """Reset step status to ready."""
+        try:
+            self.current_step_label.setText("⏸️ Ready")
+            self.current_step_label.setStyleSheet("color: #666; font-size: 11px;")
+        except Exception as e:
+            self._logger.error(f"Error resetting step status: {e}")

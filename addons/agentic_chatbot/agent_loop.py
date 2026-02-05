@@ -188,6 +188,10 @@ class AgentLoop(QThread):
             message = self._current_message
             self._logger.info(f"Processing user message: {message[:100]}...")
             
+            # Start streaming for this turn
+            self.streaming_handler.start_streaming("agent_turn")
+            self.streaming_handler.add_process_step("initialization", "Starting agent processing...")
+            
             # Start progress monitoring
             operation_id = f"agent_turn_{int(time.time())}"
             self.progress_monitor.start_operation(operation_id, "Processing user message", 4)
@@ -214,38 +218,60 @@ class AgentLoop(QThread):
             )
             
             # Step 1: Generate initial response with potential tool calls
+            self.streaming_handler.complete_process_step("initialization")
+            self.streaming_handler.add_process_step("reasoning", "Analyzing request and planning response...")
             self.progress_monitor.update_progress(operation_id, 1, "Generating response and tool calls")
+            
             response_data = self._generate_agent_response(message)
             
             if self._stop_requested:
+                self.streaming_handler.finish_streaming()
                 self.progress_monitor.cancel_operation(operation_id, "User requested stop")
                 return
             
             # Step 2: Parse response for tool calls
+            self.streaming_handler.complete_process_step("reasoning")
+            self.streaming_handler.add_process_step("parsing", "Parsing response for tool calls...")
             self.progress_monitor.update_progress(operation_id, 2, "Parsing tool calls")
+            
             tool_calls = self._parse_tool_calls(response_data)
             agent_turn.reasoning = response_data.get("reasoning", "")
             agent_turn.tool_calls = tool_calls
             
+            # Notify about detected tool calls
+            for tool_call in tool_calls:
+                self.streaming_handler.notify_tool_call_detected(tool_call.tool_name, tool_call.parameters)
+            
             # Step 3: Execute tool calls if any
+            self.streaming_handler.complete_process_step("parsing")
+            
             if tool_calls:
+                self.streaming_handler.add_process_step("tool_execution", f"Executing {len(tool_calls)} tool calls...")
                 self.progress_monitor.update_progress(operation_id, 3, f"Executing {len(tool_calls)} tool calls")
                 self._logger.info(f"Executing {len(tool_calls)} tool calls")
+                
                 tool_results = self._execute_tool_calls(tool_calls)
                 agent_turn.tool_results = tool_results
                 
                 if self._stop_requested:
+                    self.streaming_handler.finish_streaming()
                     self.progress_monitor.cancel_operation(operation_id, "User requested stop")
                     return
+                
+                self.streaming_handler.complete_process_step("tool_execution")
+                self.streaming_handler.add_process_step("final_response", "Generating final response with tool results...")
                 
                 # Generate final response with tool results
                 final_response = self._generate_final_response(message, tool_results)
                 agent_turn.final_response = final_response
             else:
                 # No tools needed, use direct response
+                self.streaming_handler.add_process_step("direct_response", "Generating direct response...")
                 agent_turn.final_response = response_data.get("response", "I understand your request.")
+                self.streaming_handler.complete_process_step("direct_response")
             
             # Step 4: Finalize and emit results
+            self.streaming_handler.add_process_step("finalization", "Finalizing response...")
             self.progress_monitor.update_progress(operation_id, 4, "Finalizing response")
             
             # Add to conversation history
@@ -267,6 +293,8 @@ class AgentLoop(QThread):
                 )
             
             # Complete progress monitoring
+            self.streaming_handler.complete_process_step("finalization")
+            self.streaming_handler.finish_streaming()
             self.progress_monitor.complete_operation(operation_id, "Agent turn completed successfully")
             
             # Emit completion signals
@@ -297,9 +325,12 @@ class AgentLoop(QThread):
         except Exception as e:
             self._logger.error(f"Error in agent loop: {e}")
             
-            # Fail progress monitoring
+            # Fail progress monitoring and streaming
             if 'operation_id' in locals():
                 self.progress_monitor.fail_operation(operation_id, str(e))
+            
+            self.streaming_handler.streaming_error.emit(f"Agent processing error: {str(e)}")
+            self.streaming_handler.finish_streaming()
             
             # Emit error event
             self.event_system.emit_event(
@@ -354,15 +385,17 @@ class AgentLoop(QThread):
                 self._logger.error(f"Failed to create chat generator: {e}")
                 raise ContextGenerationError(f"Failed to create chat generator: {e}")
             
-            # Generate response synchronously (we're already in a thread)
+            # Generate response with streaming support
             response_text = ""
             generation_error = None
             
-            # Connect to token signals with error handling
+            # Connect to token signals with streaming support
             def on_token(token):
                 nonlocal response_text
                 try:
                     response_text += token
+                    # Stream tokens to UI
+                    self.streaming_handler.add_token(token)
                 except Exception as e:
                     self._logger.error(f"Error processing token: {e}")
             
@@ -373,6 +406,7 @@ class AgentLoop(QThread):
                 nonlocal generation_error
                 generation_error = error
                 self._logger.error(f"Generation error: {error}")
+                self.streaming_handler.streaming_error.emit(f"Model generation error: {error}")
             
             try:
                 chat_generator.token_received.connect(on_token)
@@ -397,7 +431,13 @@ class AgentLoop(QThread):
             
             # Parse the response with error handling
             try:
-                return self._parse_agent_response(response_text)
+                parsed_response = self._parse_agent_response(response_text)
+                
+                # Stream reasoning if available
+                if parsed_response.get("reasoning"):
+                    self.streaming_handler.add_reasoning_chunk(parsed_response["reasoning"])
+                
+                return parsed_response
             except Exception as e:
                 self._logger.error(f"Response parsing failed: {e}")
                 # Return fallback response
@@ -558,6 +598,9 @@ class AgentLoop(QThread):
             try:
                 self._logger.info(f"Executing tool: {tool_call.tool_name}")
                 
+                # Notify streaming handler about tool execution start
+                self.streaming_handler.notify_tool_execution_started(tool_call.tool_name, tool_call.parameters)
+                
                 # Emit event for tool call started
                 self.event_system.emit_event(
                     EventType.TOOL_CALL_STARTED,
@@ -593,6 +636,9 @@ class AgentLoop(QThread):
                 
                 results.append(result)
                 
+                # Notify streaming handler about tool execution completion
+                self.streaming_handler.notify_tool_execution_completed(tool_call.tool_name, result)
+                
                 # Emit tool result signal
                 self.tool_result_received.emit(result)
                 
@@ -620,6 +666,10 @@ class AgentLoop(QThread):
                     "tool_name": tool_call.tool_name
                 }
                 results.append(error_result)
+                
+                # Notify streaming handler about tool execution error
+                self.streaming_handler.notify_tool_execution_completed(tool_call.tool_name, error_result)
+                
                 self.tool_result_received.emit(error_result)
                 
                 # Emit error event
