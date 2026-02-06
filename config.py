@@ -15,16 +15,17 @@ WINDOW_HEIGHT = 700
 WINDOW_SIZE = (1200, 900)  # Fixed: was missing comma between values
 MIN_WINDOW_SIZE = (800, 500)  # Fixed: was missing comma between values
 
-# --- Add these missing variables ---
+# --- GPU and Context Configuration ---
 GPU_OPTIONS = ["CPU Only", "GPU Accelerated"]
+DEFAULT_GPU_MODE = True  # GPU enabled by default
 DEFAULT_CONTEXT_SIZES = ["512", "1024", "2048", "4096", "8192", "16384", "32768"]
+DEFAULT_CONTEXT_INDEX = 6  # 32768 context (index 6 in the list above)
 SYSTEM_MESSAGE = "You are a helpful AI assistant."
 
 # Model Configuration
 MODEL_PATH = "models/DeepSeek-R1-0528-Qwen3-8B-Q4_K_M.gguf"
 MODEL_TYPE = "deepseek_r1"
-MAX_CONTEXT_LENGTH = 40960
-DEFAULT_CONTEXT_INDEX = 3
+MAX_CONTEXT_LENGTH = 32768  # Set to 32K context
 MAX_TOKENS = 2048
 
 # Persian Language Settings

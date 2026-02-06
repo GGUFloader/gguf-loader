@@ -4,6 +4,7 @@ Tool Registry - Manages available tools and their execution
 
 import logging
 import time
+from pathlib import Path
 from typing import Dict, List, Optional, Any, Type
 from abc import ABC, abstractmethod
 
@@ -118,6 +119,11 @@ class ToolRegistry(QObject):
         
         # Registry of available tools
         self._tools: Dict[str, BaseTool] = {}
+
+        # Session/workspace-specific tool instances (per-workspace sandboxing)
+        # Keyed by session_id (preferred) or a workspace-based cache key.
+        self._session_tool_sets: Dict[str, Dict[str, BaseTool]] = {}
+        self._session_workspace_roots: Dict[str, Path] = {}
         
         # Execution statistics
         self._execution_stats: Dict[str, Dict[str, Any]] = {}
@@ -125,8 +131,8 @@ class ToolRegistry(QObject):
         # Register built-in tools (will be implemented in later tasks)
         self._register_builtin_tools()
     
-    def _register_builtin_tools(self):
-        """Register built-in tools that are always available."""
+    def _create_builtin_tools(self, sandbox_validator: SandboxValidator) -> Dict[str, BaseTool]:
+        """Create built-in tool instances for a given sandbox validator/workspace."""
         from .tools import (
             ListDirectoryTool,
             ReadFileTool,
@@ -137,63 +143,66 @@ class ToolRegistry(QObject):
             DirectoryAnalysisTool,
             ExecuteCommandTool
         )
-        
-        # Register file system tools by creating instances directly
+
+        tools_to_register: List[BaseTool] = []
+
+        # File system tools with individual error handling
         try:
-            # File system tools with individual error handling
-            tools_to_register = []
-            
+            tools_to_register.append(ListDirectoryTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create ListDirectoryTool: {e}")
+
+        try:
+            tools_to_register.append(ReadFileTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create ReadFileTool: {e}")
+
+        try:
+            tools_to_register.append(WriteFileTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create WriteFileTool: {e}")
+
+        try:
+            tools_to_register.append(EditFileTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create EditFileTool: {e}")
+
+        # Search tools
+        try:
+            tools_to_register.append(SearchFilesTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create SearchFilesTool: {e}")
+
+        try:
+            tools_to_register.append(FileMetadataTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create FileMetadataTool: {e}")
+
+        try:
+            tools_to_register.append(DirectoryAnalysisTool(sandbox_validator))
+        except Exception as e:
+            self._logger.error(f"Failed to create DirectoryAnalysisTool: {e}")
+
+        # Command execution tool
+        try:
+            tools_to_register.append(ExecuteCommandTool(sandbox_validator, self.command_filter))
+        except Exception as e:
+            self._logger.error(f"Failed to create ExecuteCommandTool: {e}")
+
+        tool_map: Dict[str, BaseTool] = {}
+        for tool in tools_to_register:
             try:
-                list_tool = ListDirectoryTool(self.sandbox_validator)
-                tools_to_register.append(list_tool)
+                tool_map[tool.name] = tool
             except Exception as e:
-                self._logger.error(f"Failed to create ListDirectoryTool: {e}")
-            
-            try:
-                read_tool = ReadFileTool(self.sandbox_validator)
-                tools_to_register.append(read_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create ReadFileTool: {e}")
-            
-            try:
-                write_tool = WriteFileTool(self.sandbox_validator)
-                tools_to_register.append(write_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create WriteFileTool: {e}")
-            
-            try:
-                edit_tool = EditFileTool(self.sandbox_validator)
-                tools_to_register.append(edit_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create EditFileTool: {e}")
-            
-            # Search tools
-            try:
-                search_tool = SearchFilesTool(self.sandbox_validator)
-                tools_to_register.append(search_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create SearchFilesTool: {e}")
-            
-            try:
-                metadata_tool = FileMetadataTool(self.sandbox_validator)
-                tools_to_register.append(metadata_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create FileMetadataTool: {e}")
-            
-            try:
-                analysis_tool = DirectoryAnalysisTool(self.sandbox_validator)
-                tools_to_register.append(analysis_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create DirectoryAnalysisTool: {e}")
-            
-            # Command execution tool
-            try:
-                execute_tool = ExecuteCommandTool(self.sandbox_validator, self.command_filter)
-                tools_to_register.append(execute_tool)
-            except Exception as e:
-                self._logger.error(f"Failed to create ExecuteCommandTool: {e}")
-            
-            # Register all successfully created tools
+                self._logger.error(f"Failed to add tool instance to map: {e}")
+
+        return tool_map
+
+    def _register_builtin_tools(self):
+        """Register built-in tools that are always available."""
+        try:
+            tools_to_register = list(self._create_builtin_tools(self.sandbox_validator).values())
+
             successful_registrations = 0
             for tool in tools_to_register:
                 try:
@@ -221,6 +230,51 @@ class ToolRegistry(QObject):
         except Exception as e:
             self._logger.error(f"Critical error in built-in tool registration: {e}")
             # Continue with empty tool registry rather than failing completely
+
+    def _get_tool_set(self, session_id: Optional[str], workspace_path: Optional[str]) -> Dict[str, BaseTool]:
+        """
+        Get the tool set for a given session/workspace.
+
+        If workspace_path is provided, tools are created with a sandbox rooted at that workspace.
+        This fixes the mismatch between the UI-selected workspace and the sandbox validator
+        used by file tools.
+        """
+        if not workspace_path:
+            return self._tools
+
+        cache_key = session_id or f"workspace:{workspace_path}"
+
+        try:
+            resolved_workspace = Path(workspace_path).resolve()
+        except Exception as e:
+            self._logger.warning(f"Failed to resolve workspace path '{workspace_path}': {e}")
+            resolved_workspace = Path(workspace_path)
+
+        cached_root = self._session_workspace_roots.get(cache_key)
+        cached_tools = self._session_tool_sets.get(cache_key)
+        if cached_root and cached_tools and cached_root == resolved_workspace:
+            return cached_tools
+
+        try:
+            validator = SandboxValidator(resolved_workspace)
+            tools = self._create_builtin_tools(validator)
+            if not tools:
+                raise ValueError("No tools created for workspace")
+        except Exception as e:
+            self._logger.error(f"Failed to create tools for workspace '{workspace_path}': {e}")
+            return self._tools
+
+        self._session_workspace_roots[cache_key] = validator.workspace_root
+        self._session_tool_sets[cache_key] = tools
+        return tools
+
+    def clear_session_cache(self, session_id: str) -> None:
+        """Clear cached per-session tool instances (optional cleanup)."""
+        try:
+            self._session_tool_sets.pop(session_id, None)
+            self._session_workspace_roots.pop(session_id, None)
+        except Exception as e:
+            self._logger.debug(f"Failed to clear session cache for {session_id}: {e}")
     
     def register_tool(self, tool_class: Type[BaseTool]) -> bool:
         """
@@ -293,7 +347,9 @@ class ToolRegistry(QObject):
             self._logger.error(f"Failed to unregister tool {tool_name}: {e}")
             return False
     
-    def execute_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_tool(self, tool_name: str, parameters: Dict[str, Any], *,
+                     session_id: Optional[str] = None,
+                     workspace_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute a tool with given parameters.
         
@@ -307,18 +363,20 @@ class ToolRegistry(QObject):
         start_time = time.time()
         
         try:
+            tool_set = self._get_tool_set(session_id, workspace_path)
+
             # Check if tool exists
-            if tool_name not in self._tools:
+            if tool_name not in tool_set:
                 error_result = {
                     "status": "error",
                     "error": f"Tool '{tool_name}' not found",
-                    "available_tools": list(self._tools.keys()),
+                    "available_tools": list(tool_set.keys()),
                     "execution_time": 0.0
                 }
                 self.tool_error.emit(tool_name, error_result["error"])
                 return error_result
             
-            tool = self._tools[tool_name]
+            tool = tool_set[tool_name]
             
             # Validate parameters
             if not tool.validate_parameters(parameters):
@@ -362,6 +420,10 @@ class ToolRegistry(QObject):
             
             result["execution_time"] = time.time() - start_time
             result["tool_name"] = tool_name
+            if session_id:
+                result.setdefault("session_id", session_id)
+            if workspace_path:
+                result.setdefault("workspace_path", workspace_path)
             
             # Update statistics
             success = result["status"] == "success"

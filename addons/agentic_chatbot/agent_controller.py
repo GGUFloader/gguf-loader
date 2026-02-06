@@ -206,9 +206,16 @@ class AgentController(QObject):
             
             # Remove session
             del self._active_sessions[session_id]
-            
+
             # Delete context
             self.context_manager.delete_context(session_id)
+
+            # Cleanup any session-specific tool caches
+            try:
+                if hasattr(self.tool_registry, "clear_session_cache"):
+                    self.tool_registry.clear_session_cache(session_id)
+            except Exception as e:
+                self._logger.debug(f"Failed to clear session tool cache for {session_id}: {e}")
             
             self._logger.info(f"Ended agent session {session_id}")
             self.session_ended.emit(session_id)
@@ -289,7 +296,12 @@ class AgentController(QObject):
                 raise ToolExecutionError("Tool registry not available")
             
             try:
-                result = self.tool_registry.execute_tool(tool_name, parameters)
+                result = self.tool_registry.execute_tool(
+                    tool_name,
+                    parameters,
+                    session_id=session_id,
+                    workspace_path=str(session.workspace_path)
+                )
             except Exception as e:
                 # Log the full traceback for debugging
                 self._logger.error(f"Tool registry execution failed: {e}")

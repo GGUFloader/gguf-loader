@@ -147,6 +147,7 @@ class UISetupMixin:
 
         self.processing_combo = QComboBox()
         self.processing_combo.addItems(GPU_OPTIONS)
+        self.processing_combo.setCurrentIndex(1)  # Default to GPU Accelerated (index 1)
         self.processing_combo.setMinimumHeight(35)
         layout.addWidget(self.processing_combo)
 
@@ -158,7 +159,7 @@ class UISetupMixin:
 
         self.context_combo = QComboBox()
         self.context_combo.addItems(DEFAULT_CONTEXT_SIZES)
-        self.context_combo.setCurrentIndex(1)  # Default to 2048
+        self.context_combo.setCurrentIndex(6)  # Default to 32768 (index 6)
         self.context_combo.setMinimumHeight(35)
         layout.addWidget(self.context_combo)
 

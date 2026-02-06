@@ -628,9 +628,17 @@ class AgentLoop(QThread):
                         "call_id": tool_call.call_id
                     }
                 else:
+                    workspace_path = ""
+                    if self._current_session_id:
+                        context = self.context_manager.get_context(self._current_session_id)
+                        if context:
+                            workspace_path = context.workspace_path or ""
+
                     result = self.tool_registry.execute_tool(
                         tool_call.tool_name, 
-                        tool_call.parameters
+                        tool_call.parameters,
+                        session_id=self._current_session_id,
+                        workspace_path=workspace_path
                     )
                     result["call_id"] = tool_call.call_id
                 

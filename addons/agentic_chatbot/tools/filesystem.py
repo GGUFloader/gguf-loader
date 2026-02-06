@@ -12,12 +12,16 @@ import os
 import logging
 import tempfile
 import shutil
-import chardet
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 
 from ..tool_registry import BaseTool
 from ..security.sandbox import SandboxValidator, SecurityError
+
+try:
+    import chardet  # type: ignore
+except Exception:  # pragma: no cover
+    chardet = None
 
 
 class ListDirectoryTool(BaseTool):
@@ -199,9 +203,17 @@ class ReadFileTool(BaseTool):
                 raw_data = f.read()
             
             if encoding == "auto":
-                detected = chardet.detect(raw_data)
-                encoding = detected.get('encoding', 'utf-8')
-                if encoding is None:
+                # Prefer BOM-based detection, then chardet (if available), then utf-8 fallback
+                if raw_data.startswith(b'\xef\xbb\xbf'):
+                    encoding = 'utf-8-sig'
+                elif raw_data.startswith(b'\xff\xfe') or raw_data.startswith(b'\xfe\xff'):
+                    encoding = 'utf-16'
+                elif raw_data.startswith(b'\xff\xfe\x00\x00') or raw_data.startswith(b'\x00\x00\xfe\xff'):
+                    encoding = 'utf-32'
+                elif chardet is not None:
+                    detected = chardet.detect(raw_data)
+                    encoding = detected.get('encoding', 'utf-8') or 'utf-8'
+                else:
                     encoding = 'utf-8'
             
             try:

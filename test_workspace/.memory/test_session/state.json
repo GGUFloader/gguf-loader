@@ -1,0 +1,8 @@
+{
+  "status": "running",
+  "current_node": "node_1",
+  "completed_nodes": [
+    "node_0"
+  ],
+  "updated_at": "2026-02-06T23:27:02.956242"
+}

@@ -229,6 +229,20 @@ class FloatingChatWindow(QWidget):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(8)
         
+        # Copy All button
+        copy_all_btn = QPushButton("📋 Copy All")
+        copy_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #17a2b8;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #138496;
+            }
+        """)
+        copy_all_btn.clicked.connect(self._copy_all_messages)
+        button_layout.addWidget(copy_all_btn)
+        
         # Clear button
         self.clear_btn = QPushButton("🗑️ Clear")
         self.clear_btn.setStyleSheet("""
@@ -809,6 +823,42 @@ class FloatingChatWindow(QWidget):
         QTimer.singleShot(100, lambda: self.chat_scroll.verticalScrollBar().setValue(
             self.chat_scroll.verticalScrollBar().maximum()
         ))
+    
+    def _copy_all_messages(self):
+        """Copy all messages to clipboard."""
+        try:
+            from PySide6.QtGui import QClipboard
+            from PySide6.QtWidgets import QApplication
+            
+            # Build text from conversation history
+            all_text = []
+            for msg in self._conversation_history:
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                
+                if role == 'user':
+                    all_text.append(f"User: {content}")
+                elif role == 'assistant':
+                    all_text.append(f"Assistant: {content}")
+                else:
+                    all_text.append(f"{role}: {content}")
+                
+                all_text.append("")  # Empty line between messages
+            
+            # Join all text
+            full_text = "\n".join(all_text)
+            
+            if full_text.strip():
+                # Copy to clipboard
+                clipboard = QApplication.clipboard()
+                clipboard.setText(full_text)
+                self._add_system_message("📋 All messages copied to clipboard!")
+            else:
+                self._add_system_message("⚠️ No messages to copy")
+                
+        except Exception as e:
+            self._logger.error(f"Error copying messages: {e}")
+            self._add_system_message(f"❌ Error copying messages: {e}")
     
     def _clear_chat(self):
         """Clear chat history."""

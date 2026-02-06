@@ -18,11 +18,12 @@ class ModelLoader(QThread):
     finished = Signal(object)  # Loaded model or None
     error = Signal(str)  # Error message
 
-    def __init__(self, model_path: str, use_gpu: bool, n_ctx: int = None):
+    def __init__(self, model_path: str, use_gpu: bool = True, n_ctx: int = None):
         super().__init__()
         self.model_path = model_path
         self.use_gpu = use_gpu
-        self.n_ctx = n_ctx or int(DEFAULT_CONTEXT_SIZES[DEFAULT_CONTEXT_INDEX])
+        # Default to 32768 context if not specified
+        self.n_ctx = n_ctx or 32768
 
     def run(self):
         try:

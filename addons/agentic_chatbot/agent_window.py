@@ -328,6 +328,20 @@ class AgentWindow(QWidget):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(8)
         
+        # Copy All button
+        copy_all_btn = QPushButton("📋 Copy All")
+        copy_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #17a2b8;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #138496;
+            }
+        """)
+        copy_all_btn.clicked.connect(self._copy_all_messages)
+        button_layout.addWidget(copy_all_btn)
+        
         # Clear button
         clear_btn = QPushButton("🗑️ Clear")
         clear_btn.setStyleSheet("""
@@ -730,6 +744,54 @@ class AgentWindow(QWidget):
             
         except Exception as e:
             self._logger.error(f"Error clearing chat: {e}")
+    
+    def _copy_all_messages(self):
+        """Copy all messages to clipboard."""
+        try:
+            from PySide6.QtWidgets import QApplication
+            
+            # Build text from conversation history
+            all_text = []
+            for msg in self._conversation_history:
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                timestamp = msg.get('timestamp', '')
+                
+                if role == 'user':
+                    header = f"User"
+                    if timestamp:
+                        header += f" [{timestamp}]"
+                    all_text.append(f"{header}: {content}")
+                elif role == 'assistant':
+                    header = f"Assistant"
+                    if timestamp:
+                        header += f" [{timestamp}]"
+                    all_text.append(f"{header}: {content}")
+                elif role == 'tool':
+                    tool_name = msg.get('tool_name', 'unknown')
+                    header = f"Tool ({tool_name})"
+                    if timestamp:
+                        header += f" [{timestamp}]"
+                    all_text.append(f"{header}: {content}")
+                else:
+                    all_text.append(f"{role}: {content}")
+                
+                all_text.append("")  # Empty line between messages
+            
+            # Join all text
+            full_text = "\n".join(all_text)
+            
+            if full_text.strip():
+                # Copy to clipboard
+                clipboard = QApplication.clipboard()
+                clipboard.setText(full_text)
+                self._add_system_message("📋 All messages copied to clipboard!")
+            else:
+                self._add_system_message("⚠️ No messages to copy")
+                
+        except Exception as e:
+            self._logger.error(f"Error copying messages: {e}")
+            self._add_system_message(f"❌ Error copying messages: {e}")
     
     def _clear_tool_history(self):
         """Clear tool execution history."""

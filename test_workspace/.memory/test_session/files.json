@@ -1,0 +1,10 @@
+{
+  "processed_files": [
+    "file1.txt"
+  ],
+  "file_metadata": {
+    "file1.txt": {
+      "size": 100
+    }
+  }
+}
