@@ -21,10 +21,11 @@ from mixins.model_handler_mixin import ModelHandlerMixin
 from mixins.chat_handler_mixin import ChatHandlerMixin
 from mixins.event_handler_mixin import EventHandlerMixin
 from mixins.utils_mixin import UtilsMixin
+from mixins.agent_mode_mixin import AgentModeMixin
 
 
 class AIChat(QMainWindow, ThemeMixin, UISetupMixin, ModelHandlerMixin,
-             ChatHandlerMixin, EventHandlerMixin, UtilsMixin):
+             ChatHandlerMixin, EventHandlerMixin, UtilsMixin, AgentModeMixin):
     """Main AI Chat Application Window - English Only"""
 
     # Define signals
@@ -57,6 +58,11 @@ class AIChat(QMainWindow, ThemeMixin, UISetupMixin, ModelHandlerMixin,
         self.current_ai_bubble = None
         self.current_ai_text = ""
         self.current_font_size = 14  # Default font size for chat bubbles
+        
+        # Initialize agent mode variables
+        self.agent_mode_enabled = False
+        self.agent_session_id = None
+        self.agent_workspace_path = None
 
         # Setup UI and apply styles
         self.setup_ui()

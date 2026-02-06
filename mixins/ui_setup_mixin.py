@@ -344,10 +344,10 @@ class UISetupMixin:
         parent.addWidget(chat_widget)
 
     def _setup_input_area(self, parent_layout):
-        """Setup the input area with text field and send button"""
+        """Setup the input area with text field, agent controls, and send button"""
         input_frame = QFrame()
         input_frame.setFrameStyle(QFrame.StyledPanel)
-        input_frame.setMaximumHeight(150)
+        input_frame.setMaximumHeight(180)
 
         input_layout = QVBoxLayout(input_frame)
         input_layout.setContentsMargins(15, 10, 15, 10)
@@ -362,20 +362,88 @@ class UISetupMixin:
         self.input_text.textChanged.connect(self.on_input_text_changed)
         self.input_text.send_message.connect(self.send_message)
 
-        # Send button
-        button_layout = QHBoxLayout()
-        button_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        input_layout.addWidget(self.input_text)
 
+        # Agent mode controls row
+        agent_controls_layout = QHBoxLayout()
+        agent_controls_layout.setSpacing(8)
+
+        # Agent mode toggle button
+        self.agent_mode_btn = QPushButton("🤖 Agent Mode: OFF")
+        self.agent_mode_btn.setCheckable(True)
+        self.agent_mode_btn.setMinimumHeight(35)
+        self.agent_mode_btn.setMaximumWidth(150)
+        self.agent_mode_btn.setToolTip("Enable agent mode with tool execution")
+        self.agent_mode_btn.clicked.connect(self.toggle_agent_mode_button)
+        self.agent_mode_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+            QPushButton:checked {
+                background-color: #28a745;
+            }
+            QPushButton:checked:hover {
+                background-color: #218838;
+            }
+        """)
+        agent_controls_layout.addWidget(self.agent_mode_btn)
+
+        # Workspace selector (hidden by default)
+        self.workspace_label = QLabel("📁")
+        self.workspace_label.setToolTip("Workspace folder")
+        self.workspace_label.setVisible(False)
+        agent_controls_layout.addWidget(self.workspace_label)
+
+        self.workspace_combo = QComboBox()
+        self.workspace_combo.setEditable(True)
+        self.workspace_combo.setPlaceholderText("Select workspace...")
+        self.workspace_combo.setMinimumHeight(35)
+        self.workspace_combo.setMinimumWidth(200)
+        self.workspace_combo.addItems([
+            "./agent_workspace",
+            "./workspace",
+            "./projects"
+        ])
+        self.workspace_combo.setCurrentText("./agent_workspace")
+        self.workspace_combo.setVisible(False)
+        agent_controls_layout.addWidget(self.workspace_combo)
+
+        # Browse button
+        self.workspace_browse_btn = QPushButton("📁")
+        self.workspace_browse_btn.setMaximumWidth(35)
+        self.workspace_browse_btn.setMinimumHeight(35)
+        self.workspace_browse_btn.setToolTip("Browse for workspace folder")
+        self.workspace_browse_btn.clicked.connect(self.browse_workspace)
+        self.workspace_browse_btn.setVisible(False)
+        agent_controls_layout.addWidget(self.workspace_browse_btn)
+
+        # Agent status indicator
+        self.agent_status_label = QLabel("⚪ Ready")
+        self.agent_status_label.setStyleSheet("color: #666; font-size: 10px;")
+        self.agent_status_label.setVisible(False)
+        agent_controls_layout.addWidget(self.agent_status_label)
+
+        agent_controls_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
+        # Send button
         self.send_btn = QPushButton("Send")
         self.send_btn.setMinimumSize(100, 35)
         self.send_btn.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
         self.send_btn.clicked.connect(self.send_message)
         self.send_btn.setEnabled(False)
 
-        button_layout.addWidget(self.send_btn)
+        agent_controls_layout.addWidget(self.send_btn)
 
-        input_layout.addWidget(self.input_text)
-        input_layout.addLayout(button_layout)
+        input_layout.addLayout(agent_controls_layout)
 
         parent_layout.addWidget(input_frame)
 

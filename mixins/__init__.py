@@ -11,6 +11,7 @@ from .chat_handler_mixin import ChatHandlerMixin
 from .event_handler_mixin import EventHandlerMixin
 from .utils_mixin import UtilsMixin
 from .addon_mixin import AddonMixin
+from .agent_mode_mixin import AgentModeMixin
 
 __all__ = [
     'UISetupMixin',
@@ -18,5 +19,6 @@ __all__ = [
     'ChatHandlerMixin',
     'EventHandlerMixin',
     'UtilsMixin',
-    'AddonMixin'
+    'AddonMixin',
+    'AgentModeMixin'
 ]
