@@ -4,6 +4,8 @@
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 [![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
 
+> 🎉 **NEW: Agentic Mode Now Available!** Transform your local AI into an autonomous coding assistant that can read, create, edit, and organize files in your workspace. Perfect for automating development tasks, generating boilerplate code, and managing complex workflows - all running privately on your machine. [Learn more about Agentic Mode →](#-agentic-mode)
+
 A beginner-friendly, privacy-first desktop application for running large language models locally on Windows, Linux, and macOS. Load and chat with GGUF format models like Mistral, LLaMA, DeepSeek, and others with zero setup required.
 
 ## 🚀 Quick Start
