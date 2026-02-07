@@ -147,7 +147,7 @@ class UISetupMixin:
 
         self.processing_combo = QComboBox()
         self.processing_combo.addItems(GPU_OPTIONS)
-        self.processing_combo.setCurrentIndex(1)  # Default to GPU Accelerated (index 1)
+        self.processing_combo.setCurrentIndex(0)  # Default to CPU Only (index 0)
         self.processing_combo.setMinimumHeight(35)
         layout.addWidget(self.processing_combo)
 

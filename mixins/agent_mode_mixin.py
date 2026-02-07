@@ -78,22 +78,67 @@ class AgentModeMixin:
         try:
             workspace_path = self.workspace_combo.currentText().strip()
             if not workspace_path:
-                self._update_agent_status("⚠️ No workspace")
-                return
-            
+                # Try to set a default workspace
+                workspace_path = "./agent_workspace"
+                self.workspace_combo.setCurrentText(workspace_path)
+                
+            # Import Path at the beginning to avoid scoping issues
+            from pathlib import Path
             workspace = Path(workspace_path)
             workspace.mkdir(parents=True, exist_ok=True)
-            
+
             if not hasattr(self, 'model') or not self.model:
                 self._update_agent_status("❌ No model")
                 self._add_agent_system_message("⚠️ Please load a model first")
                 return
+
+            # For PyInstaller bundled executables, we need to handle imports differently
+            # The most reliable method is to use importlib with the correct path
+            import importlib.util
+            import sys
+            import os
             
-            from core.agent import SimpleAgent
-            
+            # Try to dynamically load the SimpleAgent class using importlib
+            # This approach works for both bundled and unbundled environments
+            try:
+                # Determine the path to the simple_agent module
+                if getattr(sys, 'frozen', False):
+                    # Running in a PyInstaller bundle
+                    bundle_dir = sys._MEIPASS  # PyInstaller temporary folder
+                    agent_module_path = os.path.join(bundle_dir, 'core', 'agent', 'simple_agent.py')
+                else:
+                    # Running in development (not bundled)
+                    import inspect
+                    current_file = inspect.getfile(self.__class__)
+                    current_dir = os.path.dirname(current_file)
+                    parent_dir = os.path.dirname(current_dir)
+                    agent_module_path = os.path.join(parent_dir, 'core', 'agent', 'simple_agent.py')
+                
+                # Load the module from the file path
+                if os.path.exists(agent_module_path):
+                    spec = importlib.util.spec_from_file_location("simple_agent", agent_module_path)
+                    simple_agent_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(simple_agent_module)
+                    SimpleAgent = simple_agent_module.SimpleAgent
+                    self._logger.info(f"Successfully loaded SimpleAgent from: {agent_module_path}")
+                else:
+                    self._logger.error(f"Agent module not found at: {agent_module_path}")
+                    # Fallback to standard import
+                    from core.agent import SimpleAgent
+            except ImportError as e:
+                self._logger.error(f"Standard import failed: {e}")
+                # If standard import fails, try to access it through the module system
+                try:
+                    import core.agent
+                    SimpleAgent = core.agent.SimpleAgent
+                except ImportError as e2:
+                    self._logger.error(f"Module access import failed: {e2}")
+                    # Final fallback - try to import directly
+                    from core.agent import SimpleAgent
+
             self.simple_agent = SimpleAgent(self.model, str(workspace))
             self.agent_workspace_path = str(workspace)
-            
+
             # Connect all signals
             self.simple_agent.response_generated.connect(self._on_agent_response)
             self.simple_agent.tool_executed.connect(self._on_agent_tool_executed)
@@ -101,13 +146,16 @@ class AgentModeMixin:
             self.simple_agent.processing_started.connect(self._on_agent_processing_started)
             self.simple_agent.processing_finished.connect(self._on_agent_processing_finished)
             self.simple_agent.status_update.connect(self._on_agent_status_update)
-            
+
             self._update_agent_status("🟢 Ready")
             self._add_agent_system_message(f"🤖 Agent mode activated\n📁 Workspace: {workspace_path}")
-                
+
         except Exception as e:
             self._logger.error(f"Error initializing agent: {e}")
+            import traceback
+            self._logger.error(f"Full traceback: {traceback.format_exc()}")
             self._update_agent_status("❌ Error")
+            self._add_agent_system_message(f"❌ Agent initialization failed: {str(e)}")
 
     def _update_agent_status(self, status: str):
         """Update agent status label"""

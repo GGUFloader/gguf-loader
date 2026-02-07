@@ -5,11 +5,11 @@
 PySide6>=6.5.0
 
 # AI/ML Dependencies
-llama-cpp-python>=0.2.0
+llama-cpp-python>=0.3.13
 
 # Optional GPU acceleration (uncomment if needed)
-# llama-cpp-python[cuda]>=0.2.0  # For CUDA support
-# llama-cpp-python[metal]>=0.2.0  # For Metal support (macOS)
+# llama-cpp-python[cuda]>=0.3.13  # For CUDA support
+# llama-cpp-python[metal]>=0.3.13  # For Metal support (macOS)
 
 # Development dependencies (optional)
 # pytest>=7.0.0

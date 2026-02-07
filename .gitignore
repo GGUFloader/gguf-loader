@@ -125,3 +125,6 @@ models/*.bin
 
 # Benchmarks
 .benchmarks/
+
+# Kiro folder
+.kiro/

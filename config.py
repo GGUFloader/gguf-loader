@@ -17,7 +17,7 @@ MIN_WINDOW_SIZE = (800, 500)  # Fixed: was missing comma between values
 
 # --- GPU and Context Configuration ---
 GPU_OPTIONS = ["CPU Only", "GPU Accelerated"]
-DEFAULT_GPU_MODE = True  # GPU enabled by default
+DEFAULT_GPU_MODE = False  # CPU only by default (GPU disabled)
 DEFAULT_CONTEXT_SIZES = ["512", "1024", "2048", "4096", "8192", "16384", "32768"]
 DEFAULT_CONTEXT_INDEX = 6  # 32768 context (index 6 in the list above)
 SYSTEM_MESSAGE = "You are a helpful AI assistant."

@@ -52,10 +52,10 @@ if exist "dist\GGUFLoader_WithAddons.exe" (
     echo - Floating Chat addon
     echo - All Python dependencies
     echo - All DLL files
-    echo - No installation required!
+    echo - No installation required
     echo.
-    echo Just share this ONE file - users can run it directly!
-    echo File size: Large (100-300 MB) but completely portable
+    echo Just share this ONE file - users can run it directly
+    echo File size: Large 100-300 MB but completely portable
     echo.
 ) else (
     echo.
