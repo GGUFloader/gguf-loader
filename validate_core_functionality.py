@@ -1,13 +1,3 @@
-#!/usr/bin/env python3
-"""
-Core Functionality Validation Script for Agentic Chatbot Addon
-
-This script validates the core security and tools functionality that has been implemented:
-- Sandbox validator security
-- Command filter security  
-- Tool registry functionality
-- File system tools
-"""
 
 import sys
 import os
