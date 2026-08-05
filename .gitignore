@@ -117,6 +117,20 @@ temp/
 tmp/
 cache/
 
+# Freebuff desktop app data
+.freebuff/
+
+# Agent / test workspaces (sandbox artifacts, not source)
+agent_workspace/
+test_workspace/
+
+# Stray screenshots & UI preview artifacts
+float.png
+screen.png
+ui_preview.html
+ui_preview_*.png
+_bubble_*.png
+
 # Model files (usually large)
 *.gguf
 *.bin
