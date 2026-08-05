@@ -4,6 +4,9 @@
 # This script will create a virtual environment if it doesn't exist,
 # install dependencies, and launch the application.
 
+# Change to the project root so relative paths work from anywhere
+cd "$(dirname "$0")/.."
+
 # Set the name of the virtual environment
 VENV_NAME=".venv"
 
@@ -35,7 +38,7 @@ fi
 
 # Launch the application
 echo "Starting GGUF Loader..."
-python gguf_loader_main.py || error_exit "Failed to start the application."
+python main.py || error_exit "Failed to start the application."
 
 # Deactivate virtual environment when done
 deactivate

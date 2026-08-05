@@ -24,7 +24,7 @@ ggufloader/
 ├── requirements.txt           # Dependencies
 ├── 
 ├── # Main Application Files
-├── gguf_loader_main.py        # GGUF Loader with addon support
+├── main.py                    # Application entry point
 ├── addon_manager.py           # Addon management system
 ├── config.py                  # Configuration
 ├── utils.py                   # Utilities
@@ -92,7 +92,7 @@ pip install ggufloader
 ggufloader
 ```
 
-This command launches `gguf_loader_main.py` which includes:
+This command launches `main.py` which includes:
 - Full GGUF Loader functionality
 - Smart Floating Assistant addon (automatically loaded)
 - Addon management system

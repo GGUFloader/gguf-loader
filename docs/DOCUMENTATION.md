@@ -24,6 +24,7 @@ Complete documentation index for GGUF Loader.
 | Document | Description |
 |----------|-------------|
 | [Addon Development](docs/addon-development.md) | Create custom addons |
+| [Architecture](ARCHITECTURE.md) | Layered design, threading model, extension guide |
 | [Feedback System](docs/feedback-system.md) | Set up user feedback |
 | [Contributing](CONTRIBUTING.md) | How to contribute to the project |
 
@@ -81,7 +82,7 @@ docs/
 
 ```
 BUILD_EXE_INSTRUCTIONS.md  # How to build executable
-LAUNCH_README.md           # Launch scripts documentation
+scripts/LAUNCH_README.md   # Launch scripts documentation
 ```
 
 ## 🔍 Finding Information
@@ -90,7 +91,7 @@ LAUNCH_README.md           # Launch scripts documentation
 
 **Installation**
 - [Installation Guide](docs/installation.md)
-- [Launch Scripts](LAUNCH_README.md)
+- [Launch Scripts](scripts/LAUNCH_README.md)
 - [Build Executable](BUILD_EXE_INSTRUCTIONS.md)
 
 **Usage**

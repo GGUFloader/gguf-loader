@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0.."
 echo Installing GPU-enabled llama-cpp-python...
 echo.
 
@@ -24,5 +25,5 @@ pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-c
 echo.
 echo Installation complete!
 echo.
-echo To verify GPU support, run: python verify_gpu_support.py
+echo To verify GPU support, run: python scripts/verify_gpu_support.py
 pause

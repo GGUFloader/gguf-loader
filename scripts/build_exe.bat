@@ -1,5 +1,7 @@
 @echo off
 REM Build script for creating GGUF Loader executable on Windows (WITH ADDON SUPPORT)
+REM Change to the project root so relative paths work from anywhere
+cd /d "%~dp0.."
 
 echo ========================================
 echo GGUF Loader - Executable Builder

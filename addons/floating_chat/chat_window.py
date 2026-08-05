@@ -8,14 +8,15 @@ for AI conversations.
 """
 
 import logging
-from typing import Optional, Any
+import threading
+from typing import Any
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
     QLabel, QScrollArea, QFrame, QSpacerItem, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QTimer, QThread
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import QObject, Qt, Signal, Slot, QTimer, QThread
+from PySide6.QtGui import QFont
 
 try:
     from config import FONT_FAMILY
@@ -29,21 +30,28 @@ except ImportError:
     ChatBubble = None
 
 
-class StreamingThread(QThread):
-    """Thread for streaming model responses without blocking UI."""
+class StreamingWorker(QObject):
+    """Streams model responses on a worker thread without blocking the UI.
+
+    Follows the services worker pattern (see services/chat_service.py):
+    arguments are assigned as attributes before the thread starts and
+    :meth:`process` is a zero-arg slot so Qt can invoke it across threads.
+    """
+
     token_received = Signal(str)
     finished = Signal()
     error = Signal(str)
-    
-    def __init__(self, model, prompt, max_tokens=8192):
+
+    def __init__(self) -> None:
         super().__init__()
-        self.model = model
-        self.prompt = prompt
-        self.max_tokens = max_tokens
-        self._stop_flag = False
-    
-    def run(self):
-        """Run streaming generation in background thread."""
+        self._stop_event = threading.Event()
+        self.model = None
+        self.prompt = ""
+        self.max_tokens = 8192
+
+    @Slot()
+    def process(self) -> None:
+        """Run streaming generation in the worker thread."""
         try:
             stream = self.model(
                 self.prompt,
@@ -56,23 +64,23 @@ class StreamingThread(QThread):
                 repeat_penalty=1.1,
                 top_k=40
             )
-            
+
             for token_data in stream:
-                if self._stop_flag:
+                if self._stop_event.is_set():
                     break
-                
+
                 token = token_data.get('choices', [{}])[0].get('text', '')
                 if token:
                     self.token_received.emit(token)
-            
+
             self.finished.emit()
-            
+
         except Exception as e:
             self.error.emit(f"Generation error: {str(e)}")
-    
-    def stop(self):
-        """Stop the streaming generation."""
-        self._stop_flag = True
+
+    def stop(self) -> None:
+        """Cooperatively stop the streaming generation."""
+        self._stop_event.set()
 
 
 class FloatingChatWindow(QWidget):
@@ -105,6 +113,8 @@ class FloatingChatWindow(QWidget):
         self._is_generating = False
         self._current_ai_message_widget = None  # Track current streaming message
         self._current_response_text = ""  # Accumulate streaming response
+        self._current_generator = None  # Active StreamingWorker
+        self._current_thread = None     # Its QThread container
         
         # Setup window
         self._setup_window()
@@ -370,9 +380,10 @@ class FloatingChatWindow(QWidget):
         try:
             self._is_generating = False
             
-            # Stop the generator thread if exists
-            if hasattr(self, '_current_generator'):
-                self._current_generator.stop()
+            # Stop the generator worker if exists
+            generator = self._current_generator
+            if generator is not None:
+                generator.stop()
             
             # Add incomplete message to history if exists
             if self._current_response_text:
@@ -412,12 +423,8 @@ class FloatingChatWindow(QWidget):
             # Initialize streaming response
             self._current_response_text = ""
             
-            # Generate response using the main app's chat generator with streaming
-            if hasattr(self.gguf_app, 'chat_generator') and self.gguf_app.chat_generator:
-                # Use existing chat generator
-                self._generate_with_chat_generator_streaming(user_message)
-            elif hasattr(self.gguf_app, 'model') and self.gguf_app.model:
-                # Direct model generation with streaming
+            # Generate response using the loaded model with streaming
+            if hasattr(self.gguf_app, 'model') and self.gguf_app.model:
                 self._generate_with_model_streaming(user_message)
             else:
                 self._remove_last_message()
@@ -435,47 +442,6 @@ class FloatingChatWindow(QWidget):
             self.send_btn.setEnabled(True)
             self.input_field.setFocus()
     
-    def _generate_with_chat_generator_streaming(self, message: str):
-        """Generate response using chat generator with streaming."""
-        try:
-            from models.chat_generator import ChatGenerator
-            
-            # Remove "thinking" message
-            self._remove_last_message()
-            
-            # Create empty AI message bubble for streaming
-            self._create_streaming_ai_message()
-            
-            # Create chat generator thread
-            generator = ChatGenerator(
-                model=self.gguf_app.model,
-                prompt=message,
-                chat_history=self._conversation_history[:-1],  # Exclude current user message
-                max_tokens=8192,
-                temperature=0.7,
-                top_p=0.9,
-                repeat_penalty=1.1,
-                top_k=40
-            )
-            
-            # Connect signals
-            generator.token_received.connect(self._on_token_received)
-            generator.finished.connect(lambda: self._on_streaming_finished(generator))
-            generator.error.connect(self._on_streaming_error)
-            
-            # Store reference to prevent garbage collection
-            self._current_generator = generator
-            
-            # Start generation
-            generator.start()
-            
-        except Exception as e:
-            self._logger.error(f"Chat generator error: {e}")
-            self._add_system_message(f"❌ Error: {str(e)}")
-            self._is_generating = False
-            self.input_field.setEnabled(True)
-            self.send_btn.setEnabled(True)
-    
     def _generate_with_model_streaming(self, message: str):
         """Generate response directly with model using streaming in background thread."""
         try:
@@ -488,27 +454,44 @@ class FloatingChatWindow(QWidget):
             # Build prompt
             prompt = self._build_prompt_for_model(message)
             
-            # Create streaming thread
-            streaming_thread = StreamingThread(
-                model=self.gguf_app.model,
-                prompt=prompt,
-                max_tokens=8192
-            )
-            
-            # Connect signals
-            streaming_thread.token_received.connect(self._on_token_received)
-            streaming_thread.finished.connect(lambda: self._on_streaming_finished(streaming_thread))
-            streaming_thread.error.connect(self._on_streaming_error)
-            
-            # Store reference to prevent garbage collection
-            self._current_generator = streaming_thread
-            
+            # Build the worker (args as attributes) and run it on a fresh thread
+            worker = StreamingWorker()
+            worker.model = self.gguf_app.model
+            worker.prompt = prompt
+            worker.max_tokens = 8192
+
+            thread = QThread(self)
+            worker.moveToThread(thread)
+
+            thread.started.connect(worker.process)
+            worker.token_received.connect(self._on_token_received)
+            worker.finished.connect(self._on_streaming_finished)
+            worker.error.connect(self._on_streaming_error)
+            worker.finished.connect(thread.quit)
+            worker.error.connect(thread.quit)
+            thread.finished.connect(worker.deleteLater)
+            thread.finished.connect(thread.deleteLater)
+            thread.finished.connect(lambda: self._clear_generator_refs(thread, worker))
+
+            # Store references to prevent garbage collection
+            self._current_generator = worker
+            self._current_thread = thread
+
             # Start generation in background
-            streaming_thread.start()
-            
+            thread.start()
+
         except Exception as e:
             self._logger.error(f"Model generation error: {e}")
+            self._current_generator = None
+            self._current_thread = None
             self._on_streaming_error(f"Error: {str(e)}")
+
+    def _clear_generator_refs(self, thread, worker):
+        """Drop references once the finished thread is gone (avoids stale handles)."""
+        if self._current_thread is thread:
+            self._current_thread = None
+        if self._current_generator is worker:
+            self._current_generator = None
     
     def _build_prompt_for_model(self, message: str) -> str:
         """Build prompt from conversation history."""
@@ -599,7 +582,7 @@ class FloatingChatWindow(QWidget):
         except Exception as e:
             self._logger.error(f"Error updating token: {e}")
     
-    def _on_streaming_finished(self, generator):
+    def _on_streaming_finished(self):
         """Handle streaming generation finished."""
         try:
             # Add to history
@@ -612,13 +595,10 @@ class FloatingChatWindow(QWidget):
             # Cleanup
             self._current_ai_message_widget = None
             self._current_response_text = ""
-            
-            if hasattr(self, '_current_generator'):
-                delattr(self, '_current_generator')
-            
+
         except Exception as e:
             self._logger.error(f"Error finishing streaming: {e}")
-        
+
         finally:
             # Re-enable input
             self._is_generating = False
@@ -627,25 +607,25 @@ class FloatingChatWindow(QWidget):
             self.send_btn.show()
             self.stop_btn.hide()
             self.input_field.setFocus()
-    
+
     def _on_streaming_error(self, error_message: str):
         """Handle streaming generation error."""
         try:
             self._logger.error(f"Streaming error: {error_message}")
-            
+
             # Remove incomplete message if exists
             if self._current_ai_message_widget:
                 self._remove_last_message()
-            
+
             self._add_system_message(f"❌ {error_message}")
-            
+
             # Cleanup
             self._current_ai_message_widget = None
             self._current_response_text = ""
-            
+
         except Exception as e:
             self._logger.error(f"Error handling streaming error: {e}")
-        
+
         finally:
             # Re-enable input
             self._is_generating = False
@@ -654,45 +634,7 @@ class FloatingChatWindow(QWidget):
             self.send_btn.show()
             self.stop_btn.hide()
             self.input_field.setFocus()
-    
-    def _generate_with_chat_generator(self, message: str) -> str:
-        """Generate response using chat generator (deprecated - use streaming version)."""
-        try:
-            # Build conversation context
-            conversation = self._conversation_history.copy()
-            
-            # Generate with very high token limit for unlimited length responses
-            response = self.gguf_app.chat_generator.generate_response(
-                conversation,
-                max_tokens=8192  # Very high limit for long responses
-            )
-            
-            return response
-            
-        except Exception as e:
-            self._logger.error(f"Chat generator error: {e}")
-            return f"Error: {str(e)}"
-    
-    def _generate_with_model(self, message: str) -> str:
-        """Generate response directly with model."""
-        try:
-            # Simple prompt
-            prompt = f"User: {message}\nAssistant:"
-            
-            # Generate with very high token limit for unlimited length responses
-            response = self.gguf_app.model(
-                prompt,
-                max_tokens=8192,  # Very high limit for long responses
-                stop=["User:", "\nUser:"],  # Better stop sequences
-                echo=False
-            )
-            
-            return response['choices'][0]['text'].strip()
-            
-        except Exception as e:
-            self._logger.error(f"Model generation error: {e}")
-            return f"Error: {str(e)}"
-    
+
     def _add_user_message(self, message: str):
         """Add user message to chat display (right side)."""
         # Create container for right-aligned message
@@ -700,11 +642,11 @@ class FloatingChatWindow(QWidget):
         msg_layout = QHBoxLayout(msg_container)
         msg_layout.setContentsMargins(5, 2, 5, 2)
         msg_layout.setSpacing(0)
-        
+
         # Add spacer (30% minimum on left for right-aligned messages)
         spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         msg_layout.addItem(spacer)
-        
+
         if ChatBubble:
             # Use chat bubble widget
             bubble = ChatBubble(message, is_user=True)
@@ -735,58 +677,11 @@ class FloatingChatWindow(QWidget):
                 font-size: 13px;
             """)
             msg_layout.addWidget(label, stretch=2)
-        
+
         # Insert before the stretch at the end
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
         self._scroll_to_bottom()
-    
-    def _add_ai_message(self, message: str):
-        """Add AI message to chat display (left side)."""
-        # Create container for left-aligned message
-        msg_container = QWidget()
-        msg_layout = QHBoxLayout(msg_container)
-        msg_layout.setContentsMargins(5, 2, 5, 2)
-        msg_layout.setSpacing(0)
-        
-        if ChatBubble:
-            # Use chat bubble widget
-            bubble = ChatBubble(message, is_user=False)
-            bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            bubble.setStyleSheet("""
-                QFrame {
-                    background-color: #e9ecef;
-                    border-radius: 15px;
-                    margin: 2px;
-                }
-                QLabel {
-                    color: #333;
-                    font-size: 13px;
-                    padding: 10px 14px;
-                }
-            """)
-            msg_layout.addWidget(bubble, stretch=2)  # Takes up to 2/3 of space
-        else:
-            # Fallback to simple label
-            label = QLabel(message)
-            label.setWordWrap(True)
-            label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            label.setStyleSheet("""
-                background-color: #e9ecef;
-                color: #333;
-                padding: 10px 14px;
-                border-radius: 15px;
-                font-size: 13px;
-            """)
-            msg_layout.addWidget(label, stretch=2)
-        
-        # Add spacer (30% minimum on right for left-aligned messages)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        msg_layout.addItem(spacer)
-        
-        # Insert before the stretch at the end
-        self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
-        self._scroll_to_bottom()
-    
+
     def _add_system_message(self, message: str):
         """Add system message to chat display (centered)."""
         # Create container for centered message
@@ -827,7 +722,6 @@ class FloatingChatWindow(QWidget):
     def _copy_all_messages(self):
         """Copy all messages to clipboard."""
         try:
-            from PySide6.QtGui import QClipboard
             from PySide6.QtWidgets import QApplication
             
             # Build text from conversation history
@@ -899,7 +793,20 @@ class FloatingChatWindow(QWidget):
             # Let all other keys pass through (including Ctrl+V, Ctrl+C, Ctrl+X, Ctrl+A, etc.)
         return super().eventFilter(obj, event)
     
+    def _shutdown_generation(self):
+        """Stop any in-flight generation before the window is destroyed."""
+        worker = self._current_generator
+        if worker is not None:
+            worker.stop()
+        thread = self._current_thread
+        if thread is not None and thread.isRunning():
+            thread.quit()
+            thread.wait(2000)
+        self._current_generator = None
+        self._current_thread = None
+
     def closeEvent(self, event):
         """Handle window close event."""
+        self._shutdown_generation()
         self.window_closed.emit()
         super().closeEvent(event)

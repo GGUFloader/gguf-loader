@@ -16,6 +16,65 @@ There are many ways to contribute, no matter your skill level:
 
 ---
 
+## 🧭 Developer Quick Start
+
+New to the codebase? Read this before your first change.
+
+### 1. Read the Architecture Guide
+
+**[ARCHITECTURE.md](ARCHITECTURE.md)** is required reading. It documents the
+layered design, the threading model, and how to extend the app (new tools,
+services, panels, and addons).
+
+### 2. Set Up the Dev Environment
+
+```bash
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+# Linux/macOS
+source .venv/bin/activate
+
+pip install -r requirements.txt
+python main.py          # run the app
+```
+
+Always use the `.venv` interpreter for running and testing.
+
+### 3. Where Things Live
+
+| Layer | Folder | Rule of thumb |
+|---|---|---|
+| Pure domain logic (no Qt) | `core/` | `ModelBackend`, `PromptBuilder`, `ToolRegistry`, `AgentEngine` — unit-testable without a display |
+| Qt bridge + threading | `services/` | One `QObject` service per background pipeline; the only layer that manages threads |
+| Views | `ui/`, `widgets/` | Panels render and emit signals; they never import `core/` or `services/` |
+| Addons | `addons/` | Each package exposes `register(parent)`; finds the main window via duck typing |
+| Configuration | `config.py` | Constants + path bootstrap (`get_paths` / `ensure_directories`) |
+| Build/launch/GPU scripts | `scripts/` | Developer utilities; never imported by the app |
+
+### 4. Conventions That Matter
+
+- **No Qt in `core/`** — the domain layer must stay importable from any thread
+  and testable headless.
+- **Only `services/` runs background pipelines** — don't add new `QThread`
+  subclasses; copy the worker pattern in `services/chat_service.py` (arguments
+  as worker attributes, a zero-arg `@Slot() process()`, results via signals,
+  `_clear_refs()` on finish).
+- **Only `ModelBackend` calls into llama.cpp** — everything else goes through it.
+- **Panels talk in signals** — emit, don't reach into `MainWindow`.
+- **Addons use duck typing** — locate the window via `hasattr(parent, "model")`,
+  never by importing `MainWindow`.
+
+### 5. More Docs
+
+- [Addon Development](docs/addon-development.md) — build an addon
+- [Build & Package](docs/BUILD_EXE_INSTRUCTIONS.md) — PyInstaller packaging
+- [Config Files](docs/CONFIG_FILES_GUIDE.md) — configuration reference
+- [Documentation Index](docs/DOCUMENTATION.md) — everything else
+
+---
+
 ## Getting Started
 
 1. **Fork the repository**  

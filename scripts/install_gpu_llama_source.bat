@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0.."
 echo Building llama-cpp-python from source with CUDA support...
 echo This requires Visual Studio Build Tools and CUDA Toolkit installed
 echo.
@@ -28,5 +29,5 @@ pip install llama-cpp-python --no-cache-dir --force-reinstall
 echo.
 echo Build complete!
 echo.
-echo To verify GPU support, run: python verify_gpu_support.py
+echo To verify GPU support, run: python scripts/verify_gpu_support.py
 pause

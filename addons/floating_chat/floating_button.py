@@ -10,11 +10,11 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import (
-    Qt, QPoint, QRect, QPropertyAnimation, QEasingCurve, QTimer, Signal, Property
+    Qt, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Property
 )
 from PySide6.QtGui import (
-    QPainter, QColor, QBrush, QPen, QFont, QLinearGradient, 
-    QRadialGradient, QPainterPath, QMouseEvent, QPixmap, QIcon
+    QPainter, QColor, QBrush, QPen,
+    QRadialGradient, QPainterPath, QPixmap
 )
 
 
@@ -55,11 +55,6 @@ class FloatingChatButton(QWidget):
         
         # Setup animations
         self._setup_animations()
-        
-        # Auto-hide timer (optional feature)
-        self._auto_hide_timer = QTimer()
-        self._auto_hide_timer.setSingleShot(True)
-        self._auto_hide_timer.timeout.connect(self._auto_hide)
     
     def _load_icon(self):
         """Load the float.png file from the project root at highest resolution."""
@@ -245,20 +240,6 @@ class FloatingChatButton(QWidget):
             painter.setBrush(QBrush(QColor(255, 255, 255, 200)))
             painter.drawEllipse(dot_x - dot_size // 2, dot_y - dot_size // 2, dot_size, dot_size)
     
-    def _draw_shadow(self, painter, button_rect):
-        """Draw subtle shadow effect."""
-        shadow_offset = 2
-        shadow_rect = button_rect.translated(shadow_offset, shadow_offset)
-        
-        # Create shadow gradient
-        shadow_gradient = QRadialGradient(shadow_rect.center(), shadow_rect.width() // 2)
-        shadow_gradient.setColorAt(0.0, QColor(0, 0, 0, 30))
-        shadow_gradient.setColorAt(1.0, QColor(0, 0, 0, 0))
-        
-        painter.setBrush(QBrush(shadow_gradient))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(shadow_rect)
-    
     def mousePressEvent(self, event):
         """Handle mouse press for dragging and clicking."""
         if event.button() == Qt.MouseButton.LeftButton:
@@ -314,9 +295,6 @@ class FloatingChatButton(QWidget):
         self._hover_animation.setEndValue(1.1)
         self._hover_animation.start()
         
-        # Cancel auto-hide timer
-        self._auto_hide_timer.stop()
-        
         self.update()
         super().enterEvent(event)
     
@@ -329,17 +307,8 @@ class FloatingChatButton(QWidget):
         self._hover_animation.setEndValue(1.0)
         self._hover_animation.start()
         
-        # Start auto-hide timer (optional)
-        # self._auto_hide_timer.start(10000)  # Hide after 10 seconds of no interaction
-        
         self.update()
         super().leaveEvent(event)
-    
-    def _auto_hide(self):
-        """Auto-hide the button (optional feature)."""
-        # This could fade out the button or move it to screen edge
-        # For now, we'll just make it semi-transparent
-        self.setWindowOpacity(0.3)
     
     def show(self):
         """Override show to ensure full opacity."""

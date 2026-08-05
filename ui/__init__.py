@@ -1,14 +1,12 @@
 """
-UI package - Contains all user interface components
+UI package - Presentation layer for GGUF Loader.
 
-This package provides the main chat window and styling functionality
-for the GGUF Loader application.
+- MainWindow: application composition root (addon-compatible API).
+- SettingsSidebar / ChatPanel: focused UI panels.
+- ThemeMixin: dark/light theming.
 """
 
-from .ai_chat_window import AIChat
-from .apply_style import ThemeMixin
+from .main_window import MainWindow
+from .theme import ThemeMixin
 
-__all__ = [
-    'AIChat',
-    'ThemeMixin'
-]
+__all__ = ["MainWindow", "ThemeMixin"]

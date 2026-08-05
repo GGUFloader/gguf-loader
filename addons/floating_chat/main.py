@@ -10,24 +10,11 @@ Features:
 - Clean, modern UI design
 """
 
-import os
-import json
 import logging
 from typing import Optional, Any
-from pathlib import Path
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, 
-    QLabel, QFrame, QScrollArea, QApplication, QSizePolicy
-)
-from PySide6.QtCore import (
-    QObject, Signal, QTimer, Qt, QPoint, QPropertyAnimation, 
-    QEasingCurve, QRect, QSettings
-)
-from PySide6.QtGui import (
-    QPainter, QColor, QBrush, QPen, QFont, QPixmap, QIcon,
-    QLinearGradient, QRadialGradient, QPainterPath
-)
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QObject, Signal, QPoint, QSettings
 
 from .floating_button import FloatingChatButton
 from .chat_window import FloatingChatWindow
@@ -373,7 +360,6 @@ def register(parent=None):
             
             # If still not found, try to get it from QApplication
             if gguf_app is None:
-                from PySide6.QtWidgets import QApplication
                 app = QApplication.instance()
                 if app:
                     # Look through all top-level widgets

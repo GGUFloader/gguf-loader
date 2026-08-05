@@ -72,16 +72,12 @@ hiddenimports = [
     'config',
     'utils',
 
-    # Models package
-    'models',
-    'models.model_loader',
-    'models.chat_generator',
-    'models.__init__',
-
     # UI package
     'ui',
-    'ui.ai_chat_window',
-    'ui.apply_style',
+    'ui.main_window',
+    'ui.sidebar_panel',
+    'ui.chat_panel',
+    'ui.theme',
     'ui.__init__',
 
     # Widgets package
@@ -90,22 +86,24 @@ hiddenimports = [
     'widgets.feedback_dialog',
     'widgets.__init__',
 
-    # Mixins package
-    'mixins',
-    'mixins.chat_handler_mixin',
-    'mixins.event_handler_mixin',
-    'mixins.model_handler_mixin',
-    'mixins.ui_setup_mixin',
-    'mixins.utils_mixin',
-    'mixins.agent_mode_mixin',
-    'mixins.__init__',
-
-    # Core agent package
+    # Core package
     'core',
-    'core.agent',
-    'core.agent.simple_agent',
-    'core.agent.__init__',
     'core.__init__',
+    'core.llm',
+    'core.llm.model_backend',
+    'core.llm.prompt_builder',
+    'core.llm.__init__',
+    'core.agent',
+    'core.agent.agent_engine',
+    'core.agent.tool_registry',
+    'core.agent.__init__',
+
+    # Services package
+    'services',
+    'services.model_service',
+    'services.chat_service',
+    'services.agent_service',
+    'services.__init__',
     
     # Addons package
     'addons',
@@ -126,7 +124,7 @@ if sys.platform == 'win32':
         pass
 
 a = Analysis(
-    ['gguf_loader_main.py'],  # Use the version with addon support
+    ['main.py'],  # Single application entry point
     pathex=[current_dir],
     binaries=binaries,
     datas=datas,
@@ -167,7 +165,6 @@ a = Analysis(
         
         # Heavy agent dependencies (saves ~300MB)
         'pydantic', 'pydantic_core', 'PyPDF2',
-        'core', 'core.agent',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

@@ -1,7 +1,7 @@
 """
 GGUF Loader - Advanced GGUF Model Loader with Smart Floating Assistant
 
-A production-ready Python package that provides a robust GGUF model loader 
+A production-ready Python package that provides a robust GGUF model loader
 application with the Smart Floating Assistant addon pre-installed.
 """
 
@@ -11,22 +11,20 @@ __email__ = "hussainnazary475@gmail.com"
 __description__ = "Advanced GGUF Model Loader with Smart Floating Assistant"
 __url__ = "https://github.com/GGUFloader/gguf-loader"
 
-# Import main functions for programmatic access
-from gguf_loader_main import main as addon_main
+# Import main function for programmatic access
+from main import main
 
 # Import key classes for programmatic integration
 from addon_manager import AddonManager
 
 # Import configuration utilities
-from config import get_current_config, detect_language, ensure_directories
+from config import ensure_directories
 
 __all__ = [
     "__version__",
-    "__author__", 
+    "__author__",
     "__description__",
-    "addon_main",
+    "main",
     "AddonManager",
-    "get_current_config",
-    "detect_language",
-    "ensure_directories"
+    "ensure_directories",
 ]

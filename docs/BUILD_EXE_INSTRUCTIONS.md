@@ -21,7 +21,7 @@ The build system uses PyInstaller hooks located in the `build_hooks/` folder:
 Simply run the provided batch file:
 
 ```cmd
-build_exe.bat
+scripts/build_exe.bat
 ```
 
 This will:

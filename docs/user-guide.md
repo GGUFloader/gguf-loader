@@ -9,7 +9,7 @@ Complete guide to using GGUF Loader.
 Choose your method:
 - **Windows Executable:** Double-click `GGUFLoader.exe`
 - **Installed via pip:** Run `ggufloader` in terminal
-- **From source:** Run `launch.bat` (Windows) or `./launch.sh` (Linux/macOS)
+- **From source:** Run `scripts/launch.bat` (Windows) or `./scripts/launch.sh` (Linux/macOS)
 
 ### 2. Load a Model
 

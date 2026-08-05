@@ -1,7 +1,8 @@
 """
-Agent core functionality - Standalone agent implementation for GGUF Loader
+Agent core - Pure agent engine and sandboxed tool registry.
 """
 
-from .simple_agent import SimpleAgent
+from .agent_engine import AgentEngine, extract_json
+from .tool_registry import ToolRegistry, create_default_registry
 
-__all__ = ['SimpleAgent']
+__all__ = ["AgentEngine", "extract_json", "ToolRegistry", "create_default_registry"]

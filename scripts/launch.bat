@@ -3,6 +3,9 @@ REM GGUF Loader Launcher Script
 REM This script will create a virtual environment if it doesn't exist,
 REM install dependencies, and launch the application.
 
+REM Change to the project root so relative paths work from anywhere
+cd /d "%~dp0.."
+
 REM Set the name of the virtual environment
 set VENV_NAME=.venv
 
@@ -46,7 +49,7 @@ if errorlevel 1 (
 
 REM Launch the application
 echo Starting GGUF Loader...
-python gguf_loader_main.py
+python main.py
 
 if errorlevel 1 (
     echo Failed to start the application.

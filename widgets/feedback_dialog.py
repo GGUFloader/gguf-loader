@@ -3,7 +3,6 @@ Feedback Dialog Widget - Allows users to send feedback via email
 Uses web service API for seamless sending without user configuration
 """
 import json
-from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from PySide6.QtWidgets import (
@@ -11,27 +10,34 @@ from PySide6.QtWidgets import (
     QTextEdit, QLineEdit, QPushButton, QComboBox,
     QMessageBox, QProgressBar
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtGui import QFont
 
 from config import FONT_FAMILY
 
 
-class EmailSenderThread(QThread):
-    """Background thread for sending emails via web service"""
+class EmailSenderWorker(QObject):
+    """Sends feedback via a web service on a worker thread.
+
+    Follows the services worker pattern (see services/chat_service.py):
+    arguments are assigned as attributes before the thread starts and
+    :meth:`process` is a zero-arg slot so Qt can invoke it across threads.
+    """
+
     success = Signal()
     error = Signal(str)
-    
-    def __init__(self, endpoint_url, subject, message, user_email, feedback_type):
+
+    def __init__(self) -> None:
         super().__init__()
-        self.endpoint_url = endpoint_url
-        self.subject = subject
-        self.message = message
-        self.user_email = user_email
-        self.feedback_type = feedback_type
-    
-    def run(self):
-        """Send email via web service in background thread"""
+        self.endpoint_url: str = ""
+        self.subject: str = ""
+        self.message: str = ""
+        self.user_email: str = ""
+        self.feedback_type: str = ""
+
+    @Slot()
+    def process(self) -> None:
+        """Send email via web service in the worker thread."""
         try:
             # Prepare data
             data = {
@@ -41,10 +47,10 @@ class EmailSenderThread(QThread):
                 'feedback_type': self.feedback_type,
                 '_subject': self.subject  # FormSpree specific
             }
-            
+
             # Convert to JSON
             json_data = json.dumps(data).encode('utf-8')
-            
+
             # Create request
             request = Request(
                 self.endpoint_url,
@@ -54,14 +60,14 @@ class EmailSenderThread(QThread):
                     'Accept': 'application/json'
                 }
             )
-            
+
             # Send request
             with urlopen(request, timeout=10) as response:
                 if response.status in (200, 201):
                     self.success.emit()
                 else:
                     self.error.emit(f"Server returned status {response.status}")
-                    
+
         except Exception as e:
             self.error.emit(str(e))
 
@@ -72,7 +78,8 @@ class FeedbackDialog(QDialog):
     def __init__(self, parent=None, endpoint_url=None):
         super().__init__(parent)
         self.endpoint_url = endpoint_url or "https://formspree.io/f/YOUR_FORM_ID"
-        self.email_thread = None
+        self._sender_thread = None
+        self._sender_worker = None
         
         self.setWindowTitle("Send Feedback")
         self.setMinimumSize(500, 450)
@@ -213,17 +220,54 @@ class FeedbackDialog(QDialog):
         self.progress_bar.setVisible(True)
         self.status_label.setText("Sending your feedback...")
         
-        # Create and start email thread
-        self.email_thread = EmailSenderThread(
-            self.endpoint_url,
-            subject,
-            message,
-            user_email,
-            feedback_type
-        )
-        self.email_thread.success.connect(self.on_send_success)
-        self.email_thread.error.connect(self.on_send_error)
-        self.email_thread.start()
+        # Stop any previous send before starting a new one
+        self._stop_sender()
+
+        # Build the worker (args as attributes) and run it on a fresh thread
+        worker = EmailSenderWorker()
+        worker.endpoint_url = self.endpoint_url
+        worker.subject = subject
+        worker.message = message
+        worker.user_email = user_email
+        worker.feedback_type = feedback_type
+
+        thread = QThread(self)
+        worker.moveToThread(thread)
+
+        thread.started.connect(worker.process)
+        worker.success.connect(self.on_send_success)
+        worker.error.connect(self.on_send_error)
+        worker.success.connect(thread.quit)
+        worker.error.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda: self._clear_sender_refs(thread, worker))
+
+        self._sender_thread = thread
+        self._sender_worker = worker
+        thread.start()
+
+    def _clear_sender_refs(self, thread, worker):
+        """Drop references once the finished thread is gone (avoids stale handles)."""
+        if self._sender_thread is thread:
+            self._sender_thread = None
+        if self._sender_worker is worker:
+            self._sender_worker = None
+
+    def _stop_sender(self):
+        """Stop any in-flight send and release thread references."""
+        thread = self._sender_thread
+        if thread is not None and thread.isRunning():
+            thread.quit()
+            # urlopen has a 10s timeout, so this bound always covers a hung send
+            thread.wait(15000)
+        self._sender_thread = None
+        self._sender_worker = None
+
+    def closeEvent(self, event):
+        """Stop any in-flight send before the dialog is destroyed."""
+        self._stop_sender()
+        super().closeEvent(event)
     
     def on_send_success(self):
         """Handle successful email send"""

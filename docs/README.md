@@ -94,13 +94,13 @@ For the best experience, use the provided launch scripts that automatically hand
 #### Windows
 ```bash
 # Full GGUF Loader with addon support
-launch.bat
+scripts/launch.bat
 ```
 
 #### Linux/macOS
 ```bash
 # Full GGUF Loader with addon support
-./launch.sh
+./scripts/launch.sh
 ```
 
 ### Alternative: Install via pip

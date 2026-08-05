@@ -67,17 +67,17 @@ ggufloader
 
 **For Windows:**
 - Open the extracted folder
-- Double-click on `launch.bat`
+- Double-click on `scripts/launch.bat`
 - **First time only**: Wait 1-2 minutes while it downloads dependencies
 - The app will start automatically!
-- **Next time**: Just double-click `launch.bat` again - it starts instantly!
+- **Next time**: Just double-click `scripts/launch.bat` again - it starts instantly!
 
 **For Linux/macOS:**
 - Open the extracted folder
-- Double-click on `launch.sh` (or right-click → Open)
+- Double-click on `scripts/launch.sh` (or right-click → Open)
 - **First time only**: Wait 1-2 minutes while it downloads dependencies
 - The app will start automatically!
-- **Next time**: Just double-click `launch.sh` again - it starts instantly!
+- **Next time**: Just double-click `scripts/launch.sh` again - it starts instantly!
 
 **That's it!** No Python installation needed, no command line, no complicated setup.
 
@@ -122,6 +122,7 @@ ggufloader
 - **[Addon Development](docs/addon-development.md)** - Create your own addons
 - **[FAQ](docs/faq.md)** - Frequently asked questions
 - **[All Documentation](docs/DOCUMENTATION.md)** - Complete documentation index
+- **[Architecture](ARCHITECTURE.md)** - Layered design, threading model, and extension guide
 
 ## 🤖 Agentic Mode
 
@@ -186,26 +187,26 @@ GGUF Loader supports GPU acceleration for significantly faster inference speeds.
 **Option A: Pre-built wheel (Recommended - Fastest)**
 ```bash
 # Windows
-install_gpu_llama.bat
+scripts/install_gpu_llama.bat
 
 # Linux/macOS
-chmod +x install_gpu_llama.sh
-./install_gpu_llama.sh
+chmod +x scripts/install_gpu_llama.sh
+./scripts/install_gpu_llama.sh
 ```
 
-**Option B: Build from source (requires Visual Studio Build Tools)**
+**Option B: Build from source (requires a C++ compiler, CMake, and CUDA Toolkit; Metal on macOS)**
 ```bash
 # Windows
-install_gpu_llama_source.bat
+scripts/install_gpu_llama_source.bat
 
 # Linux/macOS
-chmod +x install_gpu_llama_source.sh
-./install_gpu_llama_source.sh
+chmod +x scripts/install_gpu_llama_source.sh
+./scripts/install_gpu_llama_source.sh
 ```
 
 **Step 2: Verify GPU support**
 ```bash
-python verify_gpu_support.py
+python scripts/verify_gpu_support.py
 ```
 
 **Step 3: Use GPU acceleration**
@@ -223,7 +224,7 @@ python verify_gpu_support.py
 Run this in a separate terminal while using GGUF Loader:
 ```bash
 # Windows
-monitor_gpu.bat
+scripts/monitor_gpu.bat
 
 # Linux/macOS
 watch -n 1 nvidia-smi

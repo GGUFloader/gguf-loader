@@ -12,9 +12,9 @@ PyInstaller hooks tell the build system how to properly package Python modules a
 These hooks ensure all necessary files from each package are included:
 
 - **hook-addons.py** - Collects the `addons/` folder and all addon modules
+- **hook-core.py** - Collects the `core/` package (LLM backend + agent engine)
 - **hook-llama_cpp.py** - Collects llama.cpp library and DLL files (critical for AI functionality)
-- **hook-mixins.py** - Collects the `mixins/` package
-- **hook-models.py** - Collects the `models/` package
+- **hook-services.py** - Collects the `services/` package (model/chat/agent services)
 - **hook-ui.py** - Collects the `ui/` package
 - **hook-widgets.py** - Collects the `widgets/` package
 
@@ -32,8 +32,8 @@ runtime_hooks=[os.path.join(current_dir, 'build_hooks', 'runtime_hook_llama.py')
 
 ## When Are They Needed?
 
-- **Building executables**: Required when running `build_exe.bat` or `pyinstaller build_exe.spec`
-- **Running from source**: Not used during normal Python execution (`python gguf_loader_main.py`)
+- **Building executables**: Required when running `scripts/build_exe.bat` or `pyinstaller build_exe.spec`
+- **Running from source**: Not used during normal Python execution (`python main.py`)
 
 ## Modifying Hooks
 

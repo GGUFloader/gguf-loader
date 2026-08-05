@@ -6,7 +6,6 @@ Displays addon status in the GGUF Loader sidebar.
 """
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
-from PySide6.QtCore import Qt
 
 
 class FloatingChatStatusWidget(QWidget):
