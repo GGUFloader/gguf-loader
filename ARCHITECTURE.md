@@ -263,11 +263,13 @@ Mirrors the engine's callbacks as signals:
 
 - three services (`_model_service`, `_chat_service`, `_agent_service`),
 - a `PromptBuilder` and the `conversation_history` list,
-- the panels: `SettingsSidebar`, `ChatPanel`, and the addon sidebar
-  (`AddonSidebarFrame`), arranged in a `QSplitter`.
+- the panels: `SettingsSidebar` and `ChatPanel`, arranged in a `QSplitter`
+  (no addon column — addons are launched from the **Addons menu**),
+- a menu bar (File / View / Addons / Help) built by `_build_menu_bar`.
 
 Its own logic is limited to **wiring** (`_wire_services`, `_wire_ui_signals`)
-and **state transitions** (model loaded, generation finished, agent init).
+and **state transitions** (model loaded, generation finished, agent init,
+theme toggled via `theme_changed`).
 `closeEvent` stops the floating-chat addon, then stops chat/agent services and
 unloads the model.
 
@@ -364,7 +366,8 @@ Worker thread: engine.process(text, on_status=emit status_update, on_tool=emit t
 Addons live in `addons/<name>/` and must expose a `register(parent=None)`
 function in their `__init__.py`. `AddonManager` scans the directory, imports
 each package, and calls `register(main_window)`; the return value (if any) is
-embedded in the addon sidebar.
+embedded in the main window. Addons are launched from the **Addons menu**
+(`AddonManager.open_addon_dialog`), which calls `register(parent)` again.
 
 The `floating_chat` addon shows the **main-window contract** addons rely on:
 
@@ -375,6 +378,7 @@ The `floating_chat` addon shows the **main-window contract** addons rely on:
 | `model_unloaded` | `Signal()` | emitted when the model is released |
 | `generation_finished` | `Signal()` | emitted when the main chat completes |
 | `generation_error` | `Signal(str)` | emitted when generation fails |
+| `theme_changed` | `Signal(bool)` | emitted when dark/light mode is toggled (`True` = dark); addons can connect to restyle themselves |
 | `chat_generator` | always `None` | legacy hook; `None` keeps addons on the `model` path |
 | `_floating_chat_addon` | attribute | the addon stores its own instance here for lifecycle management |
 
@@ -440,7 +444,7 @@ addons/my_addon/
 
 - Locate the window via `hasattr(parent, "model")`/`model_loaded` (walk
   parents, then `QApplication.topLevelWidgets()`).
-- Connect to `model_loaded`, `generation_finished`, `generation_error`; call
+- Connect to `model_loaded`, `generation_finished`, `generation_error`, `theme_changed`; call
   `gguf_app.model(prompt, stream=True)` for inference.
 - Store your instance on the window (e.g. `gguf_app._my_addon`) and stop it in
   `closeEvent` if needed. See `docs/addon-development.md` for the full guide.

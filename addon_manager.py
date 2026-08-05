@@ -1,7 +1,6 @@
 """
 Addon Manager - Handles loading and managing addons for GGUF Loader
 """
-import os
 import sys
 import importlib
 import importlib.util
@@ -9,17 +8,9 @@ from pathlib import Path
 from typing import Dict, Optional, Callable, Any
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QDialog, QFrame, QScrollArea, QMessageBox
+    QWidget, QVBoxLayout, QDialog, QMessageBox
 )
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont
 from resource_manager import find_addons_dir
-
-try:
-    from config import FONT_FAMILY
-except ImportError:
-    FONT_FAMILY = "Arial"  # Fallback if config not found
 
 
 class AddonManager:
@@ -160,105 +151,3 @@ class AddonManager:
         """Get list of successfully loaded addon names"""
         return list(self.loaded_addons.keys())
 
-
-class AddonSidebar(QWidget):
-    """Sidebar widget for addon launcher buttons"""
-
-    def __init__(self, addon_manager: AddonManager, parent=None):
-        super().__init__(parent)
-        self.addon_manager = addon_manager
-        self.setup_ui()
-        self.refresh_addons()  # Just refresh UI, don't reload addons
-
-    def setup_ui(self):
-        """Setup the sidebar UI"""
-        self.setFixedWidth(200)
-        # Note: QWidget doesn't have setFrameStyle, only QFrame does
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Title
-        title = QLabel("🧩 Addons")
-        title.setFont(QFont(FONT_FAMILY, 14, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        # Scroll area for addon buttons
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        # Container for buttons
-        self.button_container = QWidget()
-        self.button_layout = QVBoxLayout(self.button_container)
-        self.button_layout.setSpacing(5)
-        self.button_layout.setContentsMargins(0, 0, 0, 0)
-
-        scroll_area.setWidget(self.button_container)
-        layout.addWidget(scroll_area)
-
-        # Refresh button
-        refresh_btn = QPushButton("🔄 Refresh")
-        refresh_btn.setMinimumHeight(30)
-        refresh_btn.clicked.connect(self.reload_addons)
-        layout.addWidget(refresh_btn)
-
-    def refresh_addons(self):
-        """Refresh the addon list and recreate buttons"""
-        # Clear existing buttons
-        for i in reversed(range(self.button_layout.count())):
-            child = self.button_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
-
-        # Get already loaded addons (don't reload them)
-        loaded_addons = self.addon_manager.get_loaded_addons()
-
-        if not loaded_addons:
-            # Show "no addons" message
-            no_addons_label = QLabel("No addons found")
-            no_addons_label.setAlignment(Qt.AlignCenter)
-            no_addons_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-            no_addons_label.setStyleSheet("color: #666; font-style: italic;")
-            self.button_layout.addWidget(no_addons_label)
-        else:
-            # Create buttons for each loaded addon
-            for addon_name in sorted(loaded_addons):
-                btn = QPushButton(addon_name)
-                btn.setMinimumHeight(35)
-                btn.setFont(QFont(FONT_FAMILY, 10))
-                btn.clicked.connect(lambda checked, name=addon_name: self.open_addon(name))
-                self.button_layout.addWidget(btn)
-
-        # Add stretch to push buttons to top
-        self.button_layout.addStretch()
-
-    def reload_addons(self):
-        """Reload all addons and refresh the UI"""
-        # Actually reload addons
-        results = self.addon_manager.load_all_addons()
-        # Then refresh the UI
-        self.refresh_addons()
-
-    def open_addon(self, addon_name: str):
-        """Open an addon in a popup dialog"""
-        self.addon_manager.open_addon_dialog(addon_name, self.parent())
-
-
-# Frame wrapper to match existing UI style
-class AddonSidebarFrame(QFrame):
-    """Frame wrapper for AddonSidebar to match existing UI style"""
-
-    def __init__(self, addon_manager: AddonManager, parent=None):
-        super().__init__(parent)
-        self.setFrameStyle(QFrame.StyledPanel)
-        self.setFixedWidth(200)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        self.addon_sidebar = AddonSidebar(addon_manager, self)
-        layout.addWidget(self.addon_sidebar)

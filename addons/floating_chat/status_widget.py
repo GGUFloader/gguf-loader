@@ -6,6 +6,7 @@ Displays addon status in the GGUF Loader sidebar.
 """
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+from ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
 
 class FloatingChatStatusWidget(QWidget):
@@ -15,6 +16,11 @@ class FloatingChatStatusWidget(QWidget):
         super().__init__()
         
         self.addon = addon_instance
+
+        # Follow the main window's theme
+        app = getattr(addon_instance, 'gguf_app', None)
+        is_dark = bool(getattr(app, 'is_dark_mode', True))
+        t = DARK_TOKENS if is_dark else LIGHT_TOKENS
         
         # Setup UI
         layout = QVBoxLayout(self)
@@ -28,13 +34,13 @@ class FloatingChatStatusWidget(QWidget):
         
         # Status
         self.status_label = QLabel("🟢 Active")
-        self.status_label.setStyleSheet("color: #28a745; font-size: 12px;")
+        self.status_label.setStyleSheet(f"color: {t['success']}; font-size: 12px;")
         layout.addWidget(self.status_label)
         
         # Description
         desc = QLabel("Floating chat button is active. Click the button to open chat window.")
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #666; font-size: 11px;")
+        desc.setStyleSheet(f"color: {t['textMuted']}; font-size: 11px;")
         layout.addWidget(desc)
         
         # Button row

@@ -29,6 +29,8 @@ except ImportError:
     # Fallback if chat_bubble is not available
     ChatBubble = None
 
+from ui.theme import DARK_TOKENS, LIGHT_TOKENS
+
 
 class StreamingWorker(QObject):
     """Streams model responses on a worker thread without blocking the UI.
@@ -115,7 +117,12 @@ class FloatingChatWindow(QWidget):
         self._current_response_text = ""  # Accumulate streaming response
         self._current_generator = None  # Active StreamingWorker
         self._current_thread = None     # Its QThread container
-        
+
+        # Theme state (follows the main window)
+        self._t = DARK_TOKENS
+        self._is_model_loaded = False
+        self._styled_widgets = []  # (widget, is_user_or_None, is_fallback)
+
         # Setup window
         self._setup_window()
         self._setup_ui()
@@ -141,43 +148,8 @@ class FloatingChatWindow(QWidget):
         self.resize(400, 600)
         self.setMinimumSize(300, 400)
         
-        # Apply modern styling
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #f5f5f5;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            QTextEdit {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                padding: 10px;
-                font-size: 13px;
-            }
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #106ebe;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-            QLabel {
-                color: #333;
-                font-size: 12px;
-            }
-        """)
+        # Apply modern styling (theme-aware)
+        self.setStyleSheet(self._build_base_stylesheet(self._t))
     
     def _setup_ui(self):
         """Setup the user interface."""
@@ -186,14 +158,14 @@ class FloatingChatWindow(QWidget):
         layout.setSpacing(10)
         
         # Header
-        header = QLabel("💬 AI Chat")
-        header.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
-        header.setStyleSheet("color: #0078d4; padding: 5px;")
-        layout.addWidget(header)
+        self.header_label = QLabel("💬 AI Chat")
+        self.header_label.setFont(QFont(FONT_FAMILY, 16, QFont.Weight.Bold))
+        self.header_label.setStyleSheet(f"color: {self._t['accent']}; padding: 5px;")
+        layout.addWidget(self.header_label)
         
         # Model status indicator
         self.status_label = QLabel("⚪ Model: Not loaded")
-        self.status_label.setStyleSheet("color: #666; font-size: 11px; padding: 2px;")
+        self.status_label.setStyleSheet(self._status_style(False))
         layout.addWidget(self.status_label)
         
         # Chat display area with scroll
@@ -240,44 +212,20 @@ class FloatingChatWindow(QWidget):
         button_layout.setSpacing(8)
         
         # Copy All button
-        copy_all_btn = QPushButton("📋 Copy All")
-        copy_all_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #17a2b8;
-                padding: 8px 15px;
-            }
-            QPushButton:hover {
-                background-color: #138496;
-            }
-        """)
-        copy_all_btn.clicked.connect(self._copy_all_messages)
-        button_layout.addWidget(copy_all_btn)
+        self.copy_all_btn = QPushButton("📋 Copy All")
+        self.copy_all_btn.setStyleSheet(self._ghost_style())
+        self.copy_all_btn.clicked.connect(self._copy_all_messages)
+        button_layout.addWidget(self.copy_all_btn)
         
         # Clear button
         self.clear_btn = QPushButton("🗑️ Clear")
-        self.clear_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                padding: 8px 15px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
+        self.clear_btn.setStyleSheet(self._ghost_style())
         self.clear_btn.clicked.connect(self._clear_chat)
         button_layout.addWidget(self.clear_btn)
         
         # Stop button (hidden by default)
         self.stop_btn = QPushButton("⏹ Stop")
-        self.stop_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                padding: 8px 15px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
+        self.stop_btn.setStyleSheet(self._danger_style())
         self.stop_btn.clicked.connect(self._stop_generation)
         self.stop_btn.hide()
         button_layout.addWidget(self.stop_btn)
@@ -287,27 +235,7 @@ class FloatingChatWindow(QWidget):
         # Send button with icon
         self.send_btn = QPushButton("➤")  # Send arrow icon
         self.send_btn.setFixedSize(45, 45)  # Circular button
-        self.send_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 22px;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 0px;
-            }
-            QPushButton:hover {
-                background-color: #106ebe;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-        """)
+        self.send_btn.setStyleSheet(self._send_style())
         self.send_btn.clicked.connect(self._send_message)
         button_layout.addWidget(self.send_btn)
         
@@ -329,21 +257,201 @@ class FloatingChatWindow(QWidget):
             # Connect to model signals if available
             if hasattr(self.gguf_app, 'model_loaded'):
                 self.gguf_app.model_loaded.connect(lambda m: self.set_model_status(True))
-            
+
+            # Follow the main window's theme (and future changes to it)
+            if hasattr(self.gguf_app, 'is_dark_mode'):
+                self.apply_theme(bool(self.gguf_app.is_dark_mode))
+            if hasattr(self.gguf_app, 'theme_changed'):
+                self.gguf_app.theme_changed.connect(self.apply_theme)
+
         except Exception as e:
             self._logger.error(f"Error connecting to model: {e}")
     
     def set_model_status(self, is_loaded: bool):
         """Update model status indicator."""
+        self._is_model_loaded = is_loaded
         if is_loaded:
             self.status_label.setText("🟢 Model: Ready")
-            self.status_label.setStyleSheet("color: #28a745; font-size: 11px; padding: 2px;")
             self.send_btn.setEnabled(True)
         else:
             self.status_label.setText("🔴 Model: Not loaded")
-            self.status_label.setStyleSheet("color: #dc3545; font-size: 11px; padding: 2px;")
             self.send_btn.setEnabled(False)
-    
+        self._apply_status_style()
+
+    # ------------------------------------------------------------------
+    # Theming (follows the main window's dark/light mode)
+    # ------------------------------------------------------------------
+    def apply_theme(self, is_dark: bool):
+        """Re-style the whole window for dark or light mode."""
+        self._t = DARK_TOKENS if is_dark else LIGHT_TOKENS
+        self.setStyleSheet(self._build_base_stylesheet(self._t))
+        if not hasattr(self, 'header_label'):
+            return
+        self.header_label.setStyleSheet(f"color: {self._t['accent']}; padding: 5px;")
+        self._apply_status_style()
+        self.copy_all_btn.setStyleSheet(self._ghost_style())
+        self.clear_btn.setStyleSheet(self._ghost_style())
+        self.stop_btn.setStyleSheet(self._danger_style())
+        self.send_btn.setStyleSheet(self._send_style())
+        self._restyle_messages()
+
+    def _apply_status_style(self):
+        self.status_label.setStyleSheet(self._status_style(self._is_model_loaded))
+
+    def _restyle_messages(self):
+        """Re-apply the current theme to every rendered message."""
+        for widget, is_user, is_fallback in self._styled_widgets:
+            if is_user is None:
+                widget.setStyleSheet(self._system_style())
+            elif is_fallback:
+                widget.setStyleSheet(self._fallback_bubble_style(is_user))
+            else:
+                widget.setStyleSheet(self._bubble_style(is_user))
+
+    def _build_base_stylesheet(self, t: dict) -> str:
+        return f"""
+QWidget {{
+    background-color: {t['bg']};
+    font-family: 'Segoe UI', Arial, sans-serif;
+}}
+QTextEdit {{
+    background-color: {t['elevated']};
+    border: 1px solid {t['border']};
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    color: {t['text']};
+}}
+QPushButton {{
+    background-color: {t['elevated']};
+    color: {t['text']};
+    border: 1px solid {t['border']};
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 13px;
+}}
+QPushButton:hover {{
+    background-color: {t['elevatedHover']};
+    color: {t['text']};
+}}
+QPushButton:pressed {{
+    background-color: {t['pressedBg']};
+}}
+QPushButton:disabled {{
+    background-color: {t['disabledBg']};
+    color: {t['textMuted']};
+}}
+QLabel {{
+    color: {t['textSec']};
+    font-size: 12px;
+}}
+"""
+
+    def _ghost_style(self) -> str:
+        t = self._t
+        return f"""
+QPushButton {{
+    background-color: {t['elevated']};
+    color: {t['textSec']};
+    border: 1px solid {t['border']};
+    padding: 8px 15px;
+}}
+QPushButton:hover {{
+    background-color: {t['elevatedHover']};
+}}
+"""
+
+    def _danger_style(self) -> str:
+        t = self._t
+        return f"""
+QPushButton {{
+    background-color: {t['danger']};
+    color: white;
+    padding: 8px 15px;
+}}
+QPushButton:hover {{
+    background-color: {t['dangerHover']};
+}}
+"""
+
+    def _send_style(self) -> str:
+        t = self._t
+        return f"""
+QPushButton {{
+    background-color: {t['accent']};
+    color: {t['onAccent']};
+    border: none;
+    border-radius: 22px;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 0px;
+}}
+QPushButton:hover {{ background-color: {t['accentHover']}; }}
+QPushButton:pressed {{ background-color: {t['accentPressed']}; }}
+QPushButton:disabled {{
+    background-color: {t['disabledBg']};
+    color: {t['textMuted']};
+}}
+"""
+
+    def _bubble_style(self, is_user: bool) -> str:
+        t = self._t
+        if is_user:
+            return f"""
+QFrame {{
+    background-color: {t['accentSoft']};
+    border: 1px solid {t['accentBorder']};
+    border-radius: 15px;
+    margin: 2px;
+}}
+QLabel {{
+    color: {t['text']};
+    font-size: 13px;
+    padding: 10px 14px;
+}}
+"""
+        return f"""
+QFrame {{
+    background-color: {t['elevated']};
+    border: 1px solid {t['border']};
+    border-radius: 15px;
+    margin: 2px;
+}}
+QLabel {{
+    color: {t['text']};
+    font-size: 13px;
+    padding: 10px 14px;
+}}
+"""
+
+    def _fallback_bubble_style(self, is_user: bool) -> str:
+        t = self._t
+        if is_user:
+            bg, border = t['accentSoft'], t['accentBorder']
+        else:
+            bg, border = t['elevated'], t['border']
+        return f"""
+QLabel {{
+    background-color: {bg};
+    color: {t['text']};
+    padding: 10px 14px;
+    border: 1px solid {border};
+    border-radius: 15px;
+    font-size: 13px;
+}}
+"""
+
+    def _system_style(self) -> str:
+        return f"""
+color: {self._t['textMuted']};
+font-size: 11px;
+font-style: italic;
+padding: 5px;
+"""
+
+    def _status_style(self, is_loaded: bool) -> str:
+        color = self._t['success'] if is_loaded else self._t['danger']
+        return f"color: {color}; font-size: 11px; padding: 2px;"""
     def _send_message(self):
         """Send message to AI."""
         message = self.input_field.toPlainText().strip()
@@ -524,34 +632,19 @@ class FloatingChatWindow(QWidget):
             # Use chat bubble widget
             bubble = ChatBubble("", is_user=False)
             bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            bubble.setStyleSheet("""
-                QFrame {
-                    background-color: #e9ecef;
-                    border-radius: 15px;
-                    margin: 2px;
-                }
-                QLabel {
-                    color: #333;
-                    font-size: 13px;
-                    padding: 10px 14px;
-                }
-            """)
+            bubble.setStyleSheet(self._bubble_style(False))
             msg_layout.addWidget(bubble, stretch=2)
             self._current_ai_message_widget = bubble
+            self._styled_widgets.append((bubble, False, False))
         else:
             # Fallback to simple label
             label = QLabel("")
             label.setWordWrap(True)
             label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            label.setStyleSheet("""
-                background-color: #e9ecef;
-                color: #333;
-                padding: 10px 14px;
-                border-radius: 15px;
-                font-size: 13px;
-            """)
+            label.setStyleSheet(self._fallback_bubble_style(False))
             msg_layout.addWidget(label, stretch=2)
             self._current_ai_message_widget = label
+            self._styled_widgets.append((label, False, True))
         
         # Add spacer
         spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
@@ -651,32 +744,17 @@ class FloatingChatWindow(QWidget):
             # Use chat bubble widget
             bubble = ChatBubble(message, is_user=True)
             bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            bubble.setStyleSheet("""
-                QFrame {
-                    background-color: #0078d4;
-                    border-radius: 15px;
-                    margin: 2px;
-                }
-                QLabel {
-                    color: white;
-                    font-size: 13px;
-                    padding: 10px 14px;
-                }
-            """)
+            bubble.setStyleSheet(self._bubble_style(True))
             msg_layout.addWidget(bubble, stretch=2)  # Takes up to 2/3 of space
+            self._styled_widgets.append((bubble, True, False))
         else:
             # Fallback to simple label
             label = QLabel(message)
             label.setWordWrap(True)
             label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
-            label.setStyleSheet("""
-                background-color: #0078d4;
-                color: white;
-                padding: 10px 14px;
-                border-radius: 15px;
-                font-size: 13px;
-            """)
+            label.setStyleSheet(self._fallback_bubble_style(True))
             msg_layout.addWidget(label, stretch=2)
+            self._styled_widgets.append((label, True, True))
 
         # Insert before the stretch at the end
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, msg_container)
@@ -691,13 +769,9 @@ class FloatingChatWindow(QWidget):
         msg_layout.addStretch()
         
         label = QLabel(message)
-        label.setStyleSheet("""
-            color: #6c757d;
-            font-size: 11px;
-            font-style: italic;
-            padding: 5px;
-        """)
+        label.setStyleSheet(self._system_style())
         msg_layout.addWidget(label)
+        self._styled_widgets.append((label, None, False))
         msg_layout.addStretch()
         
         # Insert before the stretch at the end
@@ -706,6 +780,8 @@ class FloatingChatWindow(QWidget):
     
     def _remove_last_message(self):
         """Remove the last message from chat display."""
+        if self._styled_widgets:
+            self._styled_widgets.pop()
         # Get the last widget before the stretch
         count = self.chat_layout.count()
         if count > 1:  # Keep the stretch
@@ -763,6 +839,7 @@ class FloatingChatWindow(QWidget):
                 item.widget().deleteLater()
         
         self._conversation_history.clear()
+        self._styled_widgets.clear()
         self._add_system_message("Chat cleared")
     
     def on_generation_finished(self):

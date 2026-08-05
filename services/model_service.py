@@ -97,7 +97,7 @@ class ModelService(QObject):
 
         self._thread = thread
         self._worker = worker
-        self.loading.emit(f"Loading model...")
+        self.loading.emit("Loading model...")
         thread.start()
 
     def unload(self) -> None:

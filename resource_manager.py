@@ -11,8 +11,7 @@ correctly whether the application is running from:
 
 import os
 import sys
-from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 import importlib.resources
 import importlib.util
 

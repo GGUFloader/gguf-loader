@@ -2,8 +2,6 @@
 Custom PySide6 hook - only include modules we actually use
 This overrides PyInstaller's default hook that includes everything
 """
-from PyInstaller.utils.hooks import collect_submodules
-
 # Only include the Qt modules we actually use
 hiddenimports = [
     'PySide6.QtCore',

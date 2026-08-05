@@ -2,8 +2,9 @@
 MainWindow - Application composition root.
 
 Owns the three services (model/chat/agent), composes the settings
-sidebar, chat panel and addon sidebar, and exposes the addon-facing API
-that the old ``AIChat``/``GGUFLoaderApp`` provided:
+sidebar and chat panel, provides a menu bar (File/View/Addons/Help),
+and exposes the addon-facing API that the old
+``AIChat``/``GGUFLoaderApp`` provided:
 
 - ``model``          : callable ModelBackend (or None)
 - ``model_loaded``   : Signal(object)
@@ -21,12 +22,13 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
-    QFileDialog, QMainWindow, QMessageBox, QSplitter, QVBoxLayout, QWidget,
+    QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+    QSplitter, QVBoxLayout, QWidget,
 )
 
-from addon_manager import AddonManager, AddonSidebarFrame
+from addon_manager import AddonManager
 from config import MAX_TOKENS, WINDOW_SIZE, WINDOW_TITLE
 from core.llm.model_backend import ModelBackend
 from core.llm.prompt_builder import PromptBuilder
@@ -49,10 +51,11 @@ class MainWindow(QMainWindow, ThemeMixin):
     model_unloaded = Signal()
     generation_finished = Signal()
     generation_error = Signal(str)
+    theme_changed = Signal(bool)
 
     def __init__(self) -> None:
         super().__init__()
-        self.is_dark_mode = False
+        self.is_dark_mode = True  # Dark-first; the toggle in Settings flips it.
         self.chat_generator = None  # Addons check this; None keeps them on the model path.
         self._floating_chat_addon = None
 
@@ -66,6 +69,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._build_ui()
         self._wire_services()
         self._load_addons()
+        self._populate_addons_menu()
 
         logger.info("MainWindow initialized")
 
@@ -87,32 +91,144 @@ class MainWindow(QMainWindow, ThemeMixin):
             self.setWindowIcon(QIcon(icon_path))
 
     def _build_ui(self) -> None:
+        self._build_menu_bar()
+        self._build_header()
+
         self.sidebar = SettingsSidebar(self)
+        self.sidebar.setObjectName("sidePanel")
         self.chat_panel = ChatPanel(self)
 
         self.addon_manager = AddonManager()
-        addon_sidebar = AddonSidebarFrame(self.addon_manager, self)
 
         splitter = QSplitter()
-        splitter.addWidget(addon_sidebar)
         splitter.addWidget(self.sidebar)
         splitter.addWidget(self.chat_panel)
-        splitter.setSizes([200, 280, 1000])
+        splitter.setSizes([300, 1000])
         splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 0)
-        splitter.setStretchFactor(2, 1)
-        self.setCentralWidget(splitter)
+        splitter.setStretchFactor(1, 1)
+
+        central = QWidget()
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.header)
+        layout.addWidget(splitter, 1)
+        self.setCentralWidget(central)
 
         self._wire_ui_signals()
         self.apply_styles()
+        self.chat_panel.apply_theme(self.is_dark_mode)
+
+    def _build_menu_bar(self) -> None:
+        """Top-level menus: File, View (appearance), Addons, Help."""
+        bar = self.menuBar()
+
+        # ---- File ----
+        file_menu = bar.addMenu("&File")
+        action = file_menu.addAction("Load Model\u2026")
+        action.triggered.connect(self._choose_and_load_model)
+        action = file_menu.addAction("Clear Chat")
+        action.triggered.connect(self._clear_chat)
+        file_menu.addSeparator()
+        action = file_menu.addAction("Exit")
+        action.triggered.connect(self.close)
+
+        # ---- View ----
+        view_menu = bar.addMenu("&View")
+        self.dark_mode_action = QAction("Dark Mode", self)
+        self.dark_mode_action.setCheckable(True)
+        # setChecked before connect: the handler touches self.chat_panel,
+        # which does not exist yet while the menu bar is being built.
+        self.dark_mode_action.setChecked(self.is_dark_mode)
+        self.dark_mode_action.toggled.connect(self._on_dark_mode_toggled)
+        view_menu.addAction(self.dark_mode_action)
+
+        text_menu = view_menu.addMenu("Text Size")
+        self._text_size_actions: dict[int, QAction] = {}
+        for size in (12, 14, 16, 18, 20, 22):
+            action = QAction(str(size), self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda _checked, s=size: self._set_text_size(s))
+            text_menu.addAction(action)
+            self._text_size_actions[size] = action
+        self._text_size_actions[14].setChecked(True)
+
+        # ---- Addons (filled after loading) ----
+        self.addons_menu = bar.addMenu("&Addons")
+
+        # ---- Help ----
+        help_menu = bar.addMenu("&Help")
+        action = help_menu.addAction("Send Feedback")
+        action.triggered.connect(self._show_feedback_dialog)
+        help_menu.addSeparator()
+        action = help_menu.addAction("About GGUF Loader")
+        action.triggered.connect(self._show_about)
+
+    def _set_text_size(self, size: int) -> None:
+        """Apply a text size and keep the View menu checkmarks in sync."""
+        for s, action in self._text_size_actions.items():
+            action.setChecked(s == size)
+        self.chat_panel.apply_font_size(size)
+
+    def _show_about(self) -> None:
+        from __init__ import __version__
+        QMessageBox.about(
+            self,
+            "About GGUF Loader",
+            f"<b>GGUF Loader</b> v{__version__}<br>"
+            "Local LLM runtime for GGUF models.<br><br>"
+            "Built by Hussain Nazary \u00B7 @hussainnazary2",
+        )
+
+    def _populate_addons_menu(self) -> None:
+        """Rebuild the Addons menu from the loaded addons."""
+        self.addons_menu.clear()
+        addons = self.addon_manager.get_loaded_addons()
+        if not addons:
+            action = self.addons_menu.addAction("No addons found")
+            action.setEnabled(False)
+        else:
+            for name in sorted(addons):
+                action = self.addons_menu.addAction(name)
+                action.triggered.connect(
+                    lambda _checked, n=name: self.addon_manager.open_addon_dialog(n, self)
+                )
+        self.addons_menu.addSeparator()
+        action = self.addons_menu.addAction("Refresh Addons")
+        action.triggered.connect(self._refresh_addons)
+
+    def _refresh_addons(self) -> None:
+        self.addon_manager.load_all_addons()
+        self._populate_addons_menu()
+
+    def _build_header(self) -> None:
+        """App header: brand on the left, live model status chip on the right."""
+        self.header = QFrame()
+        self.header.setObjectName("headerBar")
+        self.header.setFixedHeight(58)
+
+        layout = QHBoxLayout(self.header)
+        layout.setContentsMargins(18, 8, 18, 8)
+        layout.setSpacing(12)
+
+        brand = QVBoxLayout()
+        brand.setSpacing(0)
+        title = QLabel("\U0001F999 GGUF Loader")
+        title.setObjectName("brandTitle")
+        brand.addWidget(title)
+        subtitle = QLabel("Local LLM runtime")
+        subtitle.setObjectName("brandSub")
+        brand.addWidget(subtitle)
+        layout.addLayout(brand)
+        layout.addStretch(1)
+
+        self.model_chip = QLabel("\u25CB No model loaded")
+        self.model_chip.setObjectName("statusChip")
+        layout.addWidget(self.model_chip)
 
     def _wire_ui_signals(self) -> None:
         s = self.sidebar
         s.load_model_requested.connect(self._choose_and_load_model)
-        s.dark_mode_toggled.connect(self._on_dark_mode_toggled)
-        s.text_size_changed.connect(self.chat_panel.apply_font_size)
-        s.clear_chat_requested.connect(self._clear_chat)
-        s.feedback_requested.connect(self._show_feedback_dialog)
 
         p = self.chat_panel
         p.message_submitted.connect(self._send_message)
@@ -125,6 +241,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         m.loading.connect(self.sidebar.set_status)
         m.loaded.connect(self._on_model_loaded)
         m.error.connect(self._on_model_error)
+        m.unloaded.connect(self._on_model_unloaded)
         m.unloaded.connect(self.model_unloaded.emit)
 
         c = self._chat_service
@@ -162,13 +279,25 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.sidebar.set_loading(False)
         self.sidebar.set_model_info(f"✅ Loaded: {Path(backend.model_path).name}")
         self.sidebar.set_status("Model ready! Start chatting...")
-        self.chat_panel.add_system_message("🤖 AI Assistant loaded and ready to help!")
+        self.chat_panel.add_system_message("\U0001F916 AI Assistant loaded and ready to help!")
+        self._set_model_chip("ok", f"\u25CF {Path(backend.model_path).name}")
         self.model_loaded.emit(backend)
 
     def _on_model_error(self, message: str) -> None:
         self.sidebar.set_loading(False)
         self.sidebar.set_status(f"❌ Error: {message}")
+        self._set_model_chip("err", "\u25CF Load failed")
         QMessageBox.critical(self, "Model Loading Error", message)
+
+    def _on_model_unloaded(self) -> None:
+        self._set_model_chip("", "\u25CB No model loaded")
+
+    def _set_model_chip(self, state: str, text: str) -> None:
+        """Update the header chip; *state* is '', 'ok' or 'err' (colors via QSS)."""
+        self.model_chip.setText(text)
+        self.model_chip.setProperty("state", state)
+        self.model_chip.style().unpolish(self.model_chip)
+        self.model_chip.style().polish(self.model_chip)
 
     # ------------------------------------------------------------------
     # Chat
@@ -299,6 +428,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.is_dark_mode = enabled
         self.apply_styles()
         self.chat_panel.apply_theme(enabled)
+        self.theme_changed.emit(enabled)
 
     def _show_feedback_dialog(self) -> None:
         from widgets.feedback_dialog import FeedbackDialog
@@ -319,7 +449,7 @@ class MainWindow(QMainWindow, ThemeMixin):
     # Addons
     # ------------------------------------------------------------------
     def _load_addons(self) -> None:
-        results = self.addon_manager.load_all_addons()
+        self.addon_manager.load_all_addons()
         for addon_name in self.addon_manager.get_loaded_addons():
             try:
                 self.addon_manager.get_addon_widget(addon_name, self)

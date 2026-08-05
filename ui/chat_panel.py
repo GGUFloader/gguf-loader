@@ -12,10 +12,10 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QSizePolicy, QTextEdit, QVBoxLayout, QWidget,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from config import BUBBLE_FONT_SIZE, FONT_FAMILY
+from config import BUBBLE_FONT_SIZE, CHAT_BUBBLE_FONT_SIZE, FONT_FAMILY
 from widgets.chat_bubble import ChatBubble
 
 
@@ -44,8 +44,10 @@ class ChatPanel(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("chatRoot")
         self.is_agent_mode = False
         self._is_dark = False
+        self._font_size = CHAT_BUBBLE_FONT_SIZE
         self._current_ai_bubble: ChatBubble | None = None
         self._current_ai_text = ""
         self._bubbles: list[tuple[QWidget, ChatBubble]] = []
@@ -71,12 +73,41 @@ class ChatPanel(QWidget):
         self.chat_layout.setContentsMargins(20, 20, 20, 20)
         self.chat_layout.addStretch()
 
-        self.chat_scroll.setWidget(self.chat_container)
+        # Empty-state hero (index 0) vs. live chat container (index 1).
+        self.empty_state = QWidget()
+        empty_layout = QVBoxLayout(self.empty_state)
+        empty_layout.setContentsMargins(48, 48, 48, 48)
+        empty_layout.addStretch()
+        hero = QLabel("\U0001F999")
+        hero.setAlignment(Qt.AlignCenter)
+        hero.setFont(QFont(FONT_FAMILY, 46))
+        empty_layout.addWidget(hero)
+        empty_title = QLabel("Welcome to GGUF Loader")
+        empty_title.setObjectName("panelTitle")
+        empty_title.setAlignment(Qt.AlignCenter)
+        empty_title.setFont(QFont(FONT_FAMILY, 17, QFont.Bold))
+        empty_layout.addWidget(empty_title)
+        empty_hint = QLabel(
+            "Load a GGUF model from the sidebar to start a conversation.\n"
+            "Agent Mode adds tool use against a workspace folder."
+        )
+        empty_hint.setObjectName("mutedLabel")
+        empty_hint.setAlignment(Qt.AlignCenter)
+        empty_hint.setWordWrap(True)
+        empty_layout.addWidget(empty_hint)
+        empty_layout.addStretch()
+
+        self.chat_stack = QStackedWidget()
+        self.chat_stack.addWidget(self.empty_state)
+        self.chat_stack.addWidget(self.chat_container)
+        self.chat_stack.setCurrentIndex(0)
+
+        self.chat_scroll.setWidget(self.chat_stack)
         layout.addWidget(self.chat_scroll)
 
         # ---- input frame ----
         input_frame = QFrame()
-        input_frame.setFrameStyle(QFrame.StyledPanel)
+        input_frame.setObjectName("inputFrame")
         input_frame.setMaximumHeight(200)
 
         input_layout = QVBoxLayout(input_frame)
@@ -95,18 +126,11 @@ class ChatPanel(QWidget):
         controls.setSpacing(8)
 
         self.agent_mode_btn = QPushButton("🤖 Agent Mode: OFF")
+        self.agent_mode_btn.setObjectName("agentToggle")
         self.agent_mode_btn.setCheckable(True)
         self.agent_mode_btn.setMinimumHeight(35)
-        self.agent_mode_btn.setMaximumWidth(150)
+        self.agent_mode_btn.setMaximumWidth(160)
         self.agent_mode_btn.clicked.connect(self._on_agent_toggled)
-        self.agent_mode_btn.setStyleSheet("""
-            QPushButton { background-color: #6c757d; color: white; border: none;
-                          border-radius: 6px; padding: 8px 12px; font-size: 11px;
-                          font-weight: bold; }
-            QPushButton:hover { background-color: #5a6268; }
-            QPushButton:checked { background-color: #28a745; }
-            QPushButton:checked:hover { background-color: #218838; }
-        """)
         controls.addWidget(self.agent_mode_btn)
 
         self.workspace_label = QLabel("📁")
@@ -133,13 +157,14 @@ class ChatPanel(QWidget):
         controls.addWidget(self.workspace_browse_btn)
 
         self.agent_status_label = QLabel("⚪ Ready")
-        self.agent_status_label.setStyleSheet("color: #666; font-size: 10px;")
+        self.agent_status_label.setObjectName("agentStatus")
         self.agent_status_label.setVisible(False)
         controls.addWidget(self.agent_status_label)
 
         controls.addStretch()
 
         self.send_btn = QPushButton("Send")
+        self.send_btn.setObjectName("primaryButton")
         self.send_btn.setMinimumSize(100, 35)
         self.send_btn.setFont(QFont(FONT_FAMILY, 12, QFont.Bold))
         self.send_btn.setEnabled(False)
@@ -160,14 +185,15 @@ class ChatPanel(QWidget):
 
     def add_system_message(self, text: str) -> None:
         label = QLabel(text)
+        label.setObjectName("systemMessage")
         label.setAlignment(Qt.AlignCenter)
         label.setWordWrap(True)
         label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         font = QFont(FONT_FAMILY, 12)
         font.setItalic(True)
         label.setFont(font)
-        label.setStyleSheet("color: #888; margin: 10px; padding: 10px;")
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, label)
+        self._maybe_hide_empty_state()
         self.scroll_to_bottom()
 
     def begin_streaming(self) -> None:
@@ -185,6 +211,7 @@ class ChatPanel(QWidget):
 
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, self._current_ai_bubble))
+        self._maybe_hide_empty_state()
         self.scroll_to_bottom()
 
     def stream_token(self, token: str) -> None:
@@ -207,6 +234,8 @@ class ChatPanel(QWidget):
         self._bubbles.clear()
         self._current_ai_bubble = None
         self._current_ai_text = ""
+        if not self._bubbles:
+            self.empty_state.show()
 
     # ------------------------------------------------------------------
     # Agent mode controls
@@ -219,15 +248,18 @@ class ChatPanel(QWidget):
 
     def set_agent_status(self, text: str) -> None:
         self.agent_status_label.setText(text)
+        # Colors come from QSS via the state property.
         if "🟢" in text:
-            color = "#28a745"
+            state = "ok"
         elif "🟡" in text:
-            color = "#ffc107"
+            state = "busy"
         elif "❌" in text:
-            color = "#dc3545"
+            state = "err"
         else:
-            color = "#666"
-        self.agent_status_label.setStyleSheet(f"color: {color}; font-size: 10px;")
+            state = ""
+        self.agent_status_label.setProperty("state", state)
+        self.agent_status_label.style().unpolish(self.agent_status_label)
+        self.agent_status_label.style().polish(self.agent_status_label)
 
     def get_workspace(self) -> str:
         return self.workspace_combo.currentText().strip()
@@ -248,6 +280,8 @@ class ChatPanel(QWidget):
         self.input_text.setPlaceholderText(text)
 
     def apply_font_size(self, size: int) -> None:
+        """Remember the size so future bubbles use it, and restyle existing ones."""
+        self._font_size = size
         for _container, bubble in self._bubbles:
             bubble.set_font_size(size)
 
@@ -278,6 +312,7 @@ class ChatPanel(QWidget):
     def _add_bubble(self, text: str, is_user: bool) -> None:
         bubble = ChatBubble(text, is_user)
         self._apply_bubble_theme(bubble)
+        self._maybe_hide_empty_state()
 
         container = QWidget()
         row = QHBoxLayout(container)
@@ -295,7 +330,16 @@ class ChatPanel(QWidget):
         self.scroll_to_bottom()
 
     def _apply_bubble_theme(self, bubble: ChatBubble) -> None:
-        bubble.update_style(self._is_dark)
+        # set_font_size re-applies the style with the current theme, so
+        # both the user-chosen size and dark/light mode are respected.
+        bubble.set_font_size(self._font_size)
+
+    def _maybe_hide_empty_state(self) -> None:
+        """Swap between the empty-state hero and the live chat container."""
+        if not hasattr(self, "chat_stack"):
+            return
+        has_content = bool(self._bubbles) or self._current_ai_bubble is not None
+        self.chat_stack.setCurrentIndex(1 if has_content else 0)
 
     def scroll_to_bottom(self) -> None:
         from PySide6.QtCore import QTimer

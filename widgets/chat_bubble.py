@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
 from utils import detect_persian_text
 from config import CHAT_BUBBLE_FONT_SIZE
+from ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
 class ChatBubble(QFrame):
     """Custom chat bubble widget with automatic RTL/LTR detection"""
@@ -53,16 +54,17 @@ class ChatBubble(QFrame):
             # Style reasoning sections differently
             if "<استدلال>" in text or "<reasoning>" in text:
                 styled_text = text
+                t = DARK_TOKENS if self._is_dark_mode else LIGHT_TOKENS
                 # Persian reasoning
-                styled_text = styled_text.replace("<استدلال>", '<span style="color:#888; font-style:italic">')
+                styled_text = styled_text.replace("<استدلال>", f'<span style="color:{t["textMuted"]}; font-style:italic">')
                 styled_text = styled_text.replace("</استدلال>", '</span>')
                 # English reasoning
-                styled_text = styled_text.replace("<reasoning>", '<span style="color:#888; font-style:italic">')
+                styled_text = styled_text.replace("<reasoning>", f'<span style="color:{t["textMuted"]}; font-style:italic">')
                 styled_text = styled_text.replace("</reasoning>", '</span>')
                 # Answer styling
-                styled_text = styled_text.replace("<پاسخ>", '<span style="color:black; font-weight:bold">')
+                styled_text = styled_text.replace("<پاسخ>", f'<span style="color:{t["text"]}; font-weight:bold">')
                 styled_text = styled_text.replace("</پاسخ>", '</span>')
-                styled_text = styled_text.replace("<answer>", '<span style="color:black; font-weight:bold">')
+                styled_text = styled_text.replace("<answer>", f'<span style="color:{t["text"]}; font-weight:bold">')
                 styled_text = styled_text.replace("</answer>", '</span>')
 
                 # Set the styled text with rich text support
@@ -94,65 +96,37 @@ class ChatBubble(QFrame):
         self._is_dark_mode = is_dark_mode
         font_size = getattr(self, '_current_font_size', 14)
 
+        t = DARK_TOKENS if is_dark_mode else LIGHT_TOKENS
         if self.is_user:
-            if is_dark_mode:
-                self.setStyleSheet(f"""
-                    QFrame {{
-                        background-color: #2d5a2d;
-                        border-radius: 15px;
-                        margin: 5px;
-                    }}
-                    QLabel {{ 
-                        color: white; 
-                        font-size: {font_size}px; 
-                        padding: 12px 16px;
-                        line-height: 1.6;
-                    }}
-                """)
-            else:
-                self.setStyleSheet(f"""
-                    QFrame {{
-                        background-color: #dcf8c6;
-                        border-radius: 15px;
-                        margin: 5px;
-                    }}
-                    QLabel {{ 
-                        color: black; 
-                        font-size: {font_size}px; 
-                        padding: 12px 16px;
-                        line-height: 1.6;
-                    }}
-                """)
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {t["accentSoft"]};
+                    border: 1px solid {t["accentBorder"]};
+                    border-radius: 14px;
+                    margin: 4px;
+                }}
+                QLabel {{
+                    color: {t["text"]};
+                    font-size: {font_size}px;
+                    padding: 12px 16px;
+                    line-height: 1.6;
+                }}
+            """)
         else:
-            if is_dark_mode:
-                self.setStyleSheet(f"""
-                    QFrame {{
-                        background-color: #404040;
-                        border-radius: 15px;
-                        margin: 5px;
-                    }}
-                    QLabel {{ 
-                        color: white; 
-                        font-size: {font_size}px; 
-                        padding: 12px 16px;
-                        line-height: 1.6;
-                    }}
-                """)
-            else:
-                self.setStyleSheet(f"""
-                    QFrame {{
-                        background-color: #f0f0f0;
-                        border-radius: 15px;
-                        margin: 5px;
-                    }}
-                    QLabel {{ 
-                        color: black; 
-                        font-size: {font_size}px; 
-                        padding: 12px 16px;
-                        line-height: 1.6;
-                    }}
-                """)
-        
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {t["elevated"]};
+                    border: 1px solid {t["border"]};
+                    border-radius: 14px;
+                    margin: 4px;
+                }}
+                QLabel {{
+                    color: {t["text"]};
+                    font-size: {font_size}px;
+                    padding: 12px 16px;
+                    line-height: 1.6;
+                }}
+            """)
         # Also ensure the font object matches (for size calculations)
         font = self.label.font()
         font.setPointSize(font_size)

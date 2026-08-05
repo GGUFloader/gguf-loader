@@ -9,7 +9,7 @@ Python (no Qt) so it can be unit tested in isolation.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class Tool:
