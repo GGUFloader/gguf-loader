@@ -95,18 +95,12 @@ For the best experience, use the provided launch scripts that automatically hand
 ```bash
 # Full GGUF Loader with addon support
 launch.bat
-
-# Basic chatbot without addons  
-launch_basic.bat
 ```
 
 #### Linux/macOS
 ```bash
 # Full GGUF Loader with addon support
 ./launch.sh
-
-# Basic chatbot without addons
-./launch_basic.sh
 ```
 
 ### Alternative: Install via pip
@@ -203,7 +197,6 @@ Welcome to GGUF Loader! This documentation will help you get started and make th
 ### Additional Resources
 - **[Security Policy](../SECURITY.md)** - Security and vulnerability reporting
 - **[Code of Conduct](../CODE_OF_CONDUCT.MD)** - Community guidelines
-- **[Release Notes](../RELEASE_NOTES.md)** - What's new in each version
 
 ## 🚀 Quick Start
 

@@ -3,7 +3,6 @@ Agent Mode Mixin - Handles agent mode functionality in main chat window
 """
 import logging
 from pathlib import Path
-from typing import Optional
 from PySide6.QtWidgets import QFileDialog, QLabel, QWidget, QHBoxLayout
 from PySide6.QtCore import Qt
 

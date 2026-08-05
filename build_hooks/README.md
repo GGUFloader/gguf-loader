@@ -33,7 +33,7 @@ runtime_hooks=[os.path.join(current_dir, 'build_hooks', 'runtime_hook_llama.py')
 ## When Are They Needed?
 
 - **Building executables**: Required when running `build_exe.bat` or `pyinstaller build_exe.spec`
-- **Running from source**: Not used during normal Python execution (`python main.py`)
+- **Running from source**: Not used during normal Python execution (`python gguf_loader_main.py`)
 
 ## Modifying Hooks
 

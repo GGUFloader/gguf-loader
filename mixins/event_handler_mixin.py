@@ -1,15 +1,10 @@
 """
 Event Handler Mixin - Handles system events and user interactions
 """
-from PySide6.QtCore import Qt, QEvent
 
 
 class EventHandlerMixin:
     """Mixin class for handling system events and user interactions"""
-
-    def eventFilter(self, obj, event):
-        """Handle system events and user interactions"""
-        return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
         """Handle application close event"""

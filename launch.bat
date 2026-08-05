@@ -4,7 +4,7 @@ REM This script will create a virtual environment if it doesn't exist,
 REM install dependencies, and launch the application.
 
 REM Set the name of the virtual environment
-set VENV_NAME=venv
+set VENV_NAME=.venv
 
 REM Check if virtual environment exists
 if not exist "%VENV_NAME%\Scripts\activate.bat" (

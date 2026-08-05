@@ -2,16 +2,12 @@
 Main application window - Master class that combines all mixins
 """
 import os
-import sys
-from pathlib import Path
 
 from PySide6.QtWidgets import QMainWindow, QApplication
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QIcon
 
-from config import WINDOW_TITLE, WINDOW_SIZE, MIN_WINDOW_SIZE, MAX_TOKENS
-from models.model_loader import ModelLoader
-from models.chat_generator import ChatGenerator
+from config import WINDOW_TITLE, WINDOW_SIZE, MIN_WINDOW_SIZE
 from resource_manager import find_icon
 from ui.apply_style import ThemeMixin
 
@@ -61,7 +57,6 @@ class AIChat(QMainWindow, ThemeMixin, UISetupMixin, ModelHandlerMixin,
         
         # Initialize agent mode variables
         self.agent_mode_enabled = False
-        self.agent_session_id = None
         self.agent_workspace_path = None
 
         # Setup UI and apply styles
@@ -76,5 +71,3 @@ class AIChat(QMainWindow, ThemeMixin, UISetupMixin, ModelHandlerMixin,
 
         # Call mixin setup methods
         self.setup_main_layout()
-        self.setup_sidebar_layout()
-        self.setup_chat_area_layout()

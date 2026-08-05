@@ -5,7 +5,7 @@
 # install dependencies, and launch the application.
 
 # Set the name of the virtual environment
-VENV_NAME="venv"
+VENV_NAME=".venv"
 
 # Function to print error messages and exit
 error_exit() {

@@ -24,7 +24,6 @@ ggufloader/
 ├── requirements.txt           # Dependencies
 ├── 
 ├── # Main Application Files
-├── main.py                    # Basic GGUF Loader (no addons)
 ├── gguf_loader_main.py        # GGUF Loader with addon support
 ├── addon_manager.py           # Addon management system
 ├── config.py                  # Configuration

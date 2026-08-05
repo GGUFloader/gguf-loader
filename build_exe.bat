@@ -8,9 +8,9 @@ echo ========================================
 echo.
 
 REM Check if virtual environment exists
-if not exist "venv\Scripts\activate.bat" (
+if not exist ".venv\Scripts\activate.bat" (
     echo [ERROR] Virtual environment not found!
-    echo Please run: python -m venv venv
+    echo Please run: python -m venv .venv
     echo Then activate it and install requirements
     pause
     exit /b 1
@@ -18,7 +18,7 @@ if not exist "venv\Scripts\activate.bat" (
 
 REM Activate virtual environment
 echo [1/4] Activating virtual environment...
-call venv\Scripts\activate.bat
+call .venv\Scripts\activate.bat
 
 REM Install PyInstaller if not already installed
 echo.

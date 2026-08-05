@@ -33,7 +33,6 @@ Complete documentation index for GGUF Loader.
 |----------|-------------|
 | [Security Policy](SECURITY.md) | Security and vulnerability reporting |
 | [Code of Conduct](CODE_OF_CONDUCT.MD) | Community guidelines |
-| [Release Notes](RELEASE_NOTES.md) | Version history and changes |
 | [License](LICENSE) | MIT License details |
 
 ## 🚀 Getting Started Path
@@ -63,7 +62,6 @@ DOCUMENTATION.md            # This file - documentation index
 CONTRIBUTING.md             # Contribution guidelines
 SECURITY.md                 # Security policy
 CODE_OF_CONDUCT.MD          # Community guidelines
-RELEASE_NOTES.md            # Version history
 LICENSE                     # MIT License
 ```
 
@@ -106,7 +104,6 @@ LAUNCH_README.md           # Launch scripts documentation
 
 **Project Info**
 - [README](README.md)
-- [Release Notes](RELEASE_NOTES.md)
 - [Security](SECURITY.md)
 - [Code of Conduct](CODE_OF_CONDUCT.MD)
 

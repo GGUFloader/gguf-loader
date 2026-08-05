@@ -1,5 +1,4 @@
 # config.py - Enhanced for Persian Language Support
-import os
 from pathlib import Path
 
 # Add these near the top of config.py
@@ -449,18 +448,6 @@ def detect_language(text):
         return "mixed"
     else:
         return "en"
-
-
-def get_persian_config():
-    """Get Persian-specific configuration settings"""
-    config = {
-        "persian_literature_prompt": PERSIAN_SYSTEM_PROMPTS["persian_literature"]["prompt"],
-        "literary_persian_params": PERSIAN_GENERATION_PRESETS["literary_persian"],
-        "persian_specific_params": DEEPSEEK_PERSIAN_CONFIG["persian_specific_params"],
-        "normalization_settings": PERSIAN_TEXT_CONFIG["normalization"],
-        "thinking_ui": UI_STRINGS["fa"]["thinking"]
-    }
-    return config
 
 
 # Initialize directories on import

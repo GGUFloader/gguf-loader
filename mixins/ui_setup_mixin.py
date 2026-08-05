@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QSpacerItem, QSizePolicy, QSlider
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QKeySequence
+from PySide6.QtGui import QFont
 from PySide6.QtCore import QTimer
 from config import (
     GPU_OPTIONS, DEFAULT_CONTEXT_SIZES, FONT_FAMILY, BUBBLE_FONT_SIZE
@@ -63,23 +63,6 @@ class UISetupMixin:
 
         # Set splitter proportions (main sidebar, chat area)
         splitter.setSizes([300, 900])
-        
-        # Setup keyboard shortcuts for text size control
-        # Temporarily disabled to test if shortcuts interfere with text input
-        # self.setup_text_size_shortcuts()
-
-    def setup_addon_sidebar(self, parent):
-        """Setup the addon sidebar - DISABLED: handled by parent app"""
-        # This method is disabled because the parent GGUFLoaderApp handles addon sidebar
-        pass
-
-    def setup_sidebar_layout(self):
-        """Additional sidebar layout setup if needed"""
-        pass
-
-    def setup_chat_area_layout(self):
-        """Additional chat area layout setup if needed"""
-        pass
 
     def setup_sidebar(self, parent):
         """Setup the left sidebar with controls"""
@@ -502,38 +485,9 @@ class UISetupMixin:
             }
         """)
 
-    def setup_text_size_shortcuts(self):
-        """Setup keyboard shortcuts for text size control"""
-        from PySide6.QtGui import QShortcut, QKeySequence
-        
-        # Use more specific shortcuts that won't interfere with text editing
-        # Ctrl+Plus to increase font size (use Ctrl+Shift+Plus to avoid conflicts)
-        increase_shortcut = QShortcut(QKeySequence("Ctrl+Shift++"), self)
-        increase_shortcut.activated.connect(self.increase_font_size)
-        
-        # Ctrl+Minus to decrease font size (use Ctrl+Shift+Minus to avoid conflicts)
-        decrease_shortcut = QShortcut(QKeySequence("Ctrl+Shift+-"), self)
-        decrease_shortcut.activated.connect(self.decrease_font_size)
-        
-        # Ctrl+0 to reset to default size (keep this one as it's less likely to conflict)
-        reset_shortcut = QShortcut(QKeySequence("Ctrl+Shift+0"), self)
-        reset_shortcut.activated.connect(self.reset_font_size)
-
     def reset_font_size(self):
         """Reset font size to default (14px)"""
         self.text_size_slider.setValue(14)
-
-    def increase_font_size(self):
-        """Increase chat bubble font size (legacy method for compatibility)"""
-        current_value = self.text_size_slider.value()
-        if current_value < self.text_size_slider.maximum():
-            self.text_size_slider.setValue(current_value + 2)
-
-    def decrease_font_size(self):
-        """Decrease chat bubble font size (legacy method for compatibility)"""
-        current_value = self.text_size_slider.value()
-        if current_value > self.text_size_slider.minimum():
-            self.text_size_slider.setValue(current_value - 2)
 
     def _apply_font_size_to_all_bubbles(self):
         """Apply current font size to all existing chat bubbles"""

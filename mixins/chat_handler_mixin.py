@@ -1,7 +1,7 @@
 """
 Chat Handler Mixin - Handles chat functionality and message processing
 """
-from PySide6.QtWidgets import QMessageBox, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QMessageBox, QWidget, QHBoxLayout, QLabel
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
@@ -200,10 +200,3 @@ class ChatHandlerMixin:
         # Update all chat bubbles
         for container, bubble in self.chat_bubbles:
             bubble.update_style(self.is_dark_mode)
-
-    def safe_update_ui(self, func, *args, **kwargs):
-        """Safely update UI from worker threads"""
-        try:
-            func(*args, **kwargs)
-        except Exception as e:
-            print(f"UI update error: {e}")  # Or use proper logging

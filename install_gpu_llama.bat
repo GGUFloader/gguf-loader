@@ -3,11 +3,11 @@ echo Installing GPU-enabled llama-cpp-python...
 echo.
 
 REM Activate virtual environment
-if exist venv\Scripts\activate.bat (
-    call venv\Scripts\activate.bat
+if exist .venv\Scripts\activate.bat (
+    call .venv\Scripts\activate.bat
     echo Virtual environment activated
 ) else (
-    echo ERROR: Virtual environment not found at venv\Scripts\activate.bat
+    echo ERROR: Virtual environment not found at .venv\Scripts\activate.bat
     echo Please create a virtual environment first or run from the correct directory
     pause
     exit /b 1

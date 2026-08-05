@@ -1,7 +1,6 @@
 """
 Utility functions for the AI chat application
 """
-from PySide6.QtGui import QFontDatabase
 
 def detect_persian_text(text: str) -> bool:
     """
@@ -29,9 +28,3 @@ def detect_persian_text(text: str) -> bool:
 
     # If more than 30% of alphabetic characters are Persian, consider it Persian text
     return (persian_chars / total_chars) > 0.6
-
-def load_fonts():
-    """Load application fonts"""
-    font_db = QFontDatabase()
-    if "Vazirmatn" not in font_db.families():
-        print("Warning: Vazirmatn font not found. Falling back to system fonts.")

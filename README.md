@@ -121,7 +121,7 @@ ggufloader
 - **[User Guide](docs/user-guide.md)** - How to use GGUF Loader
 - **[Addon Development](docs/addon-development.md)** - Create your own addons
 - **[FAQ](docs/faq.md)** - Frequently asked questions
-- **[All Documentation](DOCUMENTATION.md)** - Complete documentation index
+- **[All Documentation](docs/DOCUMENTATION.md)** - Complete documentation index
 
 ## 🤖 Agentic Mode
 

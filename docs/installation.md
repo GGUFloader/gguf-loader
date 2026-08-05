@@ -42,9 +42,8 @@ ggufloader
    ./launch.sh
    ```
 
-## Basic vs Full Version
+## Launching the Application
 
-### Full Version (Recommended)
 - Includes addon system
 - Smart Floating Assistant
 - All features enabled
@@ -52,15 +51,6 @@ ggufloader
 **Launch:**
 - Windows: `launch.bat`
 - Linux/macOS: `./launch.sh`
-
-### Basic Version
-- Core chat functionality only
-- No addons
-- Lighter weight
-
-**Launch:**
-- Windows: `launch_basic.bat`
-- Linux/macOS: `./launch_basic.sh`
 
 ## Troubleshooting
 

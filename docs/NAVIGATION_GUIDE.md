@@ -144,7 +144,7 @@ Level 3: Advanced Topics
 Level 4: Project Info
 ├── SECURITY.md (Security)
 ├── CODE_OF_CONDUCT.MD (Conduct)
-└── RELEASE_NOTES.md (Changes)
+
 ```
 
 ## 🎯 Common Scenarios

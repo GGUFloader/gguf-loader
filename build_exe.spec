@@ -86,14 +86,12 @@ hiddenimports = [
 
     # Widgets package
     'widgets',
-    'widgets.addon_sidebar',
     'widgets.chat_bubble',
-    'widgets.collapsible_widget',
+    'widgets.feedback_dialog',
     'widgets.__init__',
 
     # Mixins package
     'mixins',
-    'mixins.addon_mixin',
     'mixins.chat_handler_mixin',
     'mixins.event_handler_mixin',
     'mixins.model_handler_mixin',
@@ -106,15 +104,6 @@ hiddenimports = [
     'core',
     'core.agent',
     'core.agent.simple_agent',
-    'core.agent.enterprise_agent',
-    'core.agent.loop_engine',
-    'core.agent.planner',
-    'core.agent.task_executor',
-    'core.agent.tool_executor',
-    'core.agent.decision_engine',
-    'core.agent.task_by_task_engine',
-    'core.agent.agentic_loop',
-    'core.agent.orchestrator',
     'core.agent.__init__',
     'core.__init__',
     

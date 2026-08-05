@@ -12,7 +12,6 @@ __description__ = "Advanced GGUF Model Loader with Smart Floating Assistant"
 __url__ = "https://github.com/GGUFloader/gguf-loader"
 
 # Import main functions for programmatic access
-from main import main as basic_main
 from gguf_loader_main import main as addon_main
 
 # Import key classes for programmatic integration
@@ -25,7 +24,6 @@ __all__ = [
     "__version__",
     "__author__", 
     "__description__",
-    "basic_main",
     "addon_main",
     "AddonManager",
     "get_current_config",
