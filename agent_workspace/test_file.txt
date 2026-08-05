@@ -1,4 +1,0 @@
-This is a MODIFIED file created by the agent.
->>> This line was inserted <<<
-It has multiple lines.
-Line 3.
