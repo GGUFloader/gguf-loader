@@ -106,7 +106,7 @@ When GGUF Loader starts, the `AddonManager` automatically:
 1. **Scans** the `addons/` directory
 2. **Finds** folders with `__init__.py` files
 3. **Loads** addons by calling their `register()` function
-4. **Displays** addon buttons in the sidebar
+4. **Registers** an entry for each addon in the **Addons** menu
 
 ### Smart Floater Integration
 The Smart Floating Assistant is included as a pre-installed addon:
@@ -126,7 +126,7 @@ __all__ = ["register"]
 ### Addon Lifecycle
 1. **Package Installation**: Addon files are installed with the package
 2. **Application Start**: `AddonManager` discovers and loads addons
-3. **User Interaction**: Users can access addons via the sidebar
+3. **User Interaction**: Users launch addons from the **Addons** menu
 4. **Background Operation**: Smart Floater runs continuously in background
 
 ## 📋 Package Configuration
@@ -174,7 +174,7 @@ All necessary files are included:
 4. **Use Smart Floater**: Select text anywhere → click ✨ button
 
 ### Addon Discovery
-- Smart Floater appears in addon sidebar automatically
+- Smart Floater appears in the **Addons** menu automatically
 - Users can click to open control panel
 - No additional installation required
 - Works immediately after model loading

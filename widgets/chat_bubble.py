@@ -1,5 +1,10 @@
 """
-Custom chat bubble widget
+Chat bubble widget (ChatGPT-style).
+
+The user message is a solid accent pill anchored to the right; the
+assistant message is a soft card anchored to the left. Both use
+asymmetric "tail" corners and are capped at ~75% of the conversation
+column by their containing row (ui/chat_panel._BubbleRow).
 """
 
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
@@ -7,6 +12,11 @@ from PySide6.QtCore import Qt
 from utils import detect_persian_text
 from config import CHAT_BUBBLE_FONT_SIZE
 from ui.theme import DARK_TOKENS, LIGHT_TOKENS
+
+# Asymmetric radii: TL TR BR BL - the corner nearest the message edge is
+# almost flat, mimicking ChatGPT's "tail". Mirrored for RTL conversations.
+_TAIL_RADIUS_LTR = "20px 20px 4px 20px"    # bubble on the right -> tail BR
+_TAIL_RADIUS_RTL = "20px 4px 20px 20px"    # bubble on the left  -> tail BL
 
 class ChatBubble(QFrame):
     """Custom chat bubble widget with automatic RTL/LTR detection"""
@@ -16,15 +26,13 @@ class ChatBubble(QFrame):
         self.text = text
         # Auto-detect RTL if not forced
         self.is_rtl = force_rtl if force_rtl is not None else detect_persian_text(text)
+        self._is_dark_mode = False
+        self._current_font_size = CHAT_BUBBLE_FONT_SIZE
         self.setup_ui(text)
 
     def setup_ui(self, text: str):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 10, 15, 10)
-
-        # Initialize state variables
-        self._is_dark_mode = False
-        self._current_font_size = CHAT_BUBBLE_FONT_SIZE
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Create text label
         self.label = QLabel(text)
@@ -32,8 +40,7 @@ class ChatBubble(QFrame):
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.label.setContextMenuPolicy(Qt.DefaultContextMenu)
 
-        # Set bubble sizing - responsive to parent width
-        # Use size policies for responsive design instead of fixed widths
+        # Bubble hugs its content; the containing row caps the width.
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self.setMinimumWidth(200)  # Reasonable minimum for readability
 
@@ -92,46 +99,55 @@ class ChatBubble(QFrame):
             self.label.setLayoutDirection(Qt.LeftToRight)
 
     def update_style(self, is_dark_mode: bool):
-        """Apply styling based on theme and current font size"""
+        """Apply ChatGPT-style styling based on theme and current font size"""
         self._is_dark_mode = is_dark_mode
         font_size = getattr(self, '_current_font_size', 14)
 
         t = DARK_TOKENS if is_dark_mode else LIGHT_TOKENS
+        # The tail corner points at the conversation edge: a user bubble sits
+        # on the right in LTR (tail BR) but on the left in RTL (tail BL);
+        # assistant bubbles mirror that (is_user XOR is_rtl => right side).
+        radius = _TAIL_RADIUS_LTR if self.is_user != self.is_rtl else _TAIL_RADIUS_RTL
         if self.is_user:
+            # Solid accent pill, like ChatGPT's user bubble.
             self.setStyleSheet(f"""
                 QFrame {{
-                    background-color: {t["accentSoft"]};
-                    border: 1px solid {t["accentBorder"]};
-                    border-radius: 14px;
-                    margin: 4px;
+                    background-color: {t["accent"]};
+                    border: none;
+                    border-radius: {radius};
                 }}
+                QFrame:hover {{ background-color: {t["accentHover"]}; }}
                 QLabel {{
-                    color: {t["text"]};
+                    color: {t["onAccent"]};
                     font-size: {font_size}px;
-                    padding: 12px 16px;
-                    line-height: 1.6;
+                    padding: 10px 16px;
+                    selection-background-color: {t["accentSelection"]};
+                    selection-color: {t["onAccent"]};
                 }}
             """)
         else:
+            # Soft elevated card, like ChatGPT's assistant bubble.
             self.setStyleSheet(f"""
                 QFrame {{
                     background-color: {t["elevated"]};
                     border: 1px solid {t["border"]};
-                    border-radius: 14px;
-                    margin: 4px;
+                    border-radius: {radius};
                 }}
+                QFrame:hover {{ background-color: {t["elevatedHover"]};
+                                border-color: {t["borderStrong"]}; }}
                 QLabel {{
                     color: {t["text"]};
                     font-size: {font_size}px;
-                    padding: 12px 16px;
-                    line-height: 1.6;
+                    padding: 10px 16px;
+                    selection-background-color: {t["accentSoft"]};
+                    selection-color: {t["text"]};
                 }}
             """)
         # Also ensure the font object matches (for size calculations)
         font = self.label.font()
         font.setPointSize(font_size)
         self.label.setFont(font)
-        
+
         # Force update
         self.label.adjustSize()
         self.adjustSize()

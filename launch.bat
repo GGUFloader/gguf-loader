@@ -4,7 +4,7 @@ REM This script will create a virtual environment if it doesn't exist,
 REM install dependencies, and launch the application.
 
 REM Change to the project root so relative paths work from anywhere
-cd /d "%~dp0.."
+cd /d "%~dp0"
 
 REM Set the name of the virtual environment
 set VENV_NAME=.venv

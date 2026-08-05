@@ -24,7 +24,7 @@ ggufloader
 ### Windows
 
 1. Clone or download the repository
-2. Double-click `scripts/launch.bat`
+2. Double-click `launch.bat`
 3. The script will automatically:
    - Create a virtual environment
    - Install dependencies
@@ -35,11 +35,11 @@ ggufloader
 1. Clone or download the repository
 2. Make the script executable:
    ```bash
-   chmod +x scripts/launch.sh
+   chmod +x launch.sh
    ```
 3. Run the script:
    ```bash
-   ./scripts/launch.sh
+   ./launch.sh
    ```
 
 ## Launching the Application
@@ -49,8 +49,8 @@ ggufloader
 - All features enabled
 
 **Launch:**
-- Windows: `scripts/launch.bat`
-- Linux/macOS: `./scripts/launch.sh`
+- Windows: `launch.bat`
+- Linux/macOS: `./launch.sh`
 
 ## Troubleshooting
 
@@ -59,7 +59,7 @@ Ensure Python 3.7+ is installed and added to your PATH.
 
 ### Permission Denied (Linux/macOS)
 ```bash
-chmod +x scripts/launch.sh
+chmod +x launch.sh
 ```
 
 ### Antivirus Blocking

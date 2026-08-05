@@ -250,7 +250,7 @@ def register(parent=None):
 1. **Place your addon** in the `addons/` directory
 2. **Launch GGUF Loader**: `ggufloader`
 3. **Load a GGUF model** in the main application
-4. **Click your addon** in the addon sidebar
+4. **Open the Addons menu** and click your addon
 5. **Test the functionality**
 
 ## 🎨 Advanced Addon Features
@@ -527,7 +527,7 @@ A powerful addon for GGUF Loader that provides [functionality].
 
 1. Copy the addon to `addons/my_awesome_addon/`
 2. Restart GGUF Loader
-3. Click on the addon in the sidebar
+3. Open the **Addons** menu and click on the addon
 
 ## Configuration
 

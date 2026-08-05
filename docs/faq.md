@@ -101,7 +101,7 @@ An addon that lets you select text anywhere on your system and process it with A
 
 ### How do I enable it?
 
-It's enabled by default. Check the addon sidebar to verify it's active.
+It's enabled by default. Open the **Addons** menu to verify it's listed.
 
 ### Why isn't the floating button appearing?
 
@@ -125,7 +125,7 @@ Addons are extensions that add new features to GGUF Loader. They can add UI comp
 1. Download the addon folder
 2. Place it in the `addons/` directory
 3. Restart GGUF Loader
-4. The addon will appear in the sidebar
+4. The addon will appear in the **Addons** menu
 
 ### Can I create my own addon?
 

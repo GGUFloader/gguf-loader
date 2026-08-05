@@ -1,11 +1,11 @@
 # GGUF Loader - Launch Scripts
 
-This directory contains launch scripts for Windows, macOS, and Linux to easily launch the GGUF Loader application.
+This document covers the launch scripts for Windows, macOS, and Linux that live in the **project root** (`launch.bat` / `launch.sh`).
 
 ## Files
 
-- `launch.bat` - Launches the full GGUF Loader application with addon support (Windows)
-- `launch.sh` - Launches the full GGUF Loader application with addon support (macOS and Linux)
+- `launch.bat` (project root) - Launches the full GGUF Loader application with addon support (Windows)
+- `launch.sh` (project root) - Launches the full GGUF Loader application with addon support (macOS and Linux)
 
 ## Usage
 

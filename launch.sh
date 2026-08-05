@@ -5,7 +5,7 @@
 # install dependencies, and launch the application.
 
 # Change to the project root so relative paths work from anywhere
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 # Set the name of the virtual environment
 VENV_NAME=".venv"

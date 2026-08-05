@@ -9,7 +9,7 @@ Complete guide to using GGUF Loader.
 Choose your method:
 - **Windows Executable:** Double-click `GGUFLoader.exe`
 - **Installed via pip:** Run `ggufloader` in terminal
-- **From source:** Run `scripts/launch.bat` (Windows) or `./scripts/launch.sh` (Linux/macOS)
+- **From source:** Run `launch.bat` (Windows) or `./launch.sh` (Linux/macOS)
 
 ### 2. Load a Model
 
@@ -78,15 +78,15 @@ The Smart Floating Assistant works globally across all applications.
 ### Requirements
 
 - A model must be loaded in the main application
-- The addon must be enabled (check addon sidebar)
+- The addon must be enabled (check the **Addons** menu in the main window)
 
 ## Addon System
 
 ### Managing Addons
 
-1. View available addons in the left sidebar
-2. Click addon names to open their interfaces
-3. Use **🔄 Refresh** to reload addons
+1. Open the **Addons** menu in the menu bar to see installed addons
+2. Click an addon name to open its interface
+3. Use **Refresh Addons** to reload them
 
 ### Installing Addons
 

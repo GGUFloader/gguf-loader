@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -35,6 +37,8 @@ from core.llm.prompt_builder import PromptBuilder
 from resource_manager import find_icon
 from services.agent_service import AgentService
 from services.chat_service import ChatService
+from services.environment_service import EnvironmentService
+from services.launcher_service import launch_script
 from services.model_service import ModelService
 from ui.chat_panel import ChatPanel
 from ui.sidebar_panel import SettingsSidebar
@@ -62,12 +66,14 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._model_service = ModelService(self)
         self._chat_service = ChatService(self)
         self._agent_service = AgentService(self)
+        self._environment_service = EnvironmentService(self)
         self._prompt_builder = PromptBuilder()
         self.conversation_history: list[dict] = []
 
         self._init_window()
         self._build_ui()
         self._wire_services()
+        self._refresh_environment()
         self._load_addons()
         self._populate_addons_menu()
 
@@ -230,6 +236,12 @@ class MainWindow(QMainWindow, ThemeMixin):
         s = self.sidebar
         s.load_model_requested.connect(self._choose_and_load_model)
 
+        s.check_environment_requested.connect(self._refresh_environment)
+        s.install_dependencies_requested.connect(self._install_dependencies)
+        s.bootstrap_venv_requested.connect(self._bootstrap_venv)
+        s.restart_app_requested.connect(self._relaunch_in_venv)
+        s.launch_script_requested.connect(self._launch_script)
+
         p = self.chat_panel
         p.message_submitted.connect(self._send_message)
         p.agent_mode_toggled.connect(self._on_agent_mode_toggled)
@@ -256,6 +268,10 @@ class MainWindow(QMainWindow, ThemeMixin):
         a.processing_started.connect(lambda: self.chat_panel.set_agent_status("🟡 Processing..."))
         a.processing_finished.connect(lambda: self.chat_panel.set_agent_status("🟢 Ready"))
         a.status_update.connect(self.chat_panel.add_system_message)
+
+        e = self._environment_service
+        e.output.connect(self.sidebar.append_env_output)
+        e.finished.connect(self._on_environment_finished)
 
     # ------------------------------------------------------------------
     # Model loading
@@ -342,6 +358,48 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.conversation_history.clear()
         self.chat_panel.clear_chat()
         self.chat_panel.add_system_message("🤖 Chat cleared. Ready for new conversation!")
+
+    # ------------------------------------------------------------------
+    # Environment launcher
+    # ------------------------------------------------------------------
+    def _refresh_environment(self) -> None:
+        """Re-check the venv and dependency status into the sidebar."""
+        self.sidebar.set_environment(self._environment_service.check())
+
+    def _install_dependencies(self) -> None:
+        if self._environment_service.is_busy:
+            return
+        self.sidebar.set_env_busy(True)
+        self.sidebar.set_status("Installing missing dependencies…")
+        self._environment_service.run_task("install")
+
+    def _bootstrap_venv(self) -> None:
+        if self._environment_service.is_busy:
+            return
+        self.sidebar.set_env_busy(True)
+        self.sidebar.set_status("Creating .venv and installing dependencies…")
+        self._environment_service.run_task("bootstrap")
+
+    def _on_environment_finished(self, success: bool, message: str) -> None:
+        self.sidebar.set_env_busy(False)
+        self.sidebar.set_status("✅ " + message if success else "❌ " + message)
+        self._refresh_environment()
+        if success and self._environment_service.last_task == "bootstrap":
+            self._relaunch_in_venv()
+
+    def _relaunch_in_venv(self) -> None:
+        """Restart the app with the .venv interpreter (or the current one)."""
+        python = self._environment_service.relaunch()
+        if not python:
+            python = sys.executable
+            subprocess.Popen([python, "main.py"], cwd=Path(__file__).resolve().parent.parent)
+        self.close()
+
+    def _launch_script(self, key: str) -> None:
+        """Open a scripts/ utility in a console window."""
+        ok, error = launch_script(key)
+        if not ok:
+            QMessageBox.warning(self, "Launcher", f"Could not launch: {error}")
 
     # ------------------------------------------------------------------
     # Agent mode
@@ -466,6 +524,7 @@ class MainWindow(QMainWindow, ThemeMixin):
                 self._floating_chat_addon.stop()
             self._chat_service.stop()
             self._agent_service.stop()
+            self._environment_service.stop()
             self._model_service.unload()
         except Exception as e:
             logger.error("Error during shutdown: %s", e)

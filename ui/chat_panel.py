@@ -19,6 +19,42 @@ from config import BUBBLE_FONT_SIZE, CHAT_BUBBLE_FONT_SIZE, FONT_FAMILY
 from widgets.chat_bubble import ChatBubble
 
 
+class _BubbleRow(QWidget):
+    """Row that anchors a bubble to its side and caps its width.
+
+    ChatGPT-style: user bubbles sit on the right, assistant on the left,
+    and neither stretches full-width - they hug their content up to ~75%
+    of the conversation column.
+    """
+
+    def __init__(self, bubble: ChatBubble, is_user: bool, is_rtl: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._bubble = bubble
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        # Same XOR as the bubble's tail: user bubbles go right in LTR but
+        # left in RTL (ChatGPT mirrors the whole conversation).
+        if is_user != is_rtl:
+            row.addStretch(1)
+            row.addWidget(bubble)
+        else:
+            row.addWidget(bubble)
+            row.addStretch(1)
+        self._apply_max_width()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().resizeEvent(event)
+        self._apply_max_width()
+
+    def _apply_max_width(self) -> None:
+        width = self.width()
+        if width <= 0:
+            return
+        self._bubble.setMaximumWidth(max(240, int(width * 0.75)))
+
+
 class MessageInput(QTextEdit):
     """Input box where plain Enter sends and Shift+Enter inserts a newline."""
 
@@ -202,13 +238,10 @@ class ChatPanel(QWidget):
         self._current_ai_bubble = ChatBubble("", is_user=False)
         self._apply_bubble_theme(self._current_ai_bubble)
 
-        container = QWidget()
-        row = QHBoxLayout(container)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(0)
-        row.addWidget(self._current_ai_bubble, 3)
-        row.addStretch(1)
-
+        # Hide the empty pill until the first token arrives, so no empty
+        # card flashes on slow first tokens.
+        self._current_ai_bubble.setVisible(False)
+        container = _BubbleRow(self._current_ai_bubble, is_user=False)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, self._current_ai_bubble))
         self._maybe_hide_empty_state()
@@ -217,6 +250,7 @@ class ChatPanel(QWidget):
     def stream_token(self, token: str) -> None:
         if self._current_ai_bubble is None:
             return
+        self._current_ai_bubble.setVisible(True)
         self._current_ai_text += token
         self._current_ai_bubble.update_text(self._current_ai_text)
         self.scroll_to_bottom()
@@ -314,25 +348,17 @@ class ChatPanel(QWidget):
         self._apply_bubble_theme(bubble)
         self._maybe_hide_empty_state()
 
-        container = QWidget()
-        row = QHBoxLayout(container)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(0)
-        if is_user:
-            row.addStretch(1)
-            row.addWidget(bubble, 3)
-        else:
-            row.addWidget(bubble, 3)
-            row.addStretch(1)
-
+        container = _BubbleRow(bubble, is_user, is_rtl=bubble.is_rtl)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, bubble))
         self.scroll_to_bottom()
 
     def _apply_bubble_theme(self, bubble: ChatBubble) -> None:
-        # set_font_size re-applies the style with the current theme, so
-        # both the user-chosen size and dark/light mode are respected.
+        # set_font_size re-applies the style with the stored theme state,
+        # then we push the panel's live theme so bubbles created while dark
+        # mode is on start out correctly (not just after a toggle).
         bubble.set_font_size(self._font_size)
+        bubble.update_style(self._is_dark)
 
     def _maybe_hide_empty_state(self) -> None:
         """Swap between the empty-state hero and the live chat container."""

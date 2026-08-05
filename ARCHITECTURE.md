@@ -30,7 +30,7 @@ services or tools, or build addons.
                             │ Qt signals (queued, cross-thread)
 ┌───────────────────────────▼─────────────────────────────────┐
 │  Services layer (services/)    QObject + QThread workers    │
-│  ModelService · ChatService · AgentService                  │
+│  ModelService · ChatService · AgentService · Environment    │
 │  - the only layer that creates threads                      │
 └───────────────────────────┬─────────────────────────────────┘
                             │ plain Python calls
@@ -170,7 +170,19 @@ background threads. **All app background pipelines run through this layer.**
 were migrated onto this pattern; no `QThread` subclasses remain in the
 codebase.)
 
-### 3.1 The worker pattern (used by all three services)
+### 3.1 The worker pattern (used by the services)
+
+`EnvironmentService` runs the app's own dependency launcher: a fast
+synchronous `check()` (interpreter + `requirements.txt` status) plus a
+background `run_task("install")` / `run_task("bootstrap")` that streams
+`pip` output via the `output` signal and finishes with
+`finished(bool, str)` — the same QThread + worker shape as below.
+
+`LauncherService` (plain functions, no Qt) re-exposes the shell utilities
+in `scripts/` (GPU install/monitor/verify, EXE build) as one-click
+console-window launchers from the sidebar.
+
+(Worker pattern used by all services)
 
 ```python
 worker = ChatWorker()          # QObject, created in the MAIN thread

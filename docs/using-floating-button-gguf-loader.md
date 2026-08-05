@@ -405,7 +405,7 @@ def register(parent=None):
         
         print("✅ Simple Floating Assistant started!")
         
-        # Return a status widget for the addon panel
+        # Return a status widget for the addon's launcher dialog
         status_widget = SmartFloaterStatusWidget(addon)
         return status_widget.widget
         
@@ -542,7 +542,7 @@ def load_config(self):
 
 1. **Basic Functionality**
    - [ ] Addon loads without errors
-   - [ ] Status widget appears in sidebar
+   - [ ] Status widget appears when the addon is opened from the Addons menu
    - [ ] Model connection test works
 
 2. **Text Selection**

@@ -30,6 +30,7 @@ DARK_TOKENS = {
     "accentPressed": "#cc8a27",
     "accentSoft": "rgba(232, 163, 61, 0.16)",
     "accentBorder": "rgba(232, 163, 61, 0.35)",
+    "accentSelection": "rgba(255, 255, 255, 0.30)",
     "onAccent": "#191204",
     "success": "#3fbf8a",
     "danger": "#e5544b",
@@ -54,6 +55,7 @@ LIGHT_TOKENS = {
     "accentPressed": "#7a4f0c",
     "accentSoft": "rgba(169, 112, 20, 0.14)",
     "accentBorder": "rgba(169, 112, 20, 0.30)",
+    "accentSelection": "rgba(0, 0, 0, 0.22)",
     "onAccent": "#ffffff",
     "success": "#1f9d63",
     "danger": "#d6453d",
@@ -91,6 +93,11 @@ QLabel#sizePill { background-color: $elevated; border: 1px solid $border;
 QLabel#statusLabel { color: $textSec; }
 QLabel#statusLabel[state="ok"] { color: $success; }
 QLabel#statusLabel[state="err"] { color: $danger; }
+QLabel#envStatus { color: $textSec; }
+QLabel#envStatus[state="ok"] { color: $success; }
+QLabel#envStatus[state="warn"] { color: $warn; }
+QLabel#envStatus[state="err"] { color: $danger; }
+QLabel#envMissing { color: $warn; font-size: 11px; }
 QLabel#statusChip { background-color: $elevated; border: 1px solid $border;
                     border-radius: 12px; padding: 4px 12px;
                     color: $textSec; font-size: 11px; }
@@ -176,10 +183,14 @@ QStatusBar { background-color: $surface; color: $textMuted; }
 
 
 def build_stylesheet(tokens: dict) -> str:
-    """Substitute ``$name`` markers with the given token values."""
+    """Substitute ``$name`` markers with the given token values.
+
+    Longer names are replaced first: ``$accentSoft`` must be handled
+    before ``$accent``, otherwise ``$accentSoft`` becomes ``#e8a33dSoft``.
+    """
     qss = QSS_TEMPLATE
-    for name, value in tokens.items():
-        qss = qss.replace(f"${name}", value)
+    for name in sorted(tokens, key=len, reverse=True):
+        qss = qss.replace(f"${name}", tokens[name])
     return qss
 
 

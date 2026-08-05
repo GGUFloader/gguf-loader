@@ -67,17 +67,17 @@ ggufloader
 
 **For Windows:**
 - Open the extracted folder
-- Double-click on `scripts/launch.bat`
+- Double-click on `launch.bat`
 - **First time only**: Wait 1-2 minutes while it downloads dependencies
 - The app will start automatically!
-- **Next time**: Just double-click `scripts/launch.bat` again - it starts instantly!
+- **Next time**: Just double-click `launch.bat` again - it starts instantly!
 
 **For Linux/macOS:**
 - Open the extracted folder
-- Double-click on `scripts/launch.sh` (or right-click → Open)
+- Double-click on `launch.sh` (or right-click → Open)
 - **First time only**: Wait 1-2 minutes while it downloads dependencies
 - The app will start automatically!
-- **Next time**: Just double-click `scripts/launch.sh` again - it starts instantly!
+- **Next time**: Just double-click `launch.sh` again - it starts instantly!
 
 **That's it!** No Python installation needed, no command line, no complicated setup.
 
