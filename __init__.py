@@ -5,7 +5,7 @@ A production-ready Python package that provides a robust GGUF model loader
 application with the Smart Floating Assistant addon pre-installed.
 """
 
-__version__ = "2.0.1"
+__version__ = "2.1.2"
 __author__ = "Hussain Nazary"
 __email__ = "hussainnazary475@gmail.com"
 __description__ = "Advanced GGUF Model Loader with Smart Floating Assistant"

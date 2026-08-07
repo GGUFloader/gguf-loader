@@ -52,17 +52,51 @@ If you prefer to build manually:
 
 ## Output Location
 
-After a successful build, you'll find:
+After a successful build, you'll find a **single self-contained file**:
 
 ```
 dist/
-└── GGUFLoader/
-    ├── GGUFLoader.exe    <- Your executable
-    ├── icon.ico
-    ├── addons/           <- Addon system
-    ├── docs/             <- Documentation
-    └── [other dependencies]
+└── GGUFLoader_WithAddons.exe   <- Your executable (Windows)
+dist/
+└── GGUFLoader_WithAddons       <- Your executable (Linux, no extension)
 ```
+
+> Onefile binaries are **not cross-platform**: a Windows `.exe` must be built on
+> Windows, and a Linux binary must be built on Linux. See below for the
+> automated approach.
+
+## Building on Linux
+
+The same spec file works on Linux (the Windows-only flags are ignored there):
+
+```bash
+scripts/build_linux.sh
+```
+
+The output is `dist/GGUFLoader_WithAddons`. Rename it before publishing, e.g.:
+
+```bash
+mv dist/GGUFLoader_WithAddons dist/GGUFLoader_Linux_x86_64
+```
+
+## Automated Releases (Windows + Linux via GitHub Actions)
+
+PyInstaller cannot cross-compile, so the easiest way to ship both installers is
+the included workflow (`.github/workflows/build-release.yml`):
+
+1. Bump the version in `__init__.py` and `CHANGELOG.md`
+2. Commit and push:
+   ```bash
+   git add -A && git commit -m "Release v2.1.2"
+   git push origin main
+   git tag v2.1.2 && git push origin v2.1.2
+   ```
+3. The workflow builds `GGUFLoader_v2.1.2_win64.exe` (windows-latest) and
+   `GGUFLoader_v2.1.2_linux_x86_64` (ubuntu-latest) and attaches both to a
+   new GitHub Release with auto-generated notes.
+
+You can also run the workflow manually from the **Actions** tab (it will just
+upload artifacts, not create a release).
 
 ## Distribution
 

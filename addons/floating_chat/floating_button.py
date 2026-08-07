@@ -6,11 +6,13 @@ Cross-platform draggable button that stays on top of all windows.
 """
 
 import os
+import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import (
-    Qt, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Property
+    Qt, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Property,
+    QEvent, QTimer
 )
 from PySide6.QtGui import (
     QPainter, QColor, QBrush, QPen,
@@ -94,12 +96,18 @@ class FloatingChatButton(QWidget):
     def _setup_window(self):
         """Setup window properties for floating behavior."""
         # Set window flags for always-on-top floating window
-        self.setWindowFlags(
+        flags = (
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool |
             Qt.WindowType.X11BypassWindowManagerHint  # Linux compatibility
         )
+        # On macOS, the Tool flag turns this into a utility window that hides
+        # whenever the app loses focus - defeating the "floats above all
+        # windows" purpose. Drop it there so the button stays visible; keep
+        # it on Windows/Linux where it keeps the button out of the taskbar.
+        if sys.platform != "darwin":
+            flags |= Qt.WindowType.Tool
+        self.setWindowFlags(flags)
         
         # Set transparent background
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -259,12 +267,14 @@ class FloatingChatButton(QWidget):
             # Calculate new position
             new_pos = event.globalPosition().toPoint() - self._drag_start_position
             
-            # Ensure button stays on screen
+            # Ensure button stays on screen. availableGeometry() excludes
+            # taskbars, docks, and menu bars; clamping to its edges (not 0,0)
+            # keeps the button out from under all of them on any OS.
             screen = QApplication.primaryScreen()
-            screen_rect = screen.geometry()
+            screen_rect = screen.availableGeometry()
             
-            x = max(0, min(new_pos.x(), screen_rect.width() - self.width()))
-            y = max(0, min(new_pos.y(), screen_rect.height() - self.height()))
+            x = max(screen_rect.left(), min(new_pos.x(), screen_rect.right() - self.width() + 1))
+            y = max(screen_rect.top(), min(new_pos.y(), screen_rect.bottom() - self.height() + 1))
             
             self.move(x, y)
             event.accept()
@@ -314,6 +324,19 @@ class FloatingChatButton(QWidget):
         """Override show to ensure full opacity."""
         self.setWindowOpacity(1.0)
         super().show()
+
+    def changeEvent(self, event):
+        """Prevent the button from ever staying minimized.
+
+        System-wide shortcuts like Win+D / minimize-all minimize *every*
+        window, including this tool window - and a minimized floating
+        button is effectively "gone" with no way to restore it. Bounce it
+        straight back to normal whenever that happens.
+        """
+        if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
+            # Defer so the OS state change fully completes first, then restore.
+            QTimer.singleShot(0, self.showNormal)
+        super().changeEvent(event)
     
     # Property for scale factor animation (Qt Property)
     def getScaleFactor(self):

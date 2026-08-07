@@ -134,14 +134,15 @@ class FloatingChatWindow(QWidget):
         """Setup window properties."""
         self.setWindowTitle("Floating Chat")
         
-        # Set window flags for floating behavior
+        # Set window flags for floating behavior. No minimize button: this is
+        # an always-on-top companion window toggled by the floating button, and
+        # a minimized window is a trap state (can't be brought back reliably).
         self.setWindowFlags(
             Qt.WindowType.Window |
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.CustomizeWindowHint |
             Qt.WindowType.WindowTitleHint |
-            Qt.WindowType.WindowCloseButtonHint |
-            Qt.WindowType.WindowMinimizeButtonHint
+            Qt.WindowType.WindowCloseButtonHint
         )
         
         # Set size

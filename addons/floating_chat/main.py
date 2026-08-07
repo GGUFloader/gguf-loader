@@ -144,11 +144,19 @@ class FloatingChatAddon(QObject):
             return False
     
     def _on_button_clicked(self):
-        """Handle floating button click - show/hide chat window."""
+        """Handle floating button click - show/hide/restore chat window."""
         try:
-            if self._chat_window and self._chat_window.isVisible():
-                # Chat window is open, close it
-                self._chat_window.hide()
+            chat = self._chat_window
+            if chat and chat.isVisible():
+                if chat.isMinimized():
+                    # A minimized window is "visible" to Qt but off-screen.
+                    # Restore it - hiding it would leave it un-returnable.
+                    chat.showNormal()
+                    chat.raise_()
+                    chat.activateWindow()
+                else:
+                    # Chat window is open, close it
+                    chat.hide()
             else:
                 # Chat window is closed, open it
                 self._show_chat_window()
@@ -167,8 +175,9 @@ class FloatingChatAddon(QObject):
             # Position window near the button
             self._position_chat_window()
             
-            # Show window
-            self._chat_window.show()
+            # Show window (showNormal clears any lingering minimized state so
+            # the window always comes back fully on screen)
+            self._chat_window.showNormal()
             self._chat_window.raise_()
             self._chat_window.activateWindow()
             
@@ -185,9 +194,10 @@ class FloatingChatAddon(QObject):
             button_pos = self._floating_button.pos()
             button_size = self._floating_button.size()
             
-            # Get screen geometry
+            # Get screen geometry (availableGeometry excludes taskbars,
+            # docks, and menu bars so the window can't hide under them)
             screen = QApplication.primaryScreen()
-            screen_rect = screen.geometry()
+            screen_rect = screen.availableGeometry()
             
             # Calculate window position
             window_size = self._chat_window.size()
@@ -205,9 +215,9 @@ class FloatingChatAddon(QObject):
                 # Move up to fit on screen
                 y = screen_rect.bottom() - window_size.height() - 10
             
-            # Ensure minimum position
-            x = max(10, x)
-            y = max(10, y)
+            # Ensure minimum position (keep the margin inside the available area)
+            x = max(screen_rect.left() + 10, x)
+            y = max(screen_rect.top() + 10, y)
             
             self._chat_window.move(x, y)
             
@@ -238,12 +248,14 @@ class FloatingChatAddon(QObject):
             # Get saved position
             pos = self._settings.value("button_position", QPoint(100, 100))
             
-            # Ensure position is on screen
+            # Ensure position is on screen (availableGeometry excludes
+            # taskbars, docks, and menu bars; clamp to its edges, not 0,0,
+            # so the button can't sit under the macOS menu bar)
             screen = QApplication.primaryScreen()
-            screen_rect = screen.geometry()
+            screen_rect = screen.availableGeometry()
             
-            x = max(0, min(pos.x(), screen_rect.width() - self._floating_button.width()))
-            y = max(0, min(pos.y(), screen_rect.height() - self._floating_button.height()))
+            x = max(screen_rect.left(), min(pos.x(), screen_rect.right() - self._floating_button.width() + 1))
+            y = max(screen_rect.top(), min(pos.y(), screen_rect.bottom() - self._floating_button.height() + 1))
             
             self._floating_button.move(x, y)
             

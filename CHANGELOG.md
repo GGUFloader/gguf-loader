@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.2] - 2026-08-07
+
+### Fixed
+- Floating chat button no longer disappears when switching apps on macOS (the `Tool`
+  window flag is now dropped on macOS so the button stays visible over other apps)
+- Floating chat button can no longer get stuck minimized (it auto-restores, and
+  clicking the button restores a minimized chat window instead of hiding it)
+- Floating chat button and chat window now clamp to the **available** screen area,
+  so they stay clear of taskbars, docks, and menu bars on all OSes
+- Chat window no longer offers a minimize button (a minimized companion window was
+  a trap state that couldn't be reliably restored)
+
+### Docs
+- Documented the Linux Wayland limitation (button stays inside the app window;
+  run under X11 / `QT_QPA_PLATFORM=xcb` for full floating behavior)
+- Added Linux build script (`scripts/build_linux.sh`) and GitHub Actions workflow
+  that build and attach Windows + Linux installers to releases
+
+---
+
 ## [2.1.0] - 2026-01-23
 
 ### Added
@@ -131,7 +151,9 @@ python gguf_loader_main.py
 
 ---
 
-[Unreleased]: https://github.com/yourusername/gguf-loader/compare/v2.1.0...HEAD
-[2.1.0]: https://github.com/yourusername/gguf-loader/compare/v2.0.1...v2.1.0
+[Unreleased]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.1...v2.1.2
+[2.1.1]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.0...v2.1.1
+[2.1.0]: https://github.com/GGUFloader/gguf-loader/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/yourusername/gguf-loader/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/yourusername/gguf-loader/releases/tag/v2.0.0

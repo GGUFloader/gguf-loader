@@ -1,0 +1,75 @@
+name: Build & Release Installers
+
+# Builds the Windows and Linux installers with PyInstaller and attaches them
+# to a GitHub Release. Triggers automatically when a version tag (v*) is
+# pushed, and can also be run manually from the Actions tab (builds artifacts
+# only, no release is created).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: GGUFLoader-win64
+          - os: ubuntu-latest
+            artifact_name: GGUFLoader-linux-x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm build_exe.spec
+
+      - name: Rename artifact with version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            mv dist/GGUFLoader_WithAddons.exe "dist/GGUFLoader_v${VERSION}.exe"
+          else
+            mv dist/GGUFLoader_WithAddons "dist/GGUFLoader_v${VERSION}_linux_x86_64"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/*
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

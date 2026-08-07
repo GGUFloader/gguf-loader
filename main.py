@@ -74,7 +74,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("GGUF Loader")
-    app.setApplicationVersion("2.0.1")
+    app.setApplicationVersion("2.1.2")
     app.setOrganizationName("GGUF Loader Team")
 
     icon_path = find_icon("icon.ico")

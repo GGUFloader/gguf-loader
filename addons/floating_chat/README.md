@@ -9,7 +9,7 @@ A Facebook Messenger-style floating chat button for GGUF Loader that works acros
 - Native Qt6 implementation for consistent behavior
 
 🎯 **Floating Button**
-- Always stays on top of all windows
+- Always stays on top of all windows (see Platform Notes for the Wayland limitation)
 - Draggable to any position on screen
 - Remembers position between sessions
 - Smooth animations and hover effects
@@ -82,10 +82,21 @@ The addon is already included in GGUF Loader. Simply:
 
 The addon uses Qt6's cross-platform features:
 
-- **Window Flags**: `WindowStaysOnTopHint`, `FramelessWindowHint`, `Tool`
-- **Linux Support**: `X11BypassWindowManagerHint` for proper floating behavior
-- **macOS Support**: Native Qt6 window management
+- **Window Flags**: `WindowStaysOnTopHint`, `FramelessWindowHint`, `X11BypassWindowManagerHint`
+- **`Tool` flag**: added on Windows/Linux only — it keeps the button out of the taskbar. It is intentionally **dropped on macOS** so the button doesn't auto-hide as a utility window (see Platform Notes below)
+- **Linux Support**: `X11BypassWindowManagerHint` for proper floating behavior under X11
+- **macOS Support**: `Tool` flag removed so the button stays visible when the app loses focus
 - **Windows Support**: Full transparency and always-on-top
+
+### Platform Notes
+
+**Windows** — fully supported. The button floats above all windows and stays out of the taskbar via the `Tool` window flag.
+
+**macOS** — fully supported. The button stays visible even when the app loses focus, because the `Tool` flag (which would make it a utility window that auto-hides) is deliberately dropped. Trade-off: since it is a regular window, it also appears in Mission Control and the app's Window menu.
+
+**Linux (X11)** — fully supported. `X11BypassWindowManagerHint` gives the button proper floating behavior above all windows.
+
+**Linux (Wayland)** — limited. Wayland compositors do not allow an application window to float above windows of *other* applications, and `X11BypassWindowManagerHint` is an X11-only hint that Wayland ignores. The button still appears and works normally, but it is confined to GGUF Loader's own window instead of floating above every window on screen. For the full floating experience, run GGUF Loader under an X11 session (or with `QT_QPA_PLATFORM=xcb`).
 
 ### Settings Persistence
 
@@ -130,6 +141,14 @@ self.resize(400, 600)  # Width, Height
 ### Button not draggable on Linux
 - Ensure X11 is being used (not Wayland)
 - Or use Wayland compatibility mode in Qt6
+
+### Button doesn't float above other apps on Linux
+- This is expected under Wayland — see **Platform Notes** above
+- Run under an X11 session (or `QT_QPA_PLATFORM=xcb`) for full floating behavior
+
+### Button disappears when switching apps on macOS
+- No longer expected — the `Tool` flag is dropped on macOS so the button stays visible
+- If it still disappears, check GGUF Loader logs for errors and confirm the addon is running
 
 ## License
 

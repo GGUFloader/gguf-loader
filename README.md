@@ -13,12 +13,12 @@ A beginner-friendly, privacy-first desktop application for running large languag
 ### Option 1: Windows Executable (Easiest - Recommended)
 
 **Step 1: Download the App**
-[![Download GGUF Loader v2.1.1 Agentic Mode](https://img.shields.io/badge/Download%20GGUF%20Loader-v2.1.1%20Agentic%20Mode-blue?style=for-the-badge&logo=github)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.1/GGUFLoader_v2.1.1.agentic_mode.exe)
+[![Download GGUF Loader v2.1.2 Agentic Mode](https://img.shields.io/badge/Download%20GGUF%20Loader-v2.1.2%20Agentic%20Mode-blue?style=for-the-badge&logo=github)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe)
 
-**Direct Download:** [GGUFLoader_v2.1.1.agentic_mode.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.1/GGUFLoader_v2.1.1.agentic_mode.exe) (~150-300 MB)
+**Direct Download:** [GGUFLoader_v2.1.2.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe) (~150-300 MB)  ·  [Linux](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64)
 
 **Step 2: Run the App**
-1. Click the downloaded `GGUFLoader_v2.1.1.agentic_mode.exe` file
+1. Click the downloaded `GGUFLoader_v2.1.2.exe` file
 2. Windows may show a security warning - click "More info" then "Run anyway" (this is normal for new apps)
 3. The app will start automatically - no installation needed!
 
