@@ -12,15 +12,26 @@ A beginner-friendly, privacy-first desktop application for running large languag
 
 ### Option 1: Windows Executable (Easiest - Recommended)
 
-**Step 1: Download the App**
-[![Download GGUF Loader v2.1.2 Agentic Mode](https://img.shields.io/badge/Download%20GGUF%20Loader-v2.1.2%20Agentic%20Mode-blue?style=for-the-badge&logo=github)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe)
+**Step 1: Download the App** — click your platform's button and the download starts automatically:
 
-**Direct Download:** [GGUFLoader_v2.1.2.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe) (~150-300 MB)  ·  [Linux](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64)
+| 🪟 **Windows** | 🐧 **Linux** |
+|:---:|:---:|
+| [![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe) | [![Download for Linux](https://img.shields.io/badge/Download%20for%20Linux-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64.tar.gz) |
+| `GGUFLoader_v2.1.2.exe` · **~61 MB** | `GGUFLoader_v2.1.2_linux_x86_64.tar.gz` · **~90 MB** |
+
+**Direct downloads:** [Windows (.exe)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe)  ·  [Linux (.tar.gz installer)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64.tar.gz)  ·  [Linux (raw binary)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64)
 
 **Step 2: Run the App**
+
+**🪟 Windows:**
 1. Click the downloaded `GGUFLoader_v2.1.2.exe` file
 2. Windows may show a security warning - click "More info" then "Run anyway" (this is normal for new apps)
 3. The app will start automatically - no installation needed!
+
+**🐧 Linux:**
+1. Extract the archive: `tar -xzf GGUFLoader_v2.1.2_linux_x86_64.tar.gz`
+2. Install it (no admin rights needed): `cd GGUFLoader-v2.1.2-linux && ./install.sh`
+3. Launch it from your app menu, or run `gguf-loader`
 
 **Step 3: Download a Model**
 - Visit [Local AI Zone](https://local-ai-zone.github.io/) for curated model recommendations
