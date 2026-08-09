@@ -158,6 +158,11 @@ class MainWindow(QMainWindow, ThemeMixin):
             self._text_size_actions[size] = action
         self._text_size_actions[14].setChecked(True)
 
+        # ---- Tools ----
+        tools_menu = bar.addMenu("&Tools")
+        action = tools_menu.addAction("Find Paragraph\u2026")
+        action.triggered.connect(self._show_find_dialog)
+
         # ---- Addons (filled after loading) ----
         self.addons_menu = bar.addMenu("&Addons")
 
@@ -175,6 +180,13 @@ class MainWindow(QMainWindow, ThemeMixin):
             action.setChecked(s == size)
         self.chat_panel.apply_font_size(size)
         self.chat_panel.agent_panel.apply_font_size(size)
+
+    def _show_find_dialog(self) -> None:
+        """Open the Find Paragraph dialog (searches a document with the model)."""
+        from ui.find_dialog import FindParagraphDialog
+        default_folder = self.chat_panel.get_workspace()
+        dlg = FindParagraphDialog(self._model_service, self, default_folder=default_folder)
+        dlg.exec()
 
     def _show_about(self) -> None:
         from __init__ import __version__

@@ -172,6 +172,13 @@ QProgressBar { background-color: $elevated; border: 1px solid $border;
                border-radius: 5px; color: $textSec; font-size: 10px; }
 QProgressBar::chunk { background-color: $accent; border-radius: 4px; }
 
+/* ---- lists ---- */
+QListWidget { background-color: $elevated; color: $text; border: 1px solid $border;
+              border-radius: 8px; padding: 4px; }
+QListWidget::item { padding: 6px 8px; border-radius: 4px; }
+QListWidget::item:hover { background-color: $elevatedHover; }
+QListWidget::item:selected { background-color: $accentSoft; color: $text; }
+
 /* ---- scroll areas / bars ---- */
 QScrollArea { border: none; background: transparent; }
 QScrollArea QWidget { background: transparent; }
