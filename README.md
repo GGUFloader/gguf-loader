@@ -128,11 +128,11 @@ ggufloader
 ## 📚 Documentation
 
 - **[Quick Reference](QUICK_REFERENCE.md)** - Fast answers to common tasks
-- **[Installation Guide](docs/installation.md)** - Detailed setup instructions
-- **[User Guide](docs/user-guide.md)** - How to use GGUF Loader
-- **[Addon Development](docs/addon-development.md)** - Create your own addons
-- **[FAQ](docs/faq.md)** - Frequently asked questions
-- **[All Documentation](docs/DOCUMENTATION.md)** - Complete documentation index
+- **[Installation Guide](https://ggufloader.github.io/docs/installation/)** - Detailed setup instructions
+- **[User Guide](https://ggufloader.github.io/docs/user-guide/)** - How to use GGUF Loader
+- **[Addon Development](https://ggufloader.github.io/docs/addon-development/)** - Create your own addons
+- **[FAQ](https://ggufloader.github.io/faq.html)** - Frequently asked questions
+- **[All Documentation](https://ggufloader.github.io/docs/)** - Complete documentation index
 - **[Architecture](ARCHITECTURE.md)** - Layered design, threading model, and extension guide
 
 ## 🤖 Agentic Mode

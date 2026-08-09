@@ -91,7 +91,7 @@ QT_QPA_PLATFORM=xcb python launch.py
 
 - Full documentation: `README.md`
 - Report issues: GitHub Issues
-- Addon API: `docs/gguf-loader-addon-api.md`
+- Addon API: [ggufloader.github.io/docs/addon-api](https://ggufloader.github.io/docs/addon-api/)
 
 ---
 

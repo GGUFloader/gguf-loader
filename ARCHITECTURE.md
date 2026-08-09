@@ -459,11 +459,11 @@ addons/my_addon/
 - Connect to `model_loaded`, `generation_finished`, `generation_error`, `theme_changed`; call
   `gguf_app.model(prompt, stream=True)` for inference.
 - Store your instance on the window (e.g. `gguf_app._my_addon`) and stop it in
-  `closeEvent` if needed. See `docs/addon-development.md` for the full guide.
+  `closeEvent` if needed. See the [Addon Development Guide](https://ggufloader.github.io/docs/addon-development/) for the full guide.
 
 ### 7.5 Add configuration
 
-Add constants to `config.py` (they're all documented in `docs/CONFIG_FILES_GUIDE.md`).
+Add constants to `config.py` (they're all documented in the [Configuration Guide](https://ggufloader.github.io/docs/configuration/)).
 Runtime-created directories are declared in `get_paths()` /
 `ensure_directories()`; `resource_manager.py` decides where they actually live
 per deployment mode (dev = project root, exe = `%LOCALAPPDATA%`/`~`).

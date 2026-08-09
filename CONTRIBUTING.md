@@ -68,10 +68,10 @@ Always use the `.venv` interpreter for running and testing.
 
 ### 5. More Docs
 
-- [Addon Development](docs/addon-development.md) — build an addon
-- [Build & Package](docs/BUILD_EXE_INSTRUCTIONS.md) — PyInstaller packaging
-- [Config Files](docs/CONFIG_FILES_GUIDE.md) — configuration reference
-- [Documentation Index](docs/DOCUMENTATION.md) — everything else
+- [Addon Development](https://ggufloader.github.io/docs/addon-development/) — build an addon
+- [Build & Package](https://ggufloader.github.io/docs/installation/) — PyInstaller packaging
+- [Config Files](https://ggufloader.github.io/docs/configuration/) — configuration reference
+- [Documentation Index](https://ggufloader.github.io/docs/) — everything else
 
 ---
 
@@ -177,7 +177,7 @@ Help improve our docs:
 - Clarify confusing sections
 - Translate to other languages
 
-Documentation files are in the `docs/` folder.
+Documentation lives on the [GGUF Loader website](https://ggufloader.github.io/docs/).
 
 ## Testing
 

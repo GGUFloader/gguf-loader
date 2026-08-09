@@ -27,7 +27,6 @@ datas = [
     ('icon.ico', '.'),
     ('float.png', '.'),  # Floating chat button icon
     ('addons/floating_chat', 'addons/floating_chat'),  # Only include floating_chat, not agentic_chatbot
-    ('docs', 'docs'),
     ('core', 'core'),  # Include the core module directory
 ]
 
