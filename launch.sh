@@ -2,7 +2,8 @@
 
 # GGUF Loader Launcher Script
 # This script will create a virtual environment if it doesn't exist,
-# install dependencies, and launch the application.
+# verify that every dependency from requirements.txt is installed,
+# install anything that's missing, and then launch the application.
 
 # Change to the project root so relative paths work from anywhere
 cd "$(dirname "$0")"
@@ -26,12 +27,41 @@ fi
 echo "Activating virtual environment..."
 source "$VENV_NAME/bin/activate" || error_exit "Failed to activate virtual environment."
 
-# Check if requirements are installed by trying to import a key module
-python -c "import PySide6" >/dev/null 2>&1
+# Verify that every requirement in requirements.txt is installed
+python - <<'PY'
+import importlib.metadata
+import re
+import sys
+
+
+def normalize(name: str) -> str:
+    return re.sub(r"[-_.]+", "_", name).lower()
+
+
+installed = {
+    normalize(dist.metadata.get("Name", ""))
+    for dist in importlib.metadata.distributions()
+}
+
+missing = []
+with open("requirements.txt", encoding="utf-8") as fh:
+    for raw in fh:
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        name = re.split(r"[<>=!~;\[ ]", line, maxsplit=1)[0].strip()
+        if name and normalize(name) not in installed:
+            missing.append(name)
+
+if missing:
+    print("Missing dependencies: " + ", ".join(missing))
+    sys.exit(1)
+print("All dependencies are installed.")
+PY
 
 if [ $? -ne 0 ]; then
     echo "Installing dependencies..."
-    pip install -r requirements.txt || error_exit "Failed to install dependencies."
+    pip install --disable-pip-version-check -r requirements.txt || error_exit "Failed to install dependencies."
 else
     echo "Dependencies already installed."
 fi

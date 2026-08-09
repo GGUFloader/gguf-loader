@@ -93,11 +93,6 @@ QLabel#sizePill { background-color: $elevated; border: 1px solid $border;
 QLabel#statusLabel { color: $textSec; }
 QLabel#statusLabel[state="ok"] { color: $success; }
 QLabel#statusLabel[state="err"] { color: $danger; }
-QLabel#envStatus { color: $textSec; }
-QLabel#envStatus[state="ok"] { color: $success; }
-QLabel#envStatus[state="warn"] { color: $warn; }
-QLabel#envStatus[state="err"] { color: $danger; }
-QLabel#envMissing { color: $warn; font-size: 11px; }
 QLabel#statusChip { background-color: $elevated; border: 1px solid $border;
                     border-radius: 12px; padding: 4px 12px;
                     color: $textSec; font-size: 11px; }
@@ -126,6 +121,13 @@ QPushButton#primaryButton:disabled { background-color: $disabledBg;
 QPushButton#agentToggle { border-radius: 15px; padding: 8px 14px; }
 QPushButton#agentToggle:checked { background-color: $accent; color: $onAccent;
                                   border: none; font-weight: bold; }
+QPushButton#gpuToggle:checked { background-color: $accent; color: $onAccent;
+                                border: none; font-weight: bold; }
+QPushButton#gpuToggle:checked:hover { background-color: $accentHover; }
+QPushButton#gpuInstallBtn[state="ok"] { background-color: $accentSoft;
+    color: $success; border-color: $success; font-weight: bold; }
+QPushButton#gpuInstallBtn[state="ok"]:hover { background-color: $accentSoft;
+    color: $success; border-color: $success; }
 
 /* ---- inputs ---- */
 QComboBox, QLineEdit, QTextEdit { background-color: $elevated; color: $text;

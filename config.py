@@ -7,7 +7,6 @@ WINDOW_SIZE = (1200, 900)
 MIN_WINDOW_SIZE = (800, 500)
 
 # --- GPU and Context Configuration ---
-GPU_OPTIONS = ["CPU Only", "GPU Accelerated"]
 DEFAULT_CONTEXT_SIZES = ["512", "1024", "2048", "4096", "8192", "16384", "32768"]
 
 # Generation

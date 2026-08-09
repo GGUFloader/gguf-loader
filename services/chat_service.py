@@ -13,6 +13,7 @@ import threading
 from typing import List, Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
+from shiboken6 import isValid
 
 from core.llm.model_backend import ModelBackend
 
@@ -115,10 +116,12 @@ class ChatService(QObject):
 
     def stop(self) -> None:
         """Cooperatively stop the in-flight generation, if any."""
-        if self._worker is not None:
-            self._worker.stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(2000)
+        worker = self._worker
+        if worker is not None and isValid(worker):
+            worker.stop()
+        thread = self._thread
+        if thread is not None and isValid(thread) and thread.isRunning():
+            thread.quit()
+            thread.wait(2000)
         self._worker = None
         self._thread = None

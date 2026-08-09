@@ -52,7 +52,8 @@ class _BubbleRow(QWidget):
         width = self.width()
         if width <= 0:
             return
-        self._bubble.setMaximumWidth(max(240, int(width * 0.75)))
+        # Fit the bubble to its text, capped at 75% of the conversation column.
+        self._bubble.fit_width(max(240, int(width * 0.75)))
 
 
 class MessageInput(QTextEdit):

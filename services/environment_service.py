@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
+from shiboken6 import isValid
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ def check_environment() -> dict:
     }
 
 
-def _stream_command(worker: "EnvironmentWorker", command: list[str], label: str) -> tuple[bool, str]:
+def _stream_command(worker: "EnvironmentWorker", command: list[str], label: str, env: Optional[dict] = None) -> tuple[bool, str]:
     """Run *command*, forwarding each output line through the worker's signal."""
     worker.output.emit(f"▶ {label}: {' '.join(command)}")
     try:
@@ -109,6 +110,7 @@ def _stream_command(worker: "EnvironmentWorker", command: list[str], label: str)
             encoding="utf-8",
             errors="replace",
             cwd=str(PROJECT_ROOT),
+            env=env,
         )
     except OSError as e:
         worker.output.emit(f"✗ could not start process: {e}")
@@ -193,7 +195,7 @@ class EnvironmentService(QObject):
 
     @property
     def is_busy(self) -> bool:
-        return self._thread is not None and self._thread.isRunning()
+        return self._thread is not None and isValid(self._thread) and self._thread.isRunning()
 
     def run_task(self, task: str) -> bool:
         """Start 'install' or 'bootstrap' in the background. No-op if busy."""
@@ -220,9 +222,10 @@ class EnvironmentService(QObject):
 
     def stop(self) -> None:
         """Wait (bounded) for any in-flight task; safe to call on shutdown."""
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(1000)
+        thread = self._thread
+        if thread is not None and isValid(thread) and thread.isRunning():
+            thread.quit()
+            thread.wait(1000)
         self._thread = None
         self._worker = None
 

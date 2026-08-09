@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QObject, Qt, Signal, Slot, QTimer, QThread
 from PySide6.QtGui import QFont
+from shiboken6 import isValid
 
 try:
     from config import FONT_FAMILY
@@ -190,6 +191,7 @@ class FloatingChatWindow(QWidget):
         self.chat_layout.addStretch()  # Push messages to top
         
         self.chat_scroll.setWidget(self.chat_container)
+        self.chat_container.installEventFilter(self)  # re-fit bubbles on resize
         layout.addWidget(self.chat_scroll, stretch=1)
         
         # Input area
@@ -635,6 +637,8 @@ padding: 5px;
             bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
             bubble.setStyleSheet(self._bubble_style(False))
             msg_layout.addWidget(bubble, stretch=2)
+            if hasattr(bubble, "fit_width"):
+                bubble.fit_width(self.chat_container.contentsRect().width())
             self._current_ai_message_widget = bubble
             self._styled_widgets.append((bubble, False, False))
         else:
@@ -747,6 +751,8 @@ padding: 5px;
             bubble.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
             bubble.setStyleSheet(self._bubble_style(True))
             msg_layout.addWidget(bubble, stretch=2)  # Takes up to 2/3 of space
+            if hasattr(bubble, "fit_width"):
+                bubble.fit_width(self.chat_container.contentsRect().width())
             self._styled_widgets.append((bubble, True, False))
         else:
             # Fallback to simple label
@@ -858,7 +864,14 @@ padding: 5px;
     
     def eventFilter(self, obj, event):
         """Event filter for Enter to send, Shift+Enter for new line."""
-        if obj == self.input_field and event.type() == event.Type.KeyPress:
+        if obj == self.chat_container and event.type() == event.Type.Resize:
+            # Keep bubbles fitted to the window's new width.
+            cap = self.chat_container.contentsRect().width()
+            for widget, _is_user, _is_fallback in self._styled_widgets:
+                if hasattr(widget, "fit_width"):
+                    widget.fit_width(cap)
+            return False
+        if hasattr(self, "input_field") and obj == self.input_field and event.type() == event.Type.KeyPress:
             # Enter without Shift sends the message
             if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
                 if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
@@ -874,10 +887,10 @@ padding: 5px;
     def _shutdown_generation(self):
         """Stop any in-flight generation before the window is destroyed."""
         worker = self._current_generator
-        if worker is not None:
+        if worker is not None and isValid(worker):
             worker.stop()
         thread = self._current_thread
-        if thread is not None and thread.isRunning():
+        if thread is not None and isValid(thread) and thread.isRunning():
             thread.quit()
             thread.wait(2000)
         self._current_generator = None

@@ -8,7 +8,8 @@ column by their containing row (ui/chat_panel._BubbleRow).
 """
 
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtCore import QRect, Qt
 from utils import detect_persian_text
 from config import CHAT_BUBBLE_FONT_SIZE
 from ui.theme import DARK_TOKENS, LIGHT_TOKENS
@@ -28,6 +29,7 @@ class ChatBubble(QFrame):
         self.is_rtl = force_rtl if force_rtl is not None else detect_persian_text(text)
         self._is_dark_mode = False
         self._current_font_size = CHAT_BUBBLE_FONT_SIZE
+        self._fit_max_width = None  # cap for fit_width(); None = no cap
         self.setup_ui(text)
 
     def setup_ui(self, text: str):
@@ -50,6 +52,40 @@ class ChatBubble(QFrame):
 
         # Apply initial styling
         self.update_style(is_dark_mode=False)
+        self.fit_width()
+
+    def fit_width(self, max_width=None):
+        """Size the bubble to fit its text, capped at *max_width*.
+
+        QLabel with word-wrap reports a tiny sizeHint (the width of the
+        longest word), so without this the bubble collapses to a narrow
+        column and text wraps after a few words even though the row is
+        much wider. We measure the text with the label's font metrics and
+        fix the bubble's width *and* wrapped height instead, so the bubble
+        hugs its text (up to the cap) instead of wrapping every 3-4 words.
+        """
+        if max_width is not None:
+            self._fit_max_width = max_width
+        cap = self._fit_max_width or 4096
+
+        # Measure with a pixel-size font so it matches the QSS
+        # ``font-size: Npx`` that actually renders the label.
+        font = self.label.font()
+        font.setPixelSize(self._current_font_size)
+        fm = QFontMetrics(font)
+
+        pad_x = 32  # QSS label padding 10px 16px -> 32px horizontal (floating chat: 14px + 2px margins)
+        pad_y = 24  # 10px top + 10px bottom (floating chat adds 2px margins)
+        text = self.text or " "
+
+        # Ideal single-line width, clamped to the cap.
+        width = min(max(fm.horizontalAdvance(text) + pad_x, self.minimumWidth()), cap)
+        # Height of the text wrapped at that width.
+        rect = fm.boundingRect(QRect(0, 0, max(width - pad_x, 1), 100000), Qt.TextWordWrap, text)
+        height = max(rect.height() + pad_y, fm.height() + pad_y)
+
+        if self.width() != width or self.height() != height:
+            self.setFixedSize(width, height)
 
     def update_text(self, text: str):
         """Update text and re-detect RTL if needed"""
@@ -88,6 +124,7 @@ class ChatBubble(QFrame):
 
         # Update alignment after text change
         self.update_alignment()
+        self.fit_width()
 
     def update_alignment(self):
         """Update text alignment based on RTL detection"""
@@ -152,6 +189,7 @@ class ChatBubble(QFrame):
         self.label.adjustSize()
         self.adjustSize()
         self.update()
+        self.fit_width()
 
     def set_rtl_mode(self, is_rtl: bool):
         """Manually set RTL mode"""

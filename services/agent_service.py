@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
+from shiboken6 import isValid
 
 from core.agent import AgentEngine, ToolRegistry
 from core.llm.model_backend import ModelBackend
@@ -136,8 +137,9 @@ class AgentService(QObject):
             self._worker = None
 
     def stop(self) -> None:
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(2000)
+        thread = self._thread
+        if thread is not None and isValid(thread) and thread.isRunning():
+            thread.quit()
+            thread.wait(2000)
         self._worker = None
         self._thread = None

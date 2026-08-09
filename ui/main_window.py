@@ -37,8 +37,7 @@ from core.llm.prompt_builder import PromptBuilder
 from resource_manager import find_icon
 from services.agent_service import AgentService
 from services.chat_service import ChatService
-from services.environment_service import EnvironmentService
-from services.launcher_service import launch_script
+from services.gpu_install_service import GpuInstallService, is_gpu_support_installed
 from services.model_service import ModelService
 from ui.chat_panel import ChatPanel
 from ui.sidebar_panel import SettingsSidebar
@@ -66,16 +65,16 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._model_service = ModelService(self)
         self._chat_service = ChatService(self)
         self._agent_service = AgentService(self)
-        self._environment_service = EnvironmentService(self)
+        self._gpu_install_service = GpuInstallService(self)
         self._prompt_builder = PromptBuilder()
         self.conversation_history: list[dict] = []
 
         self._init_window()
         self._build_ui()
         self._wire_services()
-        self._refresh_environment()
         self._load_addons()
         self._populate_addons_menu()
+        self._refresh_gpu_support_status()
 
         logger.info("MainWindow initialized")
 
@@ -235,12 +234,8 @@ class MainWindow(QMainWindow, ThemeMixin):
     def _wire_ui_signals(self) -> None:
         s = self.sidebar
         s.load_model_requested.connect(self._choose_and_load_model)
-
-        s.check_environment_requested.connect(self._refresh_environment)
-        s.install_dependencies_requested.connect(self._install_dependencies)
-        s.bootstrap_venv_requested.connect(self._bootstrap_venv)
-        s.restart_app_requested.connect(self._relaunch_in_venv)
-        s.launch_script_requested.connect(self._launch_script)
+        s.install_gpu_requested.connect(self._install_gpu_support)
+        s.gpu_toggled.connect(self._on_gpu_toggled)
 
         p = self.chat_panel
         p.message_submitted.connect(self._send_message)
@@ -269,9 +264,9 @@ class MainWindow(QMainWindow, ThemeMixin):
         a.processing_finished.connect(lambda: self.chat_panel.set_agent_status("🟢 Ready"))
         a.status_update.connect(self.chat_panel.add_system_message)
 
-        e = self._environment_service
-        e.output.connect(self.sidebar.append_env_output)
-        e.finished.connect(self._on_environment_finished)
+        g = self._gpu_install_service
+        g.output.connect(self.sidebar.append_gpu_output)
+        g.finished.connect(self._on_gpu_install_finished)
 
     # ------------------------------------------------------------------
     # Model loading
@@ -282,14 +277,16 @@ class MainWindow(QMainWindow, ThemeMixin):
         )
         if not file_path:
             return
+        self._load_model(file_path)
 
+    def _load_model(self, path: str) -> None:
         use_gpu = self.sidebar.get_processing_mode() == "GPU Accelerated"
         n_ctx = self.sidebar.get_context_size()
 
         self.sidebar.set_loading(True)
         self.sidebar.set_model_info("")
         self.sidebar.set_status("Loading model...")
-        self._model_service.load(file_path, use_gpu=use_gpu, n_ctx=n_ctx)
+        self._model_service.load(path, use_gpu=use_gpu, n_ctx=n_ctx)
 
     def _on_model_loaded(self, backend: ModelBackend) -> None:
         self.sidebar.set_loading(False)
@@ -360,46 +357,80 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.chat_panel.add_system_message("🤖 Chat cleared. Ready for new conversation!")
 
     # ------------------------------------------------------------------
-    # Environment launcher
+    # GPU support installer
     # ------------------------------------------------------------------
-    def _refresh_environment(self) -> None:
-        """Re-check the venv and dependency status into the sidebar."""
-        self.sidebar.set_environment(self._environment_service.check())
+    def _refresh_gpu_support_status(self) -> None:
+        """Sync the sidebar's GPU button with what's actually installed."""
+        self.sidebar.set_gpu_installed(is_gpu_support_installed())
 
-    def _install_dependencies(self) -> None:
-        if self._environment_service.is_busy:
+    def _on_gpu_toggled(self, enabled: bool) -> None:
+        if not enabled:
             return
-        self.sidebar.set_env_busy(True)
-        self.sidebar.set_status("Installing missing dependencies…")
-        self._environment_service.run_task("install")
-
-    def _bootstrap_venv(self) -> None:
-        if self._environment_service.is_busy:
+        if not is_gpu_support_installed():
+            QMessageBox.warning(
+                self,
+                "GPU Support Missing",
+                "GPU support is not installed yet.\n\n"
+                "Click 'Install GPU Support' in the sidebar and restart the app "
+                "to use GPU acceleration.",
+            )
+            self.sidebar.gpu_button.setChecked(False)
             return
-        self.sidebar.set_env_busy(True)
-        self.sidebar.set_status("Creating .venv and installing dependencies…")
-        self._environment_service.run_task("bootstrap")
+        backend = self._model_service.backend
+        if backend is not None:
+            reload_now = QMessageBox.question(
+                self,
+                "GPU Setting Changed",
+                "The GPU setting takes effect when the model is reloaded.\n\n"
+                "Reload the current model now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reload_now == QMessageBox.Yes:
+                self._load_model(backend.model_path)
 
-    def _on_environment_finished(self, success: bool, message: str) -> None:
-        self.sidebar.set_env_busy(False)
-        self.sidebar.set_status("✅ " + message if success else "❌ " + message)
-        self._refresh_environment()
-        if success and self._environment_service.last_task == "bootstrap":
-            self._relaunch_in_venv()
+    def _install_gpu_support(self) -> None:
+        if self._gpu_install_service.is_busy:
+            return
+        if is_gpu_support_installed():
+            self.sidebar.set_gpu_installed(True)
+            QMessageBox.information(
+                self,
+                "GPU Support",
+                "GPU support is already installed and will be used "
+                "when GPU Acceleration is turned on.",
+            )
+            return
+        self.sidebar.set_gpu_install_busy(True)
+        self.sidebar.set_status("Installing GPU support…")
+        self._gpu_install_service.run_install()
 
-    def _relaunch_in_venv(self) -> None:
-        """Restart the app with the .venv interpreter (or the current one)."""
-        python = self._environment_service.relaunch()
-        if not python:
-            python = sys.executable
-            subprocess.Popen([python, "main.py"], cwd=Path(__file__).resolve().parent.parent)
+    def _on_gpu_install_finished(self, success: bool, message: str) -> None:
+        self.sidebar.set_gpu_install_busy(False)
+        if not success:
+            self.sidebar.set_status("❌ " + message)
+            self.sidebar.gpu_install_status.setText("❌ " + message)
+            QMessageBox.critical(self, "GPU Install Failed", message)
+            return
+
+        self.sidebar.set_status("✅ GPU support installed — restart to apply")
+        self.sidebar.gpu_install_status.setText("✅ " + message)
+        self.sidebar.set_gpu_installed(True)
+        restart = QMessageBox.question(
+            self,
+            "GPU Support Installed",
+            "GPU support was installed successfully.\n\n"
+            "Restart GGUF Loader now to load the GPU build?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if restart == QMessageBox.Yes:
+            self._relaunch()
+
+    def _relaunch(self) -> None:
+        """Restart the app with the same interpreter, then close this instance."""
+        subprocess.Popen([sys.executable, "main.py"], cwd=Path(__file__).resolve().parent.parent)
         self.close()
-
-    def _launch_script(self, key: str) -> None:
-        """Open a scripts/ utility in a console window."""
-        ok, error = launch_script(key)
-        if not ok:
-            QMessageBox.warning(self, "Launcher", f"Could not launch: {error}")
 
     # ------------------------------------------------------------------
     # Agent mode
@@ -524,7 +555,7 @@ class MainWindow(QMainWindow, ThemeMixin):
                 self._floating_chat_addon.stop()
             self._chat_service.stop()
             self._agent_service.stop()
-            self._environment_service.stop()
+            self._gpu_install_service.stop()
             self._model_service.unload()
         except Exception as e:
             logger.error("Error during shutdown: %s", e)

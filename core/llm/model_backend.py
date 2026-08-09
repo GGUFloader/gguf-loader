@@ -35,7 +35,7 @@ class ModelBackend:
         model_path: str,
         use_gpu: bool = False,
         n_ctx: int = 32768,
-        n_gpu_layers: int = 35,
+        n_gpu_layers: int = -1,
     ) -> None:
         self.model_path = model_path
         self.use_gpu = use_gpu

@@ -13,6 +13,7 @@ import logging
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
+from shiboken6 import isValid
 
 from core.llm.model_backend import ModelBackend
 
@@ -102,9 +103,10 @@ class ModelService(QObject):
 
     def unload(self) -> None:
         """Stop any pending load and release the current model."""
-        if self._thread and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(2000)
+        thread = self._thread
+        if thread is not None and isValid(thread) and thread.isRunning():
+            thread.quit()
+            thread.wait(2000)
         self._thread = None
         self._worker = None
         if self._backend is not None:
