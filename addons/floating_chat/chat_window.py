@@ -407,10 +407,12 @@ QFrame {{
     border-radius: 15px;
     margin: 2px;
 }}
-QLabel {{
+QLabel, QTextEdit {{
     color: {t['text']};
     font-size: 13px;
     padding: 10px 14px;
+    background: transparent;
+    border: none;
 }}
 """
         return f"""
@@ -420,10 +422,12 @@ QFrame {{
     border-radius: 15px;
     margin: 2px;
 }}
-QLabel {{
+QLabel, QTextEdit {{
     color: {t['text']};
     font-size: 13px;
     padding: 10px 14px;
+    background: transparent;
+    border: none;
 }}
 """
 
@@ -623,6 +627,27 @@ padding: 5px;
         
         return prompt
     
+    _ROW_MARGIN_X = 10  # message row contentsMargins: left 5 + right 5
+
+    def _bubble_width_cap(self) -> int:
+        """Max width a bubble may take so it fits inside its row.
+
+        Measured from the scroll area's *viewport*, not the container's
+        current width. A bubble gets a fixed width equal to the cap, but the
+        row around it has margins, so capping at the container width makes
+        the bubble wider than the row can hold; that overflow raises the
+        container's minimum width and QScrollArea's ``widgetResizable``
+        grows the container to match, the resize handler refits bubbles to
+        the *bigger* container, and the loop balloons the chat into a huge
+        column where nothing wraps. The viewport is bounded, so capping
+        there pins the equilibrium at exactly the visible width.
+        """
+        vp = self.chat_scroll.viewport().width()
+        if vp <= 0:  # not laid out yet
+            vp = self.chat_container.contentsRect().width()
+        cm = self.chat_layout.contentsMargins()
+        return max(vp - self._ROW_MARGIN_X - cm.left() - cm.right(), 200)
+
     def _create_streaming_ai_message(self):
         """Create an empty AI message bubble for streaming updates."""
         # Create container for left-aligned message
@@ -638,7 +663,7 @@ padding: 5px;
             bubble.setStyleSheet(self._bubble_style(False))
             msg_layout.addWidget(bubble, stretch=2)
             if hasattr(bubble, "fit_width"):
-                bubble.fit_width(self.chat_container.contentsRect().width())
+                bubble.fit_width(self._bubble_width_cap())
             self._current_ai_message_widget = bubble
             self._styled_widgets.append((bubble, False, False))
         else:
@@ -752,7 +777,7 @@ padding: 5px;
             bubble.setStyleSheet(self._bubble_style(True))
             msg_layout.addWidget(bubble, stretch=2)  # Takes up to 2/3 of space
             if hasattr(bubble, "fit_width"):
-                bubble.fit_width(self.chat_container.contentsRect().width())
+                bubble.fit_width(self._bubble_width_cap())
             self._styled_widgets.append((bubble, True, False))
         else:
             # Fallback to simple label
@@ -865,8 +890,10 @@ padding: 5px;
     def eventFilter(self, obj, event):
         """Event filter for Enter to send, Shift+Enter for new line."""
         if obj == self.chat_container and event.type() == event.Type.Resize:
-            # Keep bubbles fitted to the window's new width.
-            cap = self.chat_container.contentsRect().width()
+            # Keep bubbles fitted to the window's new width. The cap comes
+            # from the viewport (see _bubble_width_cap): using the container's
+            # own width here would re-enter the ballooning loop.
+            cap = self._bubble_width_cap()
             for widget, _is_user, _is_fallback in self._styled_widgets:
                 if hasattr(widget, "fit_width"):
                     widget.fit_width(cap)
