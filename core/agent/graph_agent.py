@@ -37,7 +37,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, StreamWriter, interrupt
 from typing import TypedDict
 
-from .agent_engine import _SYSTEM_PROMPT, extract_json
+from .agent_engine import _SYSTEM_PROMPT, extract_json, stale_repeat_signatures, summarize_directive
 from .tool_registry import ToolRegistry, tool_content_for_context
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,9 @@ class AgentCancelled(Exception):
 class GraphState(TypedDict, total=False):
     messages: List[Dict[str, str]]       # persistent conversation
     tool_results: List[Dict[str, Any]]   # results accumulated in this run
+    executed_calls: List[Dict[str, str]] # {"signature", "tool"} of calls that ran, in order
+    directive: str                       # transient read-coverage directive
+    directive_rounds: int                # directives issued this run (capped)
     step: int                            # steps used so far
     max_steps: int                       # step budget for the run
     pending_calls: List[Dict[str, Any]]  # tool calls waiting to execute
@@ -83,6 +86,7 @@ class GraphAgent:
         self.max_tokens = max_tokens
         self.max_steps = max_steps
         self.json_retries = json_retries
+        self.max_directive_rounds = 2
         self.messages: List[Dict[str, str]] = []
 
         # Stable per-workspace thread id: the same folder resumes the same
@@ -151,6 +155,9 @@ class GraphAgent:
         inputs: GraphState = {
             "messages": base_messages + [{"role": "user", "content": user_message}],
             "tool_results": [],
+            "executed_calls": [],
+            "directive": "",
+            "directive_rounds": 0,
             "step": 0,
             "max_steps": self.max_steps,
             "pending_calls": [],
@@ -253,7 +260,9 @@ class GraphAgent:
                     writer({"event": "status", "text": f"💡 {analysis.strip()}"})
                     writer({"event": "status", "text": ""})
 
-        action, raw = self._request_action(messages, tool_results, writer)
+        action, raw = self._request_action(
+            messages, tool_results, writer, directive=state.get("directive", "")
+        )
         if action is None:
             # Model could not produce valid JSON at all - fall back to plain chat.
             answer = raw or "I couldn't produce a valid response."
@@ -275,15 +284,24 @@ class GraphAgent:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
                 answer = raw or "No further action needed."
-            return {
-                "pending_calls": [],
-                "final_answer": answer,
-                "messages": messages + [{"role": "assistant", "content": answer}],
-                "raw_response": raw,
-                "step": step + 1,
-            }
+            return self._finish_or_direct(state, messages, answer, raw, step, writer)
 
-        return {"pending_calls": calls, "final_answer": "", "raw_response": raw, "step": step + 1}
+        # Drop repeats of calls that already ran with a still-valid result.
+        # When the model proposes nothing but stale repeats (a hedge with
+        # "tool_calls" + "answer", or pure repetition), finish now: use its
+        # answer, or synthesize one - never burn the step budget on the same
+        # call. Re-runs after a write/edit are kept (workspace may differ).
+        stale = stale_repeat_signatures(calls, state.get("executed_calls", []))
+        new_calls = [c for c in calls if self._signature(c) not in stale]
+        if not new_calls:
+            answer = (action.get("answer") or "").strip()
+            if not answer:
+                answer = self._final_response(messages, tool_results, writer)
+            if not answer:
+                answer = raw or "No further action needed."
+            return self._finish_or_direct(state, messages, answer, raw, step, writer)
+
+        return {"pending_calls": new_calls, "final_answer": "", "raw_response": raw, "step": step + 1}
 
     def _tools_node(self, state: GraphState, writer: StreamWriter) -> Dict[str, Any]:
         """Execute pending tool calls, with one corrective retry per failure.
@@ -295,6 +313,7 @@ class GraphAgent:
         self._check_cancel()
         calls = state.get("pending_calls", [])
         tool_results = list(state.get("tool_results", []))
+        executed_calls = list(state.get("executed_calls", []))
         self._announce_plan(calls, writer)
 
         approvals: Dict[int, bool] = {}
@@ -324,6 +343,9 @@ class GraphAgent:
                           "tool_name": call.get("tool", "")}
             else:
                 result = self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
+                executed_calls.append(
+                    {"signature": signature, "tool": call.get("tool", "")}
+                )
             tool_results.append(result)
             writer({"event": "tool", "result": result})
             if result.get("status") == "success":
@@ -338,6 +360,9 @@ class GraphAgent:
             fixed = self._request_fix(failed_call, failed_result, writer)
             if fixed is None:
                 continue
+            executed_calls.append(
+                {"signature": self._signature(failed_call), "tool": failed_call.get("tool", "")}
+            )
             tool_results.append(fixed)
             writer({"event": "tool", "result": fixed})
             if fixed.get("status") == "success":
@@ -345,7 +370,7 @@ class GraphAgent:
             else:
                 writer({"event": "status", "text": f"  ✗ retry failed: {fixed.get('error', 'Unknown error')}"})
 
-        return {"tool_results": tool_results, "pending_calls": []}
+        return {"tool_results": tool_results, "executed_calls": executed_calls, "pending_calls": []}
 
     def _router(self, state: GraphState) -> str:
         """Decide whether the loop continues or the run ends.
@@ -359,6 +384,8 @@ class GraphAgent:
             return "end"
         if state.get("pending_calls"):
             return "continue"
+        if state.get("directive"):
+            return "continue"  # loop again so the directive reaches the model
         return "end"
 
     # ------------------------------------------------------------------
@@ -371,13 +398,13 @@ class GraphAgent:
             .replace("__TOOLS__", self.tools.describe())
         )
 
-    def _build_action_prompt(self, messages, tool_results, repair: str = "") -> str:
+    def _build_action_prompt(self, messages, tool_results, repair: str = "", directive: str = "") -> str:
         parts = [self._system_prompt(), ""]
         for msg in messages[-4:]:
             parts.append(f"{msg['role'].capitalize()}: {msg['content']}")
             parts.append("")
         if tool_results:
-            parts.append("Recent tool activity:")
+            parts.append("Tool results:")
             parts.extend(self._format_tool_results(tool_results))
             parts.append("")
         if repair:
@@ -389,6 +416,10 @@ class GraphAgent:
             parts.append("Your previous (invalid) response was:")
             parts.append(repair[:1500])
             parts.append("")
+        if directive:
+            parts.append("IMPORTANT - follow this instruction before replying:")
+            parts.append(directive)
+            parts.append("")
         parts.append("Assistant:")
         return "\n".join(parts)
 
@@ -399,23 +430,23 @@ class GraphAgent:
             outcome = "success" if result.get("status") == "success" else "error"
             content = tool_content_for_context(result)
             if content is not None:
-                lines.append(f"{tool}: {outcome} - {content}")
+                lines.append(f"Tool result for {tool}: {outcome} - {content}")
             else:
-                lines.append(f"{tool}: {outcome} - {self._summarize_result(result)}")
+                lines.append(f"Tool result for {tool}: {outcome} - {self._summarize_result(result)}")
         return lines
 
     # ------------------------------------------------------------------
     # LLM interaction
     # ------------------------------------------------------------------
-    def _request_action(self, messages, tool_results, writer, repair: str = "") -> Tuple[Optional[Dict[str, Any]], str]:
+    def _request_action(self, messages, tool_results, writer, repair: str = "", directive: str = "") -> Tuple[Optional[Dict[str, Any]], str]:
         """Ask for the next action, repairing malformed JSON up to json_retries times."""
-        prompt = self._build_action_prompt(messages, tool_results, repair)
+        prompt = self._build_action_prompt(messages, tool_results, repair, directive)
         raw = self._call_llm(prompt, writer)
         data = extract_json(raw)
         if data is not None:
             return data, raw
         for _attempt in range(self.json_retries):
-            prompt = self._build_action_prompt(messages, tool_results, repair=raw)
+            prompt = self._build_action_prompt(messages, tool_results, repair=raw, directive=directive)
             raw = self._call_llm(prompt, writer)
             data = extract_json(raw)
             if data is not None:
@@ -540,6 +571,8 @@ class GraphAgent:
     # Loop helpers (mirror AgentEngine's wording for consistent statuses)
     # ------------------------------------------------------------------
     def _announce_plan(self, calls, writer) -> None:
+        if not calls:
+            return
         if len(calls) == 1:
             writer({"event": "status", "text": f"→ {self._describe(calls[0])}"})
         else:
@@ -547,6 +580,46 @@ class GraphAgent:
             for index, call in enumerate(calls, 1):
                 writer({"event": "status", "text": f"  {index}. {self._describe(call)}"})
         writer({"event": "status", "text": ""})
+
+    def _finish_or_direct(self, state, messages, answer, raw, step, writer) -> Dict[str, Any]:
+        """Finish with *answer*, or loop once more to read unread files.
+
+        For folder-wide summarize requests the run should not end while
+        readable files remain unread - the model gets a directive to read
+        them (capped) instead of the premature answer. The directive is
+        surfaced to the UI as a status line.
+        """
+        directive = self._coverage_directive(state, messages)
+        if directive:
+            writer({"event": "status", "text": "📖 Reading remaining files…"})
+            writer({"event": "status", "text": directive})
+            return {
+                "pending_calls": [],
+                "final_answer": "",
+                "directive": directive,
+                "directive_rounds": state.get("directive_rounds", 0) + 1,
+                "step": step + 1,
+            }
+        return {
+            "pending_calls": [],
+            "final_answer": answer,
+            "messages": messages + [{"role": "assistant", "content": answer}],
+            "raw_response": raw,
+            "step": step + 1,
+        }
+
+    def _coverage_directive(self, state, messages) -> str:
+        """A read-coverage directive for summarize asks, or "" when satisfied."""
+        if state.get("directive_rounds", 0) >= self.max_directive_rounds:
+            return ""
+        user_text = ""
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                user_text = msg.get("content", "")
+                break
+        return summarize_directive(
+            user_text, self.workspace, state.get("executed_calls", [])
+        ) or ""
 
     def _signature(self, call: Dict[str, Any]) -> str:
         try:
@@ -586,7 +659,9 @@ class GraphAgent:
         if tool == "edit_file":
             return f"Modified {result.get('path', 'file')}" if result.get("changes_made") else "No changes needed"
         if tool == "read_file":
-            return f"Read {result.get('lines', 0)} lines"
+            path = result.get("path", "")
+            lines = result.get("lines", 0)
+            return f"Read {path} ({lines} lines)" if path else f"Read {lines} lines"
         if tool == "list_directory":
             return f"Found {len(result.get('result', []))} items"
         if tool == "search_files":

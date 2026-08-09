@@ -11,6 +11,8 @@ DONE = '{"reasoning": "done", "tool_calls": [], "answer": "All done."}'
 LIST_DIR = '{"reasoning": "list", "tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}'
 READ_MISSING = '{"reasoning": "read", "tool_calls": [{"tool": "read_file", "parameters": {"path": "missing.txt"}}]}'
 READ_EXISTS = '{"reasoning": "read ok", "tool_calls": [{"tool": "read_file", "parameters": {"path": "present.txt"}}]}'
+READ_A = '{"reasoning": "read a", "tool_calls": [{"tool": "read_file", "parameters": {"path": "a.md"}}]}'
+READ_B = '{"reasoning": "read b", "tool_calls": [{"tool": "read_file", "parameters": {"path": "b.md"}}]}'
 
 
 class FakeLLM:
@@ -58,8 +60,10 @@ def test_failure_driven_retry(tmp_path: Path) -> None:
 def test_step_budget(tmp_path: Path) -> None:
     llm = FakeLLM([WRITE] * 10)
     out = GraphAgent(llm, tmp_path, max_steps=3).process("Do many things")
-    assert len(out["tool_results"]) == 3
-    assert len(llm.calls) == 4  # 3 action calls + synthesized final response
+    # Repeating the identical call is a stale repeat: it runs once, then the
+    # run wraps up instead of burning the whole budget on the same write.
+    assert len(out["tool_results"]) == 1
+    assert len(llm.calls) == 3  # action + stale-repeat round + synthesized final
 
 
 def test_streaming_final_answer_tokens(tmp_path: Path) -> None:
@@ -140,6 +144,144 @@ def test_list_names_reach_model_context(tmp_path: Path) -> None:
     GraphAgent(llm, tmp_path).process("What files exist?")
     assert "alpha.txt" in prompts[1]
     assert "beta.py" in prompts[1]
+
+
+def test_hedged_repeat_terminates_with_answer(tmp_path: Path) -> None:
+    """Model repeats the identical call AND includes an answer - finish with the answer."""
+    (tmp_path / "notes.txt").write_text("a", encoding="utf-8")
+    hedged = (
+        '{"reasoning": "list again", '
+        '"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}], '
+        '"answer": "The folder contains notes.txt."}'
+    )
+    llm = FakeLLM([LIST_DIR, hedged])
+    out = GraphAgent(llm, tmp_path).process("What files are here?")
+    assert out["response"] == "The folder contains notes.txt."
+    assert len(out["tool_results"]) == 1  # listed once, never re-executed
+    assert len(llm.calls) == 2  # no third round
+
+
+def test_all_stale_repeats_wrap_up_early(tmp_path: Path) -> None:
+    """Repeated identical proposals without an answer synthesize immediately."""
+    (tmp_path / "notes.txt").write_text("a", encoding="utf-8")
+    calls: list[str] = []
+
+    def llm(prompt, **kwargs):
+        calls.append(prompt)
+        if len(calls) == 1:
+            return LIST_DIR
+        if len(calls) == 2:
+            return '{"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}'
+        return "The workspace contains notes.txt."
+
+    out = GraphAgent(llm, tmp_path, max_steps=8).process("What files are here?")
+    assert len(out["tool_results"]) == 1
+    assert len(calls) == 3  # action + repeat + one synthesis (not 9)
+    assert "notes.txt" in out["response"]
+
+
+def test_mixed_repeat_and_new_runs_only_new(tmp_path: Path) -> None:
+    """A hedged round with a stale repeat plus a new call executes only the new one."""
+    (tmp_path / "notes.txt").write_text("secret", encoding="utf-8")
+    calls: list[str] = []
+
+    def llm(prompt, **kwargs):
+        calls.append(prompt)
+        if len(calls) == 1:
+            return LIST_DIR
+        if len(calls) == 2:
+            return (
+                '{"tool_calls": ['
+                '{"tool": "list_directory", "parameters": {"path": "."}}, '
+                '{"tool": "read_file", "parameters": {"path": "notes.txt"}}]}'
+            )
+        return DONE
+
+    out = GraphAgent(llm, tmp_path).process("What files are here?")
+    assert [r["tool_name"] for r in out["tool_results"]] == ["list_directory", "read_file"]
+    assert len(calls) == 3
+
+
+def test_hedged_repeat_with_unescaped_path(tmp_path: Path) -> None:
+    """A hedge whose answer contains an unescaped Windows path still parses."""
+    (tmp_path / "notes.txt").write_text("a", encoding="utf-8")
+    raw = (
+        '{"reasoning": "list again", '
+        '"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}], '
+        '"answer": "Found day4\\practice.md"}'
+    )
+    llm = FakeLLM([LIST_DIR, raw])
+    out = GraphAgent(llm, tmp_path).process("What files are here?")
+    assert out["response"] == "Found day4\\practice.md"
+    assert len(out["tool_results"]) == 1  # listed once, never re-executed
+
+
+def test_summarize_directive_forces_full_read(tmp_path: Path) -> None:
+    """A summarize ask must not finish while readable files remain unread."""
+    (tmp_path / "a.md").write_text("alpha", encoding="utf-8")
+    (tmp_path / "b.md").write_text("beta", encoding="utf-8")
+    calls: list[str] = []
+
+    def llm(prompt, **kwargs):
+        calls.append(prompt)
+        n = len(calls)
+        if n == 1:
+            return LIST_DIR
+        if n == 2:
+            return READ_A
+        if n == 3:
+            return DONE  # answers early - the coverage guard must kick in
+        if n == 4:
+            return READ_B  # directive round reads the remaining file
+        return DONE
+
+    statuses: list[str] = []
+    out = GraphAgent(llm, tmp_path).process("summarize the workspace", on_status=statuses.append)
+    assert out["response"] == "All done."
+    reads = [r for r in out["tool_results"] if r.get("tool_name") == "read_file"]
+    assert len(reads) == 2
+    assert "IMPORTANT" in calls[3] and "b.md" in calls[3]
+    assert any("Reading remaining files" in s for s in statuses)
+    assert any("b.md" in s for s in statuses)
+    assert len(calls) == 5
+
+
+def test_non_summarize_ask_gets_no_directive(tmp_path: Path) -> None:
+    (tmp_path / "a.md").write_text("alpha", encoding="utf-8")
+    (tmp_path / "b.md").write_text("beta", encoding="utf-8")
+    calls: list[str] = []
+
+    def llm(prompt, **kwargs):
+        calls.append(prompt)
+        if len(calls) == 1:
+            return LIST_DIR
+        if len(calls) == 2:
+            return READ_A
+        return DONE
+
+    out = GraphAgent(llm, tmp_path).process("what does a.md say")
+    assert out["response"] == "All done."
+    assert len(calls) == 3  # no directive round
+
+
+def test_legitimate_reread_after_mutation_allowed(tmp_path: Path) -> None:
+    """A repeat after a write/edit is NOT stale - the workspace may have changed."""
+    calls: list[str] = []
+
+    def llm(prompt, **kwargs):
+        calls.append(prompt)
+        n = len(calls)
+        if n == 1:
+            return LIST_DIR
+        if n == 2:
+            return WRITE
+        if n == 3:
+            return '{"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}'
+        return DONE
+
+    out = GraphAgent(llm, tmp_path).process("List, write a file, then list again")
+    tools = [r["tool_name"] for r in out["tool_results"]]
+    assert tools.count("list_directory") == 2  # second list ran: a write happened between
 
 
 def test_checkpoint_resume_across_instances(tmp_path: Path) -> None:

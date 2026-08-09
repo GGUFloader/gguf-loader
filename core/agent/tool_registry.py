@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
+
+from .text_extract import extract_text, is_binary, looks_like_binary_text
 
 
 class Tool:
@@ -74,7 +76,8 @@ class ListDirectoryTool(Tool):
 
 class ReadFileTool(Tool):
     name = "read_file"
-    description = "Read the contents of a text file"
+    description = ("Read the contents of a text file (Markdown, code, CSV, ...) or "
+                   "extract the text of a PDF or DOCX file")
     schema = {
         "type": "object",
         "properties": {
@@ -103,9 +106,28 @@ class ReadFileTool(Tool):
                         "tool_name": self.name}
 
             raw_data = path.read_bytes()
+            ext = path.suffix.lower()
+            if ext in (".pdf", ".docx"):
+                content = extract_text(path, raw_data)
+                if content is None:
+                    return {"status": "error",
+                            "error": f"Could not extract text from {ext} file '{raw_path}' "
+                                     "(unsupported or no extractable text)",
+                            "tool_name": self.name}
+                return {"status": "success", "result": content, "tool_name": self.name,
+                        "encoding": ext.lstrip("."), "size": file_size,
+                        "lines": len(content.splitlines()),
+                        "path": str(path.relative_to(self.workspace))}
+
             content, encoding = _decode_bytes(raw_data, params.get("encoding", "auto"))
+            if looks_like_binary_text(raw_data):
+                return {"status": "error",
+                        "error": f"Cannot read '{raw_path}': looks like a binary file "
+                                 "(only text/Markdown, PDF, and DOCX are supported)",
+                        "tool_name": self.name}
             return {"status": "success", "result": content, "tool_name": self.name,
-                    "encoding": encoding, "size": file_size, "lines": len(content.splitlines())}
+                    "encoding": encoding, "size": file_size, "lines": len(content.splitlines()),
+                    "path": str(path.relative_to(self.workspace))}
         except Exception as e:
             return {"status": "error", "error": str(e), "tool_name": self.name}
 
@@ -342,6 +364,8 @@ class SearchFilesTool(Tool):
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         try:
             query = params.get("pattern") or params.get("query", "")
+            if not query or not query.strip():
+                return {"status": "error", "error": "pattern is required", "tool_name": self.name}
             path = self.resolve(params.get("path", "."))
             if not path.is_dir():
                 return {"status": "error", "error": "Directory not found", "tool_name": self.name}
@@ -349,7 +373,10 @@ class SearchFilesTool(Tool):
             for file_path in path.rglob("*"):
                 if file_path.is_file():
                     try:
-                        text = file_path.read_text(encoding="utf-8", errors="ignore")
+                        raw = file_path.read_bytes()
+                        if is_binary(raw):
+                            continue  # skip PDFs/DOCX/images - no clean keyword text
+                        text = raw.decode("utf-8", errors="ignore")
                         if query.lower() in text.lower():
                             results.append(str(file_path.relative_to(self.workspace)))
                     except Exception:
@@ -413,20 +440,33 @@ def tool_content_for_context(result: Dict[str, Any], max_chars: int = 4000) -> O
     return None
 
 
+ALL_TOOL_CLASSES = (
+    ListDirectoryTool, ReadFileTool, WriteFileTool, EditFileTool,
+    SearchFilesTool, RunCommandTool, GitTool,
+)
+
+
 class ToolRegistry:
     """Registry of named tools bound to a single workspace root."""
 
-    def __init__(self, workspace: str | Path) -> None:
+    def __init__(
+        self,
+        workspace: str | Path,
+        *,
+        only: Optional[Sequence[str]] = None,
+    ) -> None:
+        """Register all tools, or only the named subset when *only* is given.
+
+        ``only`` lets callers expose a restricted tool set (e.g. the search
+        planner gets just the read-only tools) without weakening the jail:
+        a tool that is not registered cannot be called at all.
+        """
         self.workspace = Path(workspace).resolve()
         self.workspace.mkdir(parents=True, exist_ok=True)
         self._tools: Dict[str, Tool] = {}
-        self.register(ListDirectoryTool)
-        self.register(ReadFileTool)
-        self.register(WriteFileTool)
-        self.register(EditFileTool)
-        self.register(SearchFilesTool)
-        self.register(RunCommandTool)
-        self.register(GitTool)
+        for tool_cls in ALL_TOOL_CLASSES:
+            if only is None or tool_cls.name in only:
+                self.register(tool_cls)
 
     def register(self, tool_cls: type) -> None:
         tool = tool_cls(self.workspace)
