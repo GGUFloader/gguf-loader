@@ -30,24 +30,22 @@ datas = [
     ('core', 'core'),  # Include the core module directory
 ]
 
-# Add llama_cpp lib folder if found
-if llama_cpp_lib_path and os.path.exists(llama_cpp_lib_path):
-    datas.append((llama_cpp_lib_path, 'llama_cpp/lib'))
-    print(f"Added llama_cpp/lib to datas")
-
-# Collect binaries (DLL files) - CPU only, skip CUDA for size reduction
+# Collect llama_cpp lib files - CPU only. NEVER add the whole directory:
+# that drags in ggml-cuda.dll (~950MB) plus its cublas/cublasLt runtime
+# dependencies (~790MB more). Add file-by-file and skip anything CUDA.
 binaries = []
 if llama_cpp_lib_path and os.path.exists(llama_cpp_lib_path):
-    # Add only CPU DLL files, skip CUDA (saves 400-500MB)
     for file in os.listdir(llama_cpp_lib_path):
-        if file.endswith('.dll'):
-            # Skip CUDA files to reduce size
-            if 'cuda' in file.lower():
-                print(f"Skipped CUDA binary (size reduction): {file}")
-                continue
-            dll_path = os.path.join(llama_cpp_lib_path, file)
-            binaries.append((dll_path, 'llama_cpp/lib'))
+        if 'cuda' in file.lower() or 'cublas' in file.lower():
+            print(f"Skipped CUDA file (size reduction): {file}")
+            continue
+        file_path = os.path.join(llama_cpp_lib_path, file)
+        if file.lower().endswith('.dll'):
+            binaries.append((file_path, 'llama_cpp/lib'))
             print(f"Added binary: {file}")
+        elif os.path.isfile(file_path):
+            datas.append((file_path, 'llama_cpp/lib'))
+            print(f"Added llama_cpp data file: {file}")
 
 
 # Collect hidden imports - be explicit about all modules
@@ -113,7 +111,24 @@ hiddenimports = [
     'addons.floating_chat.floating_button',
     'addons.floating_chat.status_widget',
     'addons.floating_chat.__init__',
+
+    # Search (Find Paragraph) + text extraction
+    'core.search',
+    'core.search.paragraph_search',
+    'core.search.planner',
+    'core.agent.text_extract',
+    'core.engine',
+    'core.engine.protocol',
+    'core.engine.llama_cpp_engine',
+    'services.search_service',
+    'ui.find_dialog',
 ]
+
+# LangGraph/LangChain and pydantic are imported through the agent graph;
+# collect all their submodules so lazy imports never fail in the frozen app.
+for _pkg in ('langgraph', 'langchain_core', 'pydantic', 'pydantic_core'):
+    hiddenimports += collect_submodules(_pkg)
+
 
 # Windows-specific imports
 if sys.platform == 'win32':
@@ -162,8 +177,9 @@ a = Analysis(
         # Documentation tools
         'sphinx', 'docutils',
         
-        # Heavy agent dependencies (saves ~300MB)
-        'pydantic', 'pydantic_core', 'PyPDF2',
+        # PyPDF2 is unused (PDF extraction is stdlib); pydantic must NOT be
+        # excluded - langgraph/langchain-core require it.
+        'PyPDF2',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
