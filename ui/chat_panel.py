@@ -16,44 +16,8 @@ from PySide6.QtWidgets import (
 )
 
 from config import BUBBLE_FONT_SIZE, CHAT_BUBBLE_FONT_SIZE, FONT_FAMILY
-from widgets.chat_bubble import ChatBubble
-
-
-class _BubbleRow(QWidget):
-    """Row that anchors a bubble to its side and caps its width.
-
-    ChatGPT-style: user bubbles sit on the right, assistant on the left,
-    and neither stretches full-width - they hug their content up to ~75%
-    of the conversation column.
-    """
-
-    def __init__(self, bubble: ChatBubble, is_user: bool, is_rtl: bool = False,
-                 parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._bubble = bubble
-        row = QHBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(0)
-        # Same XOR as the bubble's tail: user bubbles go right in LTR but
-        # left in RTL (ChatGPT mirrors the whole conversation).
-        if is_user != is_rtl:
-            row.addStretch(1)
-            row.addWidget(bubble)
-        else:
-            row.addWidget(bubble)
-            row.addStretch(1)
-        self._apply_max_width()
-
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
-        super().resizeEvent(event)
-        self._apply_max_width()
-
-    def _apply_max_width(self) -> None:
-        width = self.width()
-        if width <= 0:
-            return
-        # Fit the bubble to its text, capped at 75% of the conversation column.
-        self._bubble.fit_width(max(240, int(width * 0.75)))
+from ui.agent_panel import AgentPanel
+from widgets.chat_bubble import ChatBubble, _BubbleRow
 
 
 class MessageInput(QTextEdit):
@@ -137,6 +101,10 @@ class ChatPanel(QWidget):
         self.chat_stack = QStackedWidget()
         self.chat_stack.addWidget(self.empty_state)
         self.chat_stack.addWidget(self.chat_container)
+        # Agent mode gets its own structured transcript page.
+        self.agent_panel = AgentPanel()
+        self.chat_stack.addWidget(self.agent_panel)
+        self._agent_panel_visible = False
         self.chat_stack.setCurrentIndex(0)
 
         self.chat_scroll.setWidget(self.chat_stack)
@@ -269,6 +237,8 @@ class ChatPanel(QWidget):
         self._bubbles.clear()
         self._current_ai_bubble = None
         self._current_ai_text = ""
+        if hasattr(self, "agent_panel"):
+            self.agent_panel.clear()
         if not self._bubbles:
             self.empty_state.show()
 
@@ -361,9 +331,19 @@ class ChatPanel(QWidget):
         bubble.set_font_size(self._font_size)
         bubble.update_style(self._is_dark)
 
+    def set_agent_panel_visible(self, visible: bool) -> None:
+        """Switch the display between the chat and the agent transcript."""
+        self._agent_panel_visible = visible
+        if visible:
+            self.chat_stack.setCurrentIndex(2)
+        else:
+            self._maybe_hide_empty_state()
+
     def _maybe_hide_empty_state(self) -> None:
         """Swap between the empty-state hero and the live chat container."""
         if not hasattr(self, "chat_stack"):
+            return
+        if getattr(self, "_agent_panel_visible", False):
             return
         has_content = bool(self._bubbles) or self._current_ai_bubble is not None
         self.chat_stack.setCurrentIndex(1 if has_content else 0)

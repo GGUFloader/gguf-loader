@@ -174,6 +174,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         for s, action in self._text_size_actions.items():
             action.setChecked(s == size)
         self.chat_panel.apply_font_size(size)
+        self.chat_panel.agent_panel.apply_font_size(size)
 
     def _show_about(self) -> None:
         from __init__ import __version__
@@ -259,10 +260,13 @@ class MainWindow(QMainWindow, ThemeMixin):
         a = self._agent_service
         a.response_generated.connect(self._on_agent_response)
         a.tool_executed.connect(self._on_agent_tool_executed)
+        a.token_received.connect(self._on_agent_token)
+        a.approval_requested.connect(self._on_agent_approval)
+        a.cancelled.connect(self._on_agent_cancelled)
         a.error_occurred.connect(self._on_agent_error)
         a.processing_started.connect(lambda: self.chat_panel.set_agent_status("🟡 Processing..."))
         a.processing_finished.connect(lambda: self.chat_panel.set_agent_status("🟢 Ready"))
-        a.status_update.connect(self.chat_panel.add_system_message)
+        a.status_update.connect(self._on_agent_status)
 
         g = self._gpu_install_service
         g.output.connect(self.sidebar.append_gpu_output)
@@ -445,9 +449,10 @@ class MainWindow(QMainWindow, ThemeMixin):
             return
 
         p.set_placeholder("Type your message to the agent...")
+        self.chat_panel.set_agent_panel_visible(enabled)
         if not self._model_service.is_loaded:
             p.set_agent_status("❌ No model")
-            p.add_system_message("⚠️ Please load a model first")
+            self.chat_panel.agent_panel.add_status("⚠️ Please load a model first")
             return
         self._init_agent()
 
@@ -463,7 +468,7 @@ class MainWindow(QMainWindow, ThemeMixin):
 
         self._agent_service.create_engine(self._model_service.backend, workspace)
         p.set_agent_status("🟢 Ready")
-        p.add_system_message(f"🤖 Agent mode activated\n📁 Workspace: {workspace}")
+        self.chat_panel.agent_panel.add_status(f"🤖 Agent mode activated\n📁 Workspace: {workspace}")
 
     def _browse_workspace(self) -> None:
         path = QFileDialog.getExistingDirectory(
@@ -476,38 +481,41 @@ class MainWindow(QMainWindow, ThemeMixin):
     def _send_to_agent(self, text: str) -> None:
         engine = self._agent_service.engine
         if engine is None:
-            self.chat_panel.add_system_message("⚠️ Agent not initialized")
+            self.chat_panel.agent_panel.add_status("⚠️ Agent not initialized")
             return
-        self.chat_panel.add_user_message(text)
+        panel = self.chat_panel.agent_panel
+        panel.add_user_message(text)
+        # The graph streams the final answer's tokens into a live bubble.
+        panel.begin_streaming()
         self._agent_service.process_message(engine, text)
 
+    def _on_agent_status(self, text: str) -> None:
+        self.chat_panel.agent_panel.add_status(text)
+
+    def _on_agent_approval(self, payload: dict, waiter) -> None:
+        """Show an approval card; Allow/Deny resolves the graph's interrupt."""
+        self.chat_panel.agent_panel.add_approval_card(payload, waiter)
+
+    def _on_agent_token(self, token: str) -> None:
+        self.chat_panel.agent_panel.stream_token(token)
+
     def _on_agent_response(self, response: str) -> None:
-        self.chat_panel.add_ai_message(response)
+        streamed = self.chat_panel.agent_panel.finish_streaming()
+        if not streamed:
+            self.chat_panel.agent_panel.add_ai_message(response)
+
+    def _on_agent_cancelled(self) -> None:
+        panel = self.chat_panel.agent_panel
+        panel.finish_streaming()
+        panel.mark_cancelled()
+        panel.add_status("⏹ Agent run cancelled")
 
     def _on_agent_tool_executed(self, result: dict) -> None:
-        tool = result.get("tool_name", "unknown")
-        if result.get("status") == "success":
-            if tool == "write_file":
-                self.chat_panel.add_system_message(
-                    f"✅ Wrote {result.get('bytes_written', 0)} bytes to {result.get('path', 'file')}")
-            elif tool == "edit_file":
-                self.chat_panel.add_system_message(
-                    f"✅ {result.get('operation', 'edit')}: {result.get('changes_made', 0)} change(s)")
-            elif tool == "read_file":
-                self.chat_panel.add_system_message(f"✅ Read {result.get('lines', 0)} lines")
-            elif tool == "list_directory":
-                self.chat_panel.add_system_message(
-                    f"✅ Listed directory ({len(result.get('result', []))} items)")
-            elif tool == "search_files":
-                self.chat_panel.add_system_message(
-                    f"✅ Search completed ({result.get('total_matches', 0)} matches)")
-            else:
-                self.chat_panel.add_system_message(f"✅ {tool} completed")
-        else:
-            self.chat_panel.add_system_message(f"❌ {tool} failed: {result.get('error', 'Unknown error')}")
+        self.chat_panel.agent_panel.add_tool_card(result)
 
     def _on_agent_error(self, message: str) -> None:
-        self.chat_panel.add_system_message(f"❌ Error: {message}")
+        self.chat_panel.agent_panel.finish_streaming()
+        self.chat_panel.agent_panel.add_status(f"❌ Error: {message}")
         self.chat_panel.set_agent_status("🟢 Ready")
 
     # ------------------------------------------------------------------
@@ -517,6 +525,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.is_dark_mode = enabled
         self.apply_styles()
         self.chat_panel.apply_theme(enabled)
+        self.chat_panel.agent_panel.apply_theme(enabled)
         self.theme_changed.emit(enabled)
 
     def _show_feedback_dialog(self) -> None:

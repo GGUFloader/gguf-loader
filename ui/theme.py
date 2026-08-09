@@ -103,6 +103,21 @@ QLabel#agentStatus[state="ok"] { color: $success; }
 QLabel#agentStatus[state="busy"] { color: $warn; }
 QLabel#agentStatus[state="err"] { color: $danger; }
 
+/* ---- agent transcript ---- */
+QLabel#stepChip { background-color: $elevated; border: 1px solid $border;
+                  border-radius: 10px; padding: 3px 12px; color: $textSec;
+                  font-size: 11px; }
+QFrame#toolCard { background-color: $elevated; border: 1px solid $border;
+                  border-radius: 10px; }
+QFrame#approvalCard { background-color: $elevated;
+                      border: 1px solid $accentBorder; border-radius: 10px; }
+QLabel#toolCardTitle { color: $text; font-size: 12px; font-weight: bold; }
+QLabel#toolCardSub { color: $textSec; font-size: 11px; }
+QLabel#approvalTitle { color: $warn; font-size: 12px; font-weight: bold; }
+QLabel#monoText { font-family: Consolas, "Courier New", monospace;
+                  color: $textSec; font-size: 11px; background-color: $bg;
+                  border-radius: 6px; padding: 6px 8px; }
+
 /* ---- buttons ---- */
 QPushButton { background-color: $elevated; color: $textSec;
               border: 1px solid $border; border-radius: 8px;
@@ -128,6 +143,12 @@ QPushButton#gpuInstallBtn[state="ok"] { background-color: $accentSoft;
     color: $success; border-color: $success; font-weight: bold; }
 QPushButton#gpuInstallBtn[state="ok"]:hover { background-color: $accentSoft;
     color: $success; border-color: $success; }
+QPushButton#dangerButton { background-color: $danger; color: #ffffff;
+                           border: none; font-weight: bold; }
+QPushButton#dangerButton:hover { background-color: $dangerHover; }
+QPushButton#dangerButton:pressed { background-color: $danger; }
+QPushButton#dangerButton:disabled { background-color: $disabledBg;
+                                     color: $textMuted; }
 
 /* ---- inputs ---- */
 QComboBox, QLineEdit, QTextEdit { background-color: $elevated; color: $text;

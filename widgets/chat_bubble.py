@@ -7,9 +7,9 @@ asymmetric "tail" corners and are capped at ~75% of the conversation
 column by their containing row (ui/chat_panel._BubbleRow).
 """
 
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
-from PySide6.QtGui import QFontMetrics
-from PySide6.QtCore import QRect, Qt
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtGui import QFontMetrics, QTextOption
+from PySide6.QtCore import Qt
 from utils import detect_persian_text
 from config import CHAT_BUBBLE_FONT_SIZE
 from ui.theme import DARK_TOKENS, LIGHT_TOKENS
@@ -18,6 +18,81 @@ from ui.theme import DARK_TOKENS, LIGHT_TOKENS
 # almost flat, mimicking ChatGPT's "tail". Mirrored for RTL conversations.
 _TAIL_RADIUS_LTR = "20px 20px 4px 20px"    # bubble on the right -> tail BR
 _TAIL_RADIUS_RTL = "20px 4px 20px 20px"    # bubble on the left  -> tail BL
+
+
+class _BubbleText(QTextEdit):
+    """Read-only text area for bubbles that breaks long unbroken runs.
+
+    QLabel's word-wrap only breaks at word boundaries, so token-streamed
+    text without spaces (common with raw llama.cpp output), code and URLs
+    overflowed the bubble in one endless line. QTextEdit with
+    ``WrapAtWordBoundaryOrAnywhere`` breaks anywhere, and keeps native
+    selection/copy/context menu. QSS ``font-size`` does not drive a
+    QTextEdit's document, so the font is set explicitly in pixels.
+    """
+
+    _PAD_X = 32  # matches the QSS padding (10px 16px) the bubble applies
+    _PAD_Y = 20  # 10px top + 10px bottom
+
+    def __init__(self, text: str = "", parent=None) -> None:
+        # Construct empty and set the text as PLAIN text explicitly: the
+        # QTextEdit(QString) constructor auto-detects HTML, which would
+        # swallow angle brackets in ordinary user/AI messages.
+        super().__init__("", parent)
+        self.setPlainText(text)
+        self.setReadOnly(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.setMinimumSize(0, 0)
+        self.document().setDocumentMargin(0)
+        self._rich = False
+
+    # --- ChatBubble's label API -------------------------------------
+    def setWordWrap(self, wrap: bool) -> None:
+        self.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+
+    def setTextFormat(self, fmt) -> None:
+        self._rich = fmt == Qt.RichText
+
+    def setText(self, text: str) -> None:
+        if self._rich:
+            self.setHtml(text)
+        else:
+            self.setPlainText(text)
+
+    def text(self) -> str:
+        return self.toPlainText()
+
+    def setFont(self, font) -> None:
+        # The bubble historically styled labels with QSS ``font-size: Npx``.
+        # QSS sizes do not reach a QTextEdit's document, so translate the
+        # point size the caller passes into the same numeric pixel size.
+        if font.pointSizeF() > 0 and font.pixelSize() < 0:
+            font.setPixelSize(max(int(font.pointSizeF()), 1))
+        super().setFont(font)
+
+    def setAlignment(self, alignment) -> None:
+        # QTextEdit only aligns blocks horizontally; strip vertical flags.
+        horizontal = alignment & (Qt.AlignLeft | Qt.AlignRight | Qt.AlignHCenter | Qt.AlignJustify)
+        if not horizontal:
+            horizontal = Qt.AlignLeft
+        super().setAlignment(horizontal)
+
+    def heightForWidth(self, w: int) -> int:
+        """Height the wrapped text needs at widget width *w*."""
+        text_w = max(int(w) - self._PAD_X, 1)
+        doc = self.document()
+        doc.setDefaultFont(self.font())
+        doc.setTextWidth(text_w)
+        return int(doc.size().height()) + self._PAD_Y
+
+    def adjustSize(self) -> None:
+        # The bubble is fixed-size; the inner text area must not fight it.
+        return
+
 
 class ChatBubble(QFrame):
     """Custom chat bubble widget with automatic RTL/LTR detection"""
@@ -36,9 +111,8 @@ class ChatBubble(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Create text label
-        self.label = QLabel(text)
-        self.label.setWordWrap(True)
+        # Create text area (wraps anywhere, see _BubbleText)
+        self.label = _BubbleText(text)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.label.setContextMenuPolicy(Qt.DefaultContextMenu)
 
@@ -80,9 +154,26 @@ class ChatBubble(QFrame):
 
         # Ideal single-line width, clamped to the cap.
         width = min(max(fm.horizontalAdvance(text) + pad_x, self.minimumWidth()), cap)
-        # Height of the text wrapped at that width.
-        rect = fm.boundingRect(QRect(0, 0, max(width - pad_x, 1), 100000), Qt.TextWordWrap, text)
-        height = max(rect.height() + pad_y, fm.height() + pad_y)
+
+        # Fix the width first so the label's available area is known.
+        self.setFixedWidth(width)
+        # The label's horizontal room is the frame's contents rect (QSS
+        # border + margin excluded).
+        label_w = self.contentsRect().width()
+        if label_w <= 0:
+            label_w = max(width - pad_x, 1)
+
+        # Height: ask the label itself how tall it needs to be at that
+        # width. QFontMetrics.boundingRect under-estimates the wrapped
+        # height, clipping the bottom lines of multi-line bubbles (their
+        # text ran under the bubble padding). QLabel.heightForWidth uses
+        # the label's real layout engine and QSS font, so it is
+        # authoritative. Add back the vertical chrome (border + margin).
+        label_h = self.label.heightForWidth(label_w)
+        if label_h <= 0:
+            label_h = fm.height()
+        inset_y = self.height() - self.contentsRect().height()
+        height = max(label_h + inset_y, fm.height() + pad_y)
 
         if self.width() != width or self.height() != height:
             self.setFixedSize(width, height)
@@ -154,10 +245,12 @@ class ChatBubble(QFrame):
                     border-radius: {radius};
                 }}
                 QFrame:hover {{ background-color: {t["accentHover"]}; }}
-                QLabel {{
+                QLabel, QTextEdit {{
                     color: {t["onAccent"]};
                     font-size: {font_size}px;
                     padding: 10px 16px;
+                    background: transparent;
+                    border: none;
                     selection-background-color: {t["accentSelection"]};
                     selection-color: {t["onAccent"]};
                 }}
@@ -172,10 +265,12 @@ class ChatBubble(QFrame):
                 }}
                 QFrame:hover {{ background-color: {t["elevatedHover"]};
                                 border-color: {t["borderStrong"]}; }}
-                QLabel {{
+                QLabel, QTextEdit {{
                     color: {t["text"]};
                     font-size: {font_size}px;
                     padding: 10px 16px;
+                    background: transparent;
+                    border: none;
                     selection-background-color: {t["accentSoft"]};
                     selection-color: {t["text"]};
                 }}
@@ -209,3 +304,40 @@ class ChatBubble(QFrame):
         self._current_font_size = size
         # Re-apply the current style mode with new font size
         self.update_style(self._is_dark_mode)
+
+
+class _BubbleRow(QWidget):
+    """Row that anchors a bubble to its side and caps its width.
+
+    ChatGPT-style: user bubbles sit on the right, assistant on the left,
+    and neither stretches full-width - they hug their content up to ~75%
+    of the conversation column.
+    """
+
+    def __init__(self, bubble: ChatBubble, is_user: bool, is_rtl: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._bubble = bubble
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        # Same XOR as the bubble's tail: user bubbles go right in LTR but
+        # left in RTL (ChatGPT mirrors the whole conversation).
+        if is_user != is_rtl:
+            row.addStretch(1)
+            row.addWidget(bubble)
+        else:
+            row.addWidget(bubble)
+            row.addStretch(1)
+        self._apply_max_width()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().resizeEvent(event)
+        self._apply_max_width()
+
+    def _apply_max_width(self) -> None:
+        width = self.width()
+        if width <= 0:
+            return
+        # Fit the bubble to its text, capped at 75% of the conversation column.
+        self._bubble.fit_width(max(240, int(width * 0.75)))
