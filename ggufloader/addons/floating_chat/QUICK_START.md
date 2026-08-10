@@ -6,7 +6,7 @@ Get started with the Facebook Messenger-style floating chat button in under 2 mi
 
 ### Step 1: Launch GGUF Loader
 ```bash
-python launch.py
+python main.py
 ```
 
 ### Step 2: Load an AI Model
@@ -77,7 +77,7 @@ The button might be off-screen. To reset:
 ### Button not draggable on Linux?
 If using Wayland, try:
 ```bash
-QT_QPA_PLATFORM=xcb python launch.py
+QT_QPA_PLATFORM=xcb python main.py
 ```
 
 ## 🎯 Next Steps

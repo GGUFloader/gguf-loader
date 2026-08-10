@@ -262,6 +262,8 @@ all three platforms:
 ## 📚 Documentation
 
 - [Quick Reference](QUICK_REFERENCE.md)
+- [Developing Addons](ggufloader/addons/README.md)
+- [AGENTS.md](AGENTS.md) — codebase guide for AI coding agents
 - [Architecture](ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
