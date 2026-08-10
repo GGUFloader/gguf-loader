@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from core.agent import GraphAgent, ToolRegistry
-from core.agent.tool_registry import tool_content_for_context
+from ggufloader.core.agent import GraphAgent, ToolRegistry
+from ggufloader.core.agent.tool_registry import tool_content_for_context
 
 RUN_CMD = ('{"tool_calls": [{"tool": "run_command", "parameters": '
            '{"command": "echo approved > marker.txt"}}]}')

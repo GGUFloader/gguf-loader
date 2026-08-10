@@ -2,8 +2,8 @@
 
 import pytest
 
-from core.engine import ChatDelta, EngineInfo, LlamaCppEngine, ModelEngine
-from core.engine.llama_cpp_engine import _parse_offloaded
+from ggufloader.core.engine import ChatDelta, EngineInfo, LlamaCppEngine, ModelEngine
+from ggufloader.core.engine.llama_cpp_engine import _parse_offloaded
 
 
 class FakeEngine:

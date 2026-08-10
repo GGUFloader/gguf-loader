@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from core.agent import ToolRegistry
+from ggufloader.core.agent import ToolRegistry
 
 
 def test_path_escape_is_blocked(tmp_path: Path) -> None:

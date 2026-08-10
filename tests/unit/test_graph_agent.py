@@ -4,7 +4,7 @@ import threading
 import time
 from pathlib import Path
 
-from core.agent import GraphAgent
+from ggufloader.core.agent import GraphAgent
 
 WRITE = '{"reasoning": "writing", "tool_calls": [{"tool": "write_file", "parameters": {"path": "notes.md", "content": "Hello"}}]}'
 DONE = '{"reasoning": "done", "tool_calls": [], "answer": "All done."}'

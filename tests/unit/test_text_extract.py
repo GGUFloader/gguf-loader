@@ -5,8 +5,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-from core.agent.text_extract import extract_text, is_binary, looks_like_binary_text
-from core.agent.tool_registry import ToolRegistry
+from ggufloader.core.agent.text_extract import extract_text, is_binary, looks_like_binary_text
+from ggufloader.core.agent.tool_registry import ToolRegistry
 
 
 # ---------------------------------------------------------------------------

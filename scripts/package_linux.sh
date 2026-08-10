@@ -7,7 +7,7 @@
 # environment (the binary itself is built for Linux).
 #
 # Usage:  ./scripts/package_linux.sh
-# Output: dist/GGUFLoader_v<version>_linux_x86_64.tar.gz
+# Output: dist/GGUFLoader_v<version>_linux_x86_64_CPU.tar.gz
 #
 # Set PYTHON to a Python with Pillow if you want icon.png generated
 # (e.g.  PYTHON=~/.venv/bin/python ./scripts/package_linux.sh).
@@ -15,8 +15,8 @@
 set -euo pipefail
 
 VERSION="2.1.2"
-BIN_NAME="GGUFLoader_v${VERSION}_linux_x86_64"
-TARBALL="dist/GGUFLoader_v${VERSION}_linux_x86_64.tar.gz"
+BIN_NAME="GGUFLoader_v${VERSION}_linux_x86_64_CPU"
+TARBALL="dist/GGUFLoader_v${VERSION}_linux_x86_64_CPU.tar.gz"
 FOLDER="GGUFLoader-v${VERSION}-linux"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STAGE="$(mktemp -d)"

@@ -5,7 +5,45 @@ All notable changes to GGUF Loader will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.0] - 2026-08-11
+
+### Added
+
+- **PyPI distribution** (`pyproject.toml`): `pip install ggufloader` installs
+  the app; launch with the `ggufloader` command. Ships the flat-layout app
+  modules plus a `ggufloader` compat package (icons included as package data).
+- **Installed-package mode** in the resource manager: data/config/cache/logs
+  now live in the per-user data dir instead of site-packages when running
+  from a pip install, and deployment detection no longer mistakes the repo
+  checkout for an installed copy.
+- **GPU & CPU executable variants**: releases now ship both a CUDA-enabled
+  `GGUFLoader_v<version>_GPU.exe` (~850 MB) and a CPU-only
+  `GGUFLoader_v<version>_CPU.exe` (~70 MB); Linux binaries are named
+  `GGUFLoader_v<version>_linux_x86_64_CPU`. `scripts/build_exe.bat` detects
+  the installed llama-cpp-python build and names the output automatically, and
+  the build scripts keep previously built artifacts instead of wiping `dist/`.
+- **Hardened launchers** (`launch.sh`): clear, actionable preflight errors
+  when Python 3.10+ is missing, `python3-venv` is absent (falls back to
+  `virtualenv`), PyPI is unreachable, or the Linux C toolchain is missing — in
+  which case llama-cpp-python is installed from abetlen's prebuilt CPU wheel
+  index instead of failing a source build.
+
+### Changed
+
+- **Find Paragraph folder scans are much faster**: directory traversal now
+  prunes build/dependency dirs (`.venv`, `node_modules`, `.git`, ...) as it
+  walks instead of scanning the whole tree first, and hit dedup normalizes
+  each quote once instead of re-running a regex on every comparison — ~40x
+  faster on a repo-sized workspace with identical results.
+
+### Fixed
+
+- **Collision-proof pip installs**: the whole app now ships inside a single
+  `ggufloader` package (previously the wheel installed top-level `config`,
+  `utils`, `main`, `ui`, `core`, `services`, `widgets`, `addons` modules into
+  site-packages, which could silently break - or be broken by - another
+  package in a shared/global environment). `pip install ggufloader` now claims
+  only the `ggufloader` name; the app imports are `ggufloader.xxx`.
 
 ---
 
@@ -151,7 +189,8 @@ python gguf_loader_main.py
 
 ---
 
-[Unreleased]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/GGUFloader/gguf-loader/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.2...v2.2.0
 [2.1.2]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/GGUFloader/gguf-loader/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/GGUFloader/gguf-loader/compare/v2.0.1...v2.1.0

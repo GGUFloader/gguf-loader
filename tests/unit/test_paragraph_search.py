@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from core.agent.tool_registry import ToolRegistry
-from core.search.paragraph_search import Hit, ParagraphSearcher, extract_keywords, read_text_file
-from core.search.planner import SearchPlanner
+from ggufloader.core.agent.tool_registry import ToolRegistry
+from ggufloader.core.search.paragraph_search import Hit, ParagraphSearcher, extract_keywords, read_text_file
+from ggufloader.core.search.planner import SearchPlanner
 
 MARKER = "@@TARGET@@"
 

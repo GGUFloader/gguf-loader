@@ -2,8 +2,8 @@
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from core.engine import ChatDelta
-from core.engine.langchain_adapter import LlamaCppChatModel, _message_to_dict
+from ggufloader.core.engine import ChatDelta
+from ggufloader.core.engine.langchain_adapter import LlamaCppChatModel, _message_to_dict
 
 
 class FakeChatEngine:

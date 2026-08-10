@@ -16,7 +16,7 @@
 set -euo pipefail
 
 VERSION="2.1.2"
-BIN_NAME="GGUFLoader_v${VERSION}_linux_x86_64"
+BIN_NAME="GGUFLoader_v${VERSION}_linux_x86_64_CPU"
 LAUNCHER_NAME="gguf-loader"
 APP_NAME="GGUF Loader"
 

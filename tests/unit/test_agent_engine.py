@@ -4,8 +4,8 @@ from pathlib import Path
 
 import json
 
-from core.agent import AgentEngine, ToolRegistry
-from core.agent.agent_engine import extract_json, summarize_directive
+from ggufloader.core.agent import AgentEngine, ToolRegistry
+from ggufloader.core.agent.agent_engine import extract_json, summarize_directive
 
 WRITE = '{"reasoning": "writing", "tool_calls": [{"tool": "write_file", "parameters": {"path": "notes.md", "content": "Hello"}}]}'
 DONE = '{"reasoning": "done", "tool_calls": [], "answer": "All done."}'

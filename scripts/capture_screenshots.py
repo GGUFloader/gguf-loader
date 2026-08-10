@@ -3,11 +3,14 @@
 Capture screenshots of the current GGUF Loader UI.
 
 Renders the real widgets (not mockups), so the images always reflect the
-actual theme, bubbles, and layout. Writes:
+actual theme, bubbles, and layout. IMPORTANT: run WITHOUT
+QT_QPA_PLATFORM=offscreen - the offscreen platform renders a sparse,
+near-blank window (text/bubbles don't paint), so captures must happen on a
+real display. Writes:
 
-  screen.png                     - main window, dark theme  (tracked, README)
-  ui_preview_dark.png            - main window, dark theme  (local preview)
+  screen.png                     - main window, light theme (tracked, README - the app default)
   ui_preview_light.png           - main window, light theme (local preview)
+  ui_preview_dark.png            - main window, dark theme  (local preview)
   ui_preview_floating_dark.png   - floating chat, dark      (local preview)
   ui_preview_floating_light.png  - floating chat, light     (local preview)
   _bubble_dark.png / _bubble_light.png - bubble close-ups   (local preview)
@@ -25,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget  # noqa: E402
 
-from ui.theme import DARK_TOKENS, LIGHT_TOKENS  # noqa: E402
+from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS  # noqa: E402
 
 SAMPLE_USER = "What local models work best for writing Python code?"
 SAMPLE_AI = (
@@ -80,7 +83,7 @@ def bubble_stage(is_dark: bool) -> QWidget:
         f"QWidget#bubbleStage {{ background-color: {tokens['bg']}; }}"
     )
 
-    from widgets.chat_bubble import ChatBubble
+    from ggufloader.widgets.chat_bubble import ChatBubble
     layout = QVBoxLayout(stage)
     layout.setContentsMargins(24, 24, 24, 24)
     layout.setSpacing(14)
@@ -96,6 +99,21 @@ def bubble_stage(is_dark: bool) -> QWidget:
     return stage
 
 
+def hd_grab(widget) -> "QPixmap":
+    """Crisp 2x capture: paint the widget into a device-pixel-ratio-2 pixmap.
+
+    ``widget.grab()`` rasterizes at 1x logical pixels, which looks soft when
+    browsers upscale it. Rendering into a 2x-DPR pixmap doubles the output
+    resolution (e.g. 1440x900 window -> 2880x1800 image) for sharp text.
+    """
+    from PySide6.QtGui import QPixmap
+    size = widget.size()
+    pm = QPixmap(size.width() * 2, size.height() * 2)
+    pm.setDevicePixelRatio(2.0)
+    widget.render(pm)
+    return pm
+
+
 def save(pixmap, name: str) -> None:
     target = ROOT / name
     ok = pixmap.save(str(target))
@@ -105,23 +123,25 @@ def save(pixmap, name: str) -> None:
 def main() -> int:
     app = QApplication(sys.argv)
 
-    from ui.main_window import MainWindow
+    from ggufloader.ui.main_window import MainWindow
 
-    print("Rendering main window (dark)...")
+    print("Rendering main window (light - the app default)...")
     window = MainWindow()
+    window.resize(1440, 900)  # a bit wider than default for the hero screenshot
     window.show()
     pump(800)
     populate_main_window(window)
     pump(700)
 
-    save(window.grab(), "screen.png")
-    save(window.grab(), "ui_preview_dark.png")
-
-    # ---- light theme ----
-    print("Rendering main window (light)...")
-    window._on_dark_mode_toggled(False)
-    pump(500)
+    # screen.png is the README/site hero image - capture it at 2x (HD).
+    save(hd_grab(window), "screen.png")
     save(window.grab(), "ui_preview_light.png")
+
+    # ---- dark theme ----
+    print("Rendering main window (dark)...")
+    window._on_dark_mode_toggled(True)
+    pump(500)
+    save(window.grab(), "ui_preview_dark.png")
 
     # ---- floating chat (starts light; the addon follows the main theme) ----
     addon = window._floating_chat_addon

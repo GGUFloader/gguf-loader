@@ -26,8 +26,7 @@ except Exception as e:
 datas = [
     ('icon.ico', '.'),
     ('float.png', '.'),  # Floating chat button icon
-    ('addons/floating_chat', 'addons/floating_chat'),  # Only include floating_chat, not agentic_chatbot
-    ('core', 'core'),  # Include the core module directory
+    ('ggufloader/addons/floating_chat', 'ggufloader/addons/floating_chat'),  # Only include floating_chat
 ]
 
 # Collect llama_cpp lib files - CPU only. NEVER add the whole directory:
@@ -63,65 +62,70 @@ hiddenimports = [
     'pyperclip',
     'psutil',
     
-    # Application modules
-    'addon_manager',
-    'resource_manager',
-    'config',
-    'utils',
+    # Application modules (all nested inside the ggufloader package)
+    'ggufloader',
+    'ggufloader._version',
+    'ggufloader.addon_manager',
+    'ggufloader.resource_manager',
+    'ggufloader.config',
+    'ggufloader.utils',
+    'ggufloader.main',
 
     # UI package
-    'ui',
-    'ui.main_window',
-    'ui.sidebar_panel',
-    'ui.chat_panel',
-    'ui.theme',
-    'ui.__init__',
+    'ggufloader.ui',
+    'ggufloader.ui.main_window',
+    'ggufloader.ui.sidebar_panel',
+    'ggufloader.ui.chat_panel',
+    'ggufloader.ui.agent_panel',
+    'ggufloader.ui.theme',
+    'ggufloader.ui.__init__',
 
     # Widgets package
-    'widgets',
-    'widgets.chat_bubble',
-    'widgets.feedback_dialog',
-    'widgets.__init__',
+    'ggufloader.widgets',
+    'ggufloader.widgets.chat_bubble',
+    'ggufloader.widgets.feedback_dialog',
+    'ggufloader.widgets.__init__',
 
     # Core package
-    'core',
-    'core.__init__',
-    'core.llm',
-    'core.llm.model_backend',
-    'core.llm.prompt_builder',
-    'core.llm.__init__',
-    'core.agent',
-    'core.agent.agent_engine',
-    'core.agent.tool_registry',
-    'core.agent.__init__',
+    'ggufloader.core',
+    'ggufloader.core.__init__',
+    'ggufloader.core.llm',
+    'ggufloader.core.llm.model_backend',
+    'ggufloader.core.llm.prompt_builder',
+    'ggufloader.core.llm.__init__',
+    'ggufloader.core.agent',
+    'ggufloader.core.agent.agent_engine',
+    'ggufloader.core.agent.tool_registry',
+    'ggufloader.core.agent.__init__',
 
     # Services package
-    'services',
-    'services.model_service',
-    'services.chat_service',
-    'services.agent_service',
-    'services.__init__',
+    'ggufloader.services',
+    'ggufloader.services.model_service',
+    'ggufloader.services.chat_service',
+    'ggufloader.services.agent_service',
+    'ggufloader.services.__init__',
     
     # Addons package
-    'addons',
-    'addons.__init__',
-    'addons.floating_chat',
-    'addons.floating_chat.main',
-    'addons.floating_chat.chat_window',
-    'addons.floating_chat.floating_button',
-    'addons.floating_chat.status_widget',
-    'addons.floating_chat.__init__',
+    'ggufloader.addons',
+    'ggufloader.addons.__init__',
+    'ggufloader.addons.floating_chat',
+    'ggufloader.addons.floating_chat.main',
+    'ggufloader.addons.floating_chat.chat_window',
+    'ggufloader.addons.floating_chat.floating_button',
+    'ggufloader.addons.floating_chat.status_widget',
+    'ggufloader.addons.floating_chat.__init__',
 
     # Search (Find Paragraph) + text extraction
-    'core.search',
-    'core.search.paragraph_search',
-    'core.search.planner',
-    'core.agent.text_extract',
-    'core.engine',
-    'core.engine.protocol',
-    'core.engine.llama_cpp_engine',
-    'services.search_service',
-    'ui.find_dialog',
+    'ggufloader.core.search',
+    'ggufloader.core.search.paragraph_search',
+    'ggufloader.core.search.planner',
+    'ggufloader.core.agent.text_extract',
+    'ggufloader.core.engine',
+    'ggufloader.core.engine.protocol',
+    'ggufloader.core.engine.llama_cpp_engine',
+    'ggufloader.core.engine.langchain_adapter',
+    'ggufloader.services.search_service',
+    'ggufloader.ui.find_dialog',
 ]
 
 # LangGraph/LangChain and pydantic are imported through the agent graph;

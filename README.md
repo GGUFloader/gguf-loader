@@ -1,273 +1,292 @@
 # GGUF Loader
 
+[![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/ggufloader)](https://pypi.org/project/ggufloader/)
+[![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
+![PyPI - Python Versions](https://img.shields.io/pypi/pyversions/ggufloader)
 ![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
-[![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
 
-> 🎉 **NEW: Agentic Mode Now Available!** Transform your local AI into an autonomous coding assistant that can read, create, edit, and organize files in your workspace. Perfect for automating development tasks, generating boilerplate code, and managing complex workflows - all running privately on your machine. [Learn more about Agentic Mode →](#-agentic-mode)
+A privacy-first, beginner-friendly desktop application for running large
+language models **fully locally** on Windows, Linux, and macOS. Load any
+GGUF model (Mistral, LLaMA, DeepSeek, Qwen, and thousands more from Hugging
+Face) and chat with it — with a built-in **agentic mode** that can read,
+create, edit, and organize files in a workspace you choose. No data ever
+leaves your computer.
 
-A beginner-friendly, privacy-first desktop application for running large language models locally on Windows, Linux, and macOS. Load and chat with GGUF format models like Mistral, LLaMA, DeepSeek, and others with zero setup required.
-
-## 🚀 Quick Start
-
-### Option 1: Windows Executable (Easiest - Recommended)
-
-**Step 1: Download the App** — click your platform's button and the download starts automatically:
-
-| 🪟 **Windows** | 🐧 **Linux** |
-|:---:|:---:|
-| [![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe) | [![Download for Linux](https://img.shields.io/badge/Download%20for%20Linux-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64.tar.gz) |
-| `GGUFLoader_v2.1.2.exe` · **~61 MB** | `GGUFLoader_v2.1.2_linux_x86_64.tar.gz` · **~90 MB** |
-
-**Direct downloads:** [Windows (.exe)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2.exe)  ·  [Linux (.tar.gz installer)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64.tar.gz)  ·  [Linux (raw binary)](https://github.com/GGUFloader/gguf-loader/releases/download/v2.1.2/GGUFLoader_v2.1.2_linux_x86_64)
-
-**Step 2: Run the App**
-
-**🪟 Windows:**
-1. Click the downloaded `GGUFLoader_v2.1.2.exe` file
-2. Windows may show a security warning - click "More info" then "Run anyway" (this is normal for new apps)
-3. The app will start automatically - no installation needed!
-
-**🐧 Linux:**
-1. Extract the archive: `tar -xzf GGUFLoader_v2.1.2_linux_x86_64.tar.gz`
-2. Install it (no admin rights needed): `cd GGUFLoader-v2.1.2-linux && ./install.sh`
-3. Launch it from your app menu, or run `gguf-loader`
-
-**Step 3: Download a Model**
-- Visit [Local AI Zone](https://local-ai-zone.github.io/) for curated model recommendations
-- Or browse [Hugging Face](https://huggingface.co/models?library=gguf) for thousands of GGUF models
-- Save it anywhere on your computer (e.g., Downloads folder)
-
-**Step 4: Load the Model**
-1. In GGUF Loader, click "Load Model" button
-2. Browse to where you saved your GGUF model file
-3. Select the model and click "Open"
-4. Wait for the model to load (progress bar will show)
-
-**Step 5: Start Chatting!**
-1. Look for the floating chat button on your screen
-2. Click it to open the chat window
-3. Type your message and press Ctrl+Enter or click "Send"
-4. Enjoy your private, local AI assistant!
+> 📦 **Also available as a Python package** — install it in seconds with
+> `pip install ggufloader` and launch it with `ggufloader`.
+> [View on PyPI](https://pypi.org/project/ggufloader/)
 
 ---
 
-### Option 2: Install via pip
+## 🆕 What's New in 2.2.0
+
+- **Collision-proof pip package** — the entire app now ships inside a single
+  `ggufloader` package, so `pip install ggufloader` is safe even in shared or
+  global Python environments where other packages live (no more top-level
+  `config`/`utils`/`core` name clashes, no dependency mismatch: the tested
+  dependency set is pinned).
+- **Mature Agentic Mode** — LangGraph-driven multi-step agent with 7 sandboxed
+  tools, a live transcript panel, and **Allow/Deny approval cards** for shell
+  commands and git writes.
+- **Find Paragraph (no-RAG search)** — ask a question and locate the exact
+  paragraph in a document or a whole folder, with a planner that decides what
+  to read and live per-file progress.
+- **Full-folder summaries** — "summarize this folder" now reads **every**
+  readable file (Markdown, PDF, DOCX, TXT, code) before answering, with a
+  "Reading remaining files…" status so you always know what's happening.
+- **One-click GPU support** — an **Install GPU Support** button in the UI that
+  installs the CUDA-enabled build for you and shows a green tick when GPU
+  acceleration is ready.
+
+---
+
+## ✨ Features
+
+- 🤖 **Agentic Mode** — an autonomous assistant that reads, writes, edits,
+  searches, runs commands, and uses git inside a workspace folder you grant it
+  access to — with human approval for anything sensitive.
+- 🔎 **Find Paragraph** — locate a passage in a document or folder with the
+  model itself, no RAG or vector database required.
+- 🧾 **Real file reading** — extracts text from `.md`, `.pdf`, `.docx`, `.txt`
+  and source files, so the agent can summarize and answer from real content.
+- 🔄 **Universal model support** — load ANY GGUF model from anywhere; no
+  conversion or configuration.
+- ⚡ **GPU acceleration** — one button installs CUDA support; the app detects
+  it (green tick) and uses the GPU cleanly for fast inference.
+- 🌐 **Floating chat** — an always-on-top chat button that follows you across
+  apps, with proper word wrapping and right-to-left support.
+- 🔒 **Privacy first** — 100% local inference. Your prompts and files never
+  leave your machine.
+- 🎨 **Modern PySide6 UI** — clean, dark/light themed interface (light by
+  default, Dark Mode toggle in the View menu).
+- 💻 **Cross-platform** — Windows 10/11, Linux, and macOS (including Apple
+  Silicon).
+
+---
+
+## 🎬 Screenshot
+
+![GGUF Loader - main window](https://raw.githubusercontent.com/GGUFloader/gguf-loader/main/screen.png)
+
+---
+
+## 🚀 Quick Start
+
+### Option 1: Install via pip (recommended)
 
 ```bash
 pip install ggufloader
 ggufloader
 ```
 
+That's it — the app opens. Requires **Python 3.10–3.13**.
+
+The package is published on [PyPI](https://pypi.org/project/ggufloader/) —
+update it any time with `pip install --upgrade ggufloader`.
+
+The wheel installs only the `ggufloader` name into your environment, so it
+works perfectly in a global Python install alongside other packages — nothing
+gets overwritten, and the dependency set is pinned to the exact combination
+that is tested to install and boot together on all three platforms.
+
+### Option 2: Run from source
+
+```bash
+git clone https://github.com/GGUFloader/gguf-loader.git
+cd gguf-loader
+python -m venv .venv
+.venv\Scripts\activate        # Windows (or: source .venv/bin/activate)
+pip install -r requirements.txt
+python main.py
+```
+
+Windows/Linux users can also run `launch.bat` / `launch.sh` from the extracted
+ZIP (keep `launch.sh` executable after extraction). The scripts create a
+virtualenv, check every dependency, and install anything missing — on Linux
+`llama-cpp-python` is pulled from abetlen's prebuilt CPU wheel index, so no C
+compiler is required. They need Python 3.10+ (on Debian/Ubuntu also
+`python3-venv` or `virtualenv`); any missing piece is reported with a clear,
+actionable message.
+
+### Option 3: Prebuilt executable
+
+Standalone one-file executables are published on the
+[GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases) page:
+
+| Artifact | Size | Notes |
+|---|---|---|
+| `GGUFLoader_v<version>_GPU.exe` | ~850 MB | Windows · NVIDIA CUDA, zero setup |
+| `GGUFLoader_v<version>_CPU.exe` | ~70 MB | Windows · CPU-only, works everywhere |
+| `GGUFLoader_v<version>_linux_x86_64_CPU` | ~105 MB | Linux · CPU-only |
+
+The GPU build bundles the full CUDA runtime; the CPU build drops it entirely,
+which is why it is ~10× smaller. Pick the GPU build if you have an NVIDIA card,
+the CPU build otherwise.
+
+### First launch
+
+1. **Download a model** — browse [Hugging Face GGUF models](https://huggingface.co/models?library=gguf).
+2. Click **Load Model**, pick your `.gguf` file, wait for it to load.
+3. Click the **floating chat button** and start chatting — or open the chat
+   panel in the main window.
+
 ---
-
-### Option 3: Run from Source (No Installation Required)
-
-> 💡 **Easy method - No coding knowledge needed!**
-
-**Step 1: Download the ZIP file**
-- Click here: [Download ZIP](https://github.com/GGUFloader/gguf-loader/archive/refs/heads/main.zip)
-- Save it anywhere on your computer
-
-**Step 2: Extract the ZIP file**
-- Right-click on the downloaded ZIP file
-- Select "Extract All..." (Windows) or "Extract Here" (Linux/macOS)
-- Choose where to extract it
-
-**Step 3: Run the launcher**
-
-**For Windows:**
-- Open the extracted folder
-- Double-click on `launch.bat`
-- **First time only**: Wait 1-2 minutes while it downloads dependencies
-- The app will start automatically!
-- **Next time**: Just double-click `launch.bat` again - it starts instantly!
-
-**For Linux/macOS:**
-- Open the extracted folder
-- Double-click on `launch.sh` (or right-click → Open)
-- **First time only**: Wait 1-2 minutes while it downloads dependencies
-- The app will start automatically!
-- **Next time**: Just double-click `launch.sh` again - it starts instantly!
-
-**That's it!** No Python installation needed, no command line, no complicated setup.
-
----
-
-## ✨ Features
-
-- 🤖 **Universal Model Support** - Load ANY GGUF model from anywhere, not limited to pre-installed models
-- 🔄 **Zero-Setup Model Loading** - Use any downloaded GGUF model instantly without configuration or conversion
-- 🎨 **Modern UI** - Clean, intuitive interface built with PySide6
-- 🔌 **Powerful Addon System** - Enhance functionality by creating custom addons without modifying core code
-- 🌐 **Floating Chat Button** - Always-accessible chat interface that stays on top of all windows
-- 🤖 **Agentic Mode** - Advanced reasoning and task automation with multi-step problem solving
-- 🔒 **Privacy First** - All processing happens locally on your machine, no data leaves your computer
-- 💻 **Cross-Platform** - Works seamlessly on Windows, Linux, and macOS
-- ⚡ **Lightweight & Fast** - Efficient memory usage and quick response times
-- 🎯 **Beginner Friendly** - No technical knowledge required, just download and run
-
-## 📥 Download Models
-
-### Recommended Models
-
-**Mistral-7B Instruct** (4.23 GB) - **Recommended for Agentic Mode**
-- [⬇️ Download Q4_0](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.1-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_0.gguf)
-- Excellent reasoning and task automation capabilities
-- Perfect for agentic workflows and multi-step problem solving
-- Fast inference with strong instruction following
-
-**GPT-OSS 20B** (7.34 GB)
-- [⬇️ Download Q4_K](https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-MXFP4.gguf)
-
-**LLaMA 3 8B Instruct** (4.68 GB)
-- [⬇️ Download Q4_0](https://huggingface.co/TheBloke/Llama-3-8B-Instruct-GGUF/resolve/main/llama-3-8b-instruct.Q4_0.gguf)
-
-[More models available →](https://local-ai-zone.github.io)
-
-## 📚 Documentation
-
-- **[Quick Reference](QUICK_REFERENCE.md)** - Fast answers to common tasks
-- **[Installation Guide](https://ggufloader.github.io/docs/installation/)** - Detailed setup instructions
-- **[User Guide](https://ggufloader.github.io/docs/user-guide/)** - How to use GGUF Loader
-- **[Addon Development](https://ggufloader.github.io/docs/addon-development/)** - Create your own addons
-- **[FAQ](https://ggufloader.github.io/faq.html)** - Frequently asked questions
-- **[All Documentation](https://ggufloader.github.io/docs/)** - Complete documentation index
-- **[Architecture](ARCHITECTURE.md)** - Layered design, threading model, and extension guide
 
 ## 🤖 Agentic Mode
 
-GGUF Loader now supports agentic mode, enabling the AI assistant to autonomously manage your workspace. The assistant can read, create, edit, and organize files within your project folder, automating development tasks and workflows.
+Agentic Mode turns the local model into a working assistant for a folder you
+choose (your project, a documentation set, any workspace). It plans multi-step
+tasks, calls tools, and streams every step live.
 
-### What Agentic Mode Can Do
+### Tools
 
-- **Read Files** - Analyze code, documentation, and project structure
-- **Create Files** - Generate new source files, configs, and documentation
-- **Edit Files** - Modify existing code and update configurations
-- **Organize Files** - Create folders, move files, and restructure projects
-- **Automate Tasks** - Execute multi-step workflows without manual intervention
+| Tool | What it does |
+|---|---|
+| `list_directory` | Explore folders in the workspace |
+| `read_file` | Read any file (MD/PDF/DOCX/TXT/code — text extracted automatically) |
+| `write_file` | Create new files |
+| `edit_file` | Make targeted edits to existing files |
+| `search_files` | Find files and grep for content |
+| `run_command` | Run a shell command inside the workspace (sandboxed) |
+| `git` | Git operations (status, diff, add, commit) |
 
-### Getting Started with Agentic Mode
+Every tool is **sandboxed to the workspace root** — the agent cannot touch
+anything outside the folder you granted.
 
-1. **Load Mistral-7B** (recommended for best results)
-   - Download from the models section above
-   - Load it in GGUF Loader
+### Human approval
 
-2. **Enable Agentic Mode**
-   - Open the chat window
-   - Select "Agentic Mode" from the settings
-   - Grant workspace access permissions
+Shell commands and git writes are sensitive, so they pause for your approval:
+an **Allow / Deny** card appears in the agent panel and the run waits for your
+choice. Everything else (reading, searching, writing files) runs automatically.
 
-3. **Example Tasks**
-   - "Create a new feature module with proper structure"
-   - "Refactor this codebase and organize files"
-   - "Generate boilerplate code for a new component"
-   - "Update all configuration files with new settings"
-   - "Create documentation for this project"
+### Live transcript
 
-### Model Recommendations for Agentic Mode
+The agent panel shows the run as it happens — step chips, each tool call with
+its result, status lines like "📖 Reading remaining files…", and approval
+cards. Runs are checkpointed (SQLite), so state survives restarts, and a step
+budget keeps runaway loops in check.
 
-- **Mistral-7B Instruct** ⭐ Best choice - excellent reasoning, fast inference, perfect for code generation
-- **LLaMA 3 8B** - Strong reasoning and code understanding
-- **GPT-OSS 20B** - More powerful for complex refactoring tasks
+### Example tasks
 
-## 🎬 Screenshot
+- "Summarize the Day 4 folder" → reads all 5 files (MD + PDF + DOCX) and gives a real summary
+- "Create a new feature module with proper structure"
+- "Refactor this codebase and organize files"
+- "Find where `MAX_TOKENS` is defined and explain it"
 
-![GGUF Loader Interface](screen.png)
+---
+
+## 🔎 Find Paragraph (search without RAG)
+
+From **Tools → Find Paragraph…** you can locate a specific passage in a
+document or across a folder:
+
+- **Single file** — type a question ("what does it say about control flow?")
+  and the model finds and ranks the matching paragraphs.
+- **Folder search** — a planner decides which files to look at and in what
+  order (using only read-only tools), with a live per-file scan counter.
+- **Smart defaults** — your last query, source, folder, pattern, and
+  exhaustive-search setting are remembered between sessions.
+
+No vector database, no embeddings — just the model reading the text and
+finding the answer.
+
+---
+
+## ⚡ GPU Acceleration
+
+The pip-installed app runs on CPU by default. To speed up inference with an
+NVIDIA GPU:
+
+1. Click **⬇ Install GPU Support** in the sidebar.
+2. The app installs the CUDA-enabled `llama-cpp-python` build into your current
+   Python environment (you'll see progress, then "✅ GPU support installed —
+   restart to apply").
+3. Restart the app. The button now shows a **green tick** ("GPU support is
+   installed") and inference uses the GPU — no CPU+GPU mixing, just the GPU.
+
+On macOS, GPU (Metal) support is enabled by building `llama-cpp-python` with
+Metal, e.g. `CMAKE_ARGS="-DGGML_METAL=on" pip install --force-reinstall llama-cpp-python`.
+
+For manual control you can also run the bundled scripts:
+`scripts/install_gpu_llama.bat` (Windows) / `scripts/install_gpu_llama.sh`
+(Linux/macOS), and verify with `python scripts/verify_gpu_support.py`.
+
+---
+
+## 📥 Recommended Models
+
+| Model | Size | Notes |
+|---|---|---|
+| **Mistral-7B Instruct** | ~4.2 GB | ⭐ Best balance — excellent reasoning, great for agentic mode |
+| **LLaMA 3 8B Instruct** | ~4.7 GB | Strong reasoning and code understanding |
+| **GPT-OSS 20B** | ~7.3 GB | More powerful for complex refactoring |
+
+Find thousands more on [Hugging Face](https://huggingface.co/models?library=gguf).
+
+---
 
 ## 🛠️ System Requirements
 
-- **OS:** Windows 10/11, Linux, or macOS
-- **RAM:** 4GB minimum (8GB recommended)
-- **Storage:** 2GB free space
-- **GPU:** Optional (CUDA/OpenCL support)
+- **Python:** 3.10–3.13 (pip install)
+- **OS:** Windows 10/11, Linux, macOS (Intel & Apple Silicon)
+- **RAM:** 4 GB minimum (8 GB recommended)
+- **Storage:** 2 GB free
+- **GPU:** Optional — NVIDIA CUDA on Windows/Linux, Metal on macOS
 
-## 🚀 GPU Acceleration (Optional)
+## 📦 Dependencies
 
-GGUF Loader supports GPU acceleration for significantly faster inference speeds. If you have an NVIDIA GPU, follow these steps:
+The wheel declares its dependencies pinned to the exact set verified to work
+together, so `pip install ggufloader` resolves the same tested combination
+every time — no dependency mismatch, and every package has prebuilt wheels for
+all three platforms:
 
-### Prerequisites
-- NVIDIA GPU (GTX 1060 or newer recommended)
-- CUDA Toolkit installed (CUDA 12.x recommended)
-- Latest NVIDIA drivers
+`PySide6` · `llama-cpp-python` (CPU by default) · `langgraph` ·
+`langgraph-checkpoint-sqlite` · `langchain-core` · `pydantic`
 
-### Installation Steps
+---
 
-**Step 1: Run the GPU installation script**
+## 🧱 Building from source
 
-**Option A: Pre-built wheel (Recommended - Fastest)**
-```bash
-# Windows
-scripts/install_gpu_llama.bat
+- **Wheel / sdist:** `pip install build && python -m build` → artifacts in `dist/`
+- **Windows executable:** `scripts/build_exe.bat` (or `python -m PyInstaller
+  build_exe.spec`). The script detects whether the installed llama-cpp-python
+  is CUDA-enabled and names the output `GGUFLoader_v<version>_GPU.exe` or
+  `GGUFLoader_v<version>_CPU.exe` automatically.
+- **Linux executable:** `scripts/build_linux.sh` — must run on Linux (or WSL);
+  produces `GGUFLoader_v<version>_linux_x86_64_CPU`. One-file binaries are not
+  cross-platform.
+- **Tests:** `pip install pytest && python -m pytest`
 
-# Linux/macOS
-chmod +x scripts/install_gpu_llama.sh
-./scripts/install_gpu_llama.sh
-```
+## 📚 Documentation
 
-**Option B: Build from source (requires a C++ compiler, CMake, and CUDA Toolkit; Metal on macOS)**
-```bash
-# Windows
-scripts/install_gpu_llama_source.bat
+- [Quick Reference](QUICK_REFERENCE.md)
+- [Architecture](ARCHITECTURE.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
-# Linux/macOS
-chmod +x scripts/install_gpu_llama_source.sh
-./scripts/install_gpu_llama_source.sh
-```
-
-**Step 2: Verify GPU support**
-```bash
-python scripts/verify_gpu_support.py
-```
-
-**Step 3: Use GPU acceleration**
-1. Launch GGUF Loader
-2. In the "Processing Mode" dropdown, select **"GPU Accelerated"**
-3. Load your model - you'll see "(GPU)" in the status
-4. Start chatting with GPU-accelerated inference!
-
-### Performance Tips
-- **RTX 4060 (8GB):** Can offload 25-40 layers depending on model size
-- **RTX 3060 (12GB):** Can offload 40-50 layers
-- **RTX 4090 (24GB):** Can offload entire models (60+ layers)
-
-### Monitoring GPU Usage
-Run this in a separate terminal while using GGUF Loader:
-```bash
-# Windows
-scripts/monitor_gpu.bat
-
-# Linux/macOS
-watch -n 1 nvidia-smi
-```
-
-Watch the "GPU-Util" column increase when generating responses - this confirms GPU acceleration is working!
-
-### Troubleshooting
-- **"pip not recognized"**: The script will automatically activate your virtual environment
-- **Slow speeds**: Try increasing GPU layers in `models/model_loader.py` (default: 35)
-- **Out of memory**: Reduce GPU layers or use a smaller model
-- **No speedup**: Verify CUDA is installed with `nvidia-smi`
+---
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 📄 License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
 
 ## 🔒 Security
 
-Report security vulnerabilities to: hossainnazary475@gmail.com
-
-See [SECURITY.md](SECURITY.md) for our security policy.
+Report vulnerabilities to hussainnazary475@gmail.com or see
+[SECURITY.md](SECURITY.md).
 
 ## 📞 Support
 
 - 🐛 [Report Issues](https://github.com/GGUFloader/gguf-loader/issues)
 - 💬 [Discussions](https://github.com/GGUFloader/gguf-loader/discussions)
-- 📧 Email: hossainnazary475@gmail.com
+- 📧 hussainnazary475@gmail.com
 
 ---
 

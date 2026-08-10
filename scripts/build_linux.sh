@@ -28,30 +28,34 @@ echo
 echo "[2/4] Installing PyInstaller..."
 pip install pyinstaller
 
-# Clean previous builds
+# Clean previous builds. Keep other dist artifacts - only remove this build's
+# stale output (mirrors scripts/build_exe.bat).
 echo
 echo "[3/4] Cleaning previous builds..."
-rm -rf build dist
+rm -rf build
+rm -f dist/GGUFLoader_WithAddons
 
 # Build executable
 echo
 echo "[4/4] Building executable..."
 pyinstaller build_exe.spec
 
+# Resolve the app version (single source of truth: ggufloader/_version.py).
+# Linux builds are always CPU-only here (requirements.txt installs the plain
+# CPU wheel), hence the _CPU suffix.
+VERSION=$(python -c "from ggufloader._version import __version__; print(__version__)" 2>/dev/null || echo "unknown")
+FINAL_NAME="GGUFLoader_v${VERSION}_linux_x86_64_CPU"
+
 # Check if build was successful
 if [ -f "dist/GGUFLoader_WithAddons" ]; then
+    mv "dist/GGUFLoader_WithAddons" "dist/${FINAL_NAME}"
     echo
     echo "========================================"
     echo "BUILD SUCCESSFUL!"
     echo "========================================"
     echo
     echo "Your SINGLE EXECUTABLE file is located at:"
-    echo "dist/GGUFLoader_WithAddons"
-    echo
-    echo "Rename it for release, e.g.:"
-    TAG_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
-    TAG_VERSION=${TAG_VERSION#v}
-    echo "mv dist/GGUFLoader_WithAddons dist/GGUFLoader_Linux_x86_64_v${TAG_VERSION}"
+    echo "dist/${FINAL_NAME}"
     echo
     echo "Note: onefile binaries are NOT cross-platform - this build"
     echo "must run on Linux (the GitHub Actions workflow does this"

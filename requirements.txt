@@ -2,14 +2,15 @@
 # Core dependencies for the GGUF Loader application
 
 # GUI Framework
-PySide6>=6.5.0
+PySide6>=6.8,<6.12
 
 # AI/ML Dependencies
-llama-cpp-python>=0.3.13
+llama-cpp-python==0.3.34
 
 # Agent framework (LangGraph over llama.cpp)
-langgraph>=0.2,<1
-langchain-core>=0.3,<1
+langgraph>=0.6.11,<0.7
+langgraph-checkpoint-sqlite>=2.0.11,<3  # SqliteSaver for agent checkpointing (2.x matches langgraph 0.6)
+langchain-core>=0.3.86,<0.4
 
 # Optional GPU acceleration (uncomment if needed)
 # llama-cpp-python[cuda]>=0.3.13  # For CUDA support

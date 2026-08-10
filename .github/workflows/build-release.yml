@@ -45,9 +45,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "$RUNNER_OS" = "Windows" ]; then
-            mv dist/GGUFLoader_WithAddons.exe "dist/GGUFLoader_v${VERSION}.exe"
+            # CI installs from requirements.txt, which is the plain CPU wheel,
+            # so the Windows artifact is always the CPU-only build.
+            mv dist/GGUFLoader_WithAddons.exe "dist/GGUFLoader_v${VERSION}_CPU.exe"
           else
-            mv dist/GGUFLoader_WithAddons "dist/GGUFLoader_v${VERSION}_linux_x86_64"
+            mv dist/GGUFLoader_WithAddons "dist/GGUFLoader_v${VERSION}_linux_x86_64_CPU"
           fi
 
       - name: Upload artifact
