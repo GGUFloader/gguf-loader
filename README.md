@@ -264,6 +264,7 @@ all three platforms:
 - [Quick Reference](QUICK_REFERENCE.md)
 - [Developing Addons](ggufloader/addons/README.md)
 - [AGENTS.md](AGENTS.md) — codebase guide for AI coding agents
+- [Docs archive (v2.1.2)](docs/README.md) — historical documentation restored from git history
 - [Architecture](ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
