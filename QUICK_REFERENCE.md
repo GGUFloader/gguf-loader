@@ -75,9 +75,11 @@ actionable errors for the usual setup problems:
 - **Floating Chat addon** — always-on-top messenger-style button; drag it
   anywhere, position is remembered. (On Linux Wayland it stays inside the app
   window — use X11 / `QT_QPA_PLATFORM=xcb` for full floating behavior.)
-- **Agentic Mode** — the model becomes a working assistant for a folder you
+- **Agentic Mode** — LangGraph-driven working assistant for a folder you
   choose: it plans multi-step tasks, reads/creates/edits files via tools, and
-  streams every step. Approval-gated tools keep it safe.
+  streams every step. Approval-gated tools keep it safe, and each workspace's
+  conversation is checkpointed to SQLite — it survives app restarts and
+  resumes where you left off.
 - **Find Paragraph** — locate the passage that answers a question inside a
   document or a whole folder (light mode pre-filters by keyword; "exhaustive"
   scans everything). No embeddings or vector store needed.
@@ -87,9 +89,10 @@ actionable errors for the usual setup problems:
 - The **GPU exe** bundles the CUDA runtime; the **CPU exe** is ~10x smaller and
   runs anywhere. CPU-only builds still work on NVIDIA machines, just slower.
 - From source/pip, the default install is **CPU**. To enable GPU on Windows:
-  run `scripts/install_gpu_llama.bat`, or use the **"Install GPU support"**
-  button in the app's sidebar, then restart. macOS uses Metal (built via
-  `CMAKE_ARGS="-DGGML_METAL=on"`). CUDA wheels come from
+  click **⬇ Install GPU Support** in the app's sidebar — it installs the CUDA
+  build with a live status and flips to a green ✅ when done (then restart).
+  Equivalent manual path: `scripts/install_gpu_llama.bat`. macOS uses Metal
+  (built via `CMAKE_ARGS="-DGGML_METAL=on"`). CUDA wheels come from
   `https://abetlen.github.io/llama-cpp-python/whl/cu124`.
 
 ---

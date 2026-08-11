@@ -28,8 +28,9 @@ leaves your computer.
   `config`/`utils`/`core` name clashes, no dependency mismatch: the tested
   dependency set is pinned).
 - **Mature Agentic Mode** — LangGraph-driven multi-step agent with 7 sandboxed
-  tools, a live transcript panel, and **Allow/Deny approval cards** for shell
-  commands and git writes.
+  tools, a live transcript panel, **Allow/Deny approval cards** for shell
+  commands and git writes, and SQLite checkpointing so each workspace's
+  conversation survives restarts and resumes where you left off.
 - **Find Paragraph (no-RAG search)** — ask a question and locate the exact
   paragraph in a document or a whole folder, with a planner that decides what
   to read and live per-file progress.
@@ -44,17 +45,19 @@ leaves your computer.
 
 ## ✨ Features
 
-- 🤖 **Agentic Mode** — an autonomous assistant that reads, writes, edits,
-  searches, runs commands, and uses git inside a workspace folder you grant it
-  access to — with human approval for anything sensitive.
+- 🤖 **Agentic Mode (LangGraph)** — an autonomous LangGraph-driven assistant
+  that reads, writes, edits, searches, runs commands, and uses git inside a
+  workspace folder you grant it access to — with human approval for anything
+  sensitive, and SQLite checkpointing so conversations resume after restarts.
 - 🔎 **Find Paragraph** — locate a passage in a document or folder with the
   model itself, no RAG or vector database required.
 - 🧾 **Real file reading** — extracts text from `.md`, `.pdf`, `.docx`, `.txt`
   and source files, so the agent can summarize and answer from real content.
 - 🔄 **Universal model support** — load ANY GGUF model from anywhere; no
   conversion or configuration.
-- ⚡ **GPU acceleration** — one button installs CUDA support; the app detects
-  it (green tick) and uses the GPU cleanly for fast inference.
+- ⚡ **GPU acceleration** — an **Install GPU Support** button in the sidebar
+  installs the CUDA build with live status (green tick when ready); the app
+  detects it and uses the GPU cleanly for fast inference.
 - 🌐 **Floating chat** — an always-on-top chat button that follows you across
   apps, with proper word wrapping and right-to-left support.
 - 🔒 **Privacy first** — 100% local inference. Your prompts and files never

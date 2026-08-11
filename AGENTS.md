@@ -82,6 +82,40 @@ tests/unit/                # pytest suite (headless)
    prebuilt index (`--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`).
    `launch.sh` uses that index automatically when build tools are missing.
 
+## Agent & GPU support (v2.2.0)
+
+**Agent Mode is a LangGraph StateGraph** — `ggufloader/core/agent/graph_agent.py`:
+
+- Graph: `START → agent → (continue: tools → agent | end: END)`. The `agent`
+  node asks the LLM for the next JSON action (schemas + few-shot, with
+  malformed-JSON repair), the `tools` node executes calls (one corrective
+  retry per failure), and `_router` continues while work remains. A step
+  budget (`max_steps`) caps each run; the final answer streams tokens.
+- **Checkpointing**: `langgraph.checkpoint.sqlite.SqliteSaver` — one SQLite
+  DB per thread. The thread id is derived from the workspace path
+  (`agent-<sha>`), so the same folder resumes the same conversation across
+  app restarts.
+- **Approval**: sensitive tools (shell, git) suspend the graph via LangGraph
+  `interrupt()`; the UI shows Allow/Deny and resumes with
+  `Command(resume=...)`.
+- **Cancellation is cooperative** — `cancel()` sets an event the nodes check
+  between LLM and tool calls.
+- `process()` keeps the old `AgentEngine` call signature, so the service/UI
+  layer can swap engines without changes.
+
+**One-click GPU install** — `ggufloader/services/gpu_install_service.py`:
+
+- `GpuInstallService` (QThread worker) runs the platform installer via
+  `launcher_service` (`install_gpu_llama.bat` / `.sh`) and emits
+  `done(success, message)`.
+- The sidebar button (`ui/sidebar_panel.py`, "⬇ Install GPU Support") calls
+  `main_window._install_gpu_support()`; state comes from
+  `is_gpu_support_installed()` and the button flips to "✅ GPU Support
+  Installed" (green tick) when the CUDA build is present.
+- Installing GPU support swaps the llama-cpp-python wheel for the CUDA build
+  (abetlen cu124 index). Rebuild the exe with `scripts/install_gpu_llama.bat`
+  followed by `build_exe.bat` to produce the `_GPU.exe` variant.
+
 ## Release flow
 
 1. Bump `_version.py` + `pyproject.toml`; move CHANGELOG `[Unreleased]` →
