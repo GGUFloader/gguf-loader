@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **LangGraph-powered Agent Mode**: the agent loop was rebuilt on
+  LangGraph's `StateGraph` (`START → agent → tools → agent → … → END` with
+  conditional routing), replacing the older hand-rolled loop. The graph
+  supports streaming, checkpointed execution, and resumption from arbitrary
+  points.
+- **Resumable agent conversations**: Agent Mode now persists each
+  conversation in SQLite via LangGraph's `SqliteSaver`, keyed by a stable
+  per-workspace thread id — the same folder resumes the same conversation
+  thread even after the app restarts.
+- **Approval-before-execution for sensitive tools**: shell commands and
+  git-write tools suspend the run through LangGraph `interrupt()` *before*
+  anything executes, surface an approval prompt to the user, and resume from
+  the exact interrupt point with the decision — no partial results lost.
+- **Malformed-JSON auto-repair**: if the model returns broken action JSON,
+  the agent asks it to fix the payload (with retries) instead of failing.
+- **Corrective tool retries**: failed tool calls get a corrective retry;
+  calls that keep failing are skipped rather than repeated endlessly.
+- **Streamed final answers**: the agent's final response streams token by
+  token through the app's streaming callbacks.
+- **Cooperative cancellation**: a cancel request is honoured between steps,
+  so long-running agent turns stop promptly instead of draining the step
+  budget.
 - **PyPI distribution** (`pyproject.toml`): `pip install ggufloader` installs
   the app; launch with the `ggufloader` command. Ships the flat-layout app
   modules plus a `ggufloader` compat package (icons included as package data).
@@ -30,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Agent Mode enhancements**: richer agent engine with plan
+  announcements before multi-tool turns, step progress reporting, a step
+  budget with guarded cancellation, one corrective retry per failed tool
+  call, and coverage directives that push the model to answer fully when it
+  stops early.
 - **Find Paragraph folder scans are much faster**: directory traversal now
   prunes build/dependency dirs (`.venv`, `node_modules`, `.git`, ...) as it
   walks instead of scanning the whole tree first, and hit dedup normalizes
