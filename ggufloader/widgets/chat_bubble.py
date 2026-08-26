@@ -7,17 +7,57 @@ asymmetric "tail" corners and are capped at ~75% of the conversation
 column by their containing row (ui/chat_panel._BubbleRow).
 """
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
 from PySide6.QtGui import QFontMetrics, QTextOption
 from PySide6.QtCore import Qt
 from ggufloader.utils import detect_persian_text
 from ggufloader.config import CHAT_BUBBLE_FONT_SIZE
-from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 
 # Asymmetric radii: TL TR BR BL - the corner nearest the message edge is
 # almost flat, mimicking ChatGPT's "tail". Mirrored for RTL conversations.
 _TAIL_RADIUS_LTR = "20px 20px 4px 20px"    # bubble on the right -> tail BR
 _TAIL_RADIUS_RTL = "20px 4px 20px 20px"    # bubble on the left  -> tail BL
+
+
+def _theme_pair():
+    # Imported lazily: ggufloader.ui.__init__ pulls in main_window, and an
+    # eager import here makes widgets -> ui -> widgets a circular import.
+    from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS
+    return DARK_TOKENS, LIGHT_TOKENS
+
+
+def _active_tokens(widget):
+    """Palette of the nearest themed ancestor (falls back to light)."""
+    dark_tokens, light_tokens = _theme_pair()
+    w = widget
+    while w is not None:
+        dark = getattr(w, "_is_dark_mode", getattr(w, "_is_dark", None))
+        if dark is not None:
+            return dark_tokens if dark else light_tokens
+        w = w.parentWidget()
+    return light_tokens
+
+
+def _styled_text_menu(menu: QMenu, widget) -> None:
+    """Theme a standard Copy/Select-All popup (black-clears on Windows)."""
+    t = _active_tokens(widget)
+    menu.setAttribute(Qt.WA_TranslucentBackground, True)
+    menu.setStyleSheet(f"""
+        QMenu {{
+            background-color: {t["surface"]};
+            color: {t["text"]};
+            border: 1px solid {t["borderStrong"]};
+            border-radius: 8px;
+            padding: 4px;
+        }}
+        QMenu::item {{
+            padding: 6px 24px 6px 14px;
+            border-radius: 6px;
+            background: transparent;
+        }}
+        QMenu::item:selected {{ background-color: {t["elevatedHover"]}; }}
+        QMenu::item:disabled {{ color: {t["textMuted"]}; }}
+    """)
 
 
 class _BubbleText(QTextEdit):
@@ -73,6 +113,13 @@ class _BubbleText(QTextEdit):
         if font.pointSizeF() > 0 and font.pixelSize() < 0:
             font.setPixelSize(max(int(font.pointSizeF()), 1))
         super().setFont(font)
+
+    def contextMenuEvent(self, event) -> None:
+        """Standard Copy/Select-All menu, themed for light/dark mode."""
+        menu = self.createStandardContextMenu()
+        _styled_text_menu(menu, self)
+        menu.exec(event.globalPos())
+        event.accept()
 
     def setAlignment(self, alignment) -> None:
         # QTextEdit only aligns blocks horizontally; strip vertical flags.
@@ -188,7 +235,7 @@ class ChatBubble(QFrame):
             # Style reasoning sections differently
             if "<استدلال>" in text or "<reasoning>" in text:
                 styled_text = text
-                t = DARK_TOKENS if self._is_dark_mode else LIGHT_TOKENS
+                t = _active_tokens(self)
                 # Persian reasoning
                 styled_text = styled_text.replace("<استدلال>", f'<span style="color:{t["textMuted"]}; font-style:italic">')
                 styled_text = styled_text.replace("</استدلال>", '</span>')
@@ -231,7 +278,8 @@ class ChatBubble(QFrame):
         self._is_dark_mode = is_dark_mode
         font_size = getattr(self, '_current_font_size', 14)
 
-        t = DARK_TOKENS if is_dark_mode else LIGHT_TOKENS
+        dark_tokens, light_tokens = _theme_pair()
+        t = dark_tokens if is_dark_mode else light_tokens
         # The tail corner points at the conversation edge: a user bubble sits
         # on the right in LTR (tail BR) but on the left in RTL (tail BL);
         # assistant bubbles mirror that (is_user XOR is_rtl => right side).

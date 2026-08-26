@@ -248,6 +248,9 @@ class SettingsSidebar(QFrame):
             return
         session_id = item.data(Qt.UserRole)
         menu = QMenu(self)
+        # Popup windows clear to black on Windows unless themed explicitly.
+        from ggufloader.widgets.chat_bubble import _styled_text_menu
+        _styled_text_menu(menu, self)
         rename_action = menu.addAction("Rename\u2026")
         delete_action = menu.addAction("Delete")
         chosen = menu.exec(self.session_list.mapToGlobal(pos))

@@ -18,10 +18,16 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QFrame, QPushButton, QVBoxLayout, QWidget
 
 from ggufloader.config import FONT_FAMILY
-from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS
 from ggufloader.widgets.chat_bubble import _BubbleText
 
 _MAX_BODY_HEIGHT = 280   # long thoughts scroll instead of eating the screen
+
+
+def _tokens(is_dark: bool) -> dict:
+    # Lazy import: ui/__init__ eagerly imports main_window, which would
+    # make widgets -> ui -> widgets a circular import if done eagerly.
+    from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS
+    return DARK_TOKENS if is_dark else LIGHT_TOKENS
 
 
 class ReasoningBlock(QFrame):
@@ -144,7 +150,7 @@ class ReasoningBlock(QFrame):
     # ------------------------------------------------------------------
     def update_style(self, is_dark: bool) -> None:
         self._is_dark = is_dark
-        t = DARK_TOKENS if is_dark else LIGHT_TOKENS
+        t = _tokens(is_dark)
         self.setStyleSheet(f"""
             QFrame#reasoningBlock {{
                 background-color: {t["elevated"]};
