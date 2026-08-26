@@ -14,8 +14,8 @@ from datetime import datetime
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QLabel, QListWidget, QListWidgetItem, QMenu,
-    QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QMenu, QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ggufloader.config import DEFAULT_CONTEXT_SIZES, FONT_FAMILY
@@ -31,6 +31,7 @@ class SettingsSidebar(QFrame):
     session_selected = Signal(str)
     session_rename_requested = Signal(str)
     session_delete_requested = Signal(str)
+    params_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -101,6 +102,16 @@ class SettingsSidebar(QFrame):
         self.context_combo.setMinimumHeight(35)
         layout.addWidget(self.context_combo)
 
+        params_row = QHBoxLayout()
+        self.params_btn = QPushButton("\u2699 Model Params")
+        self.params_btn.setObjectName("gpuInstallBtn")
+        self.params_btn.setMinimumHeight(34)
+        self.params_btn.setEnabled(False)  # enabled once a model loads
+        self.params_btn.setToolTip("Per-model sampling + system prompt overrides")
+        self.params_btn.clicked.connect(self.params_requested.emit)
+        params_row.addWidget(self.params_btn, 1)
+        layout.addLayout(params_row)
+
         # Progress + status
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -166,6 +177,9 @@ class SettingsSidebar(QFrame):
         self.status_label.setProperty("state", state)
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
+
+    def set_params_enabled(self, enabled: bool) -> None:
+        self.params_btn.setEnabled(bool(enabled))
 
     def get_processing_mode(self) -> str:
         return "GPU Accelerated" if self.gpu_button.isChecked() else "CPU Only"

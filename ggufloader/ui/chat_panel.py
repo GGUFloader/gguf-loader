@@ -8,6 +8,8 @@ MainWindow.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -47,6 +49,8 @@ class ChatPanel(QWidget):
     stop_requested = Signal()
     regenerate_requested = Signal()
     edit_last_requested = Signal(str)
+    feedback_requested = Signal(str, str)  # status ("up"/"down"), message text
+    attach_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -58,6 +62,7 @@ class ChatPanel(QWidget):
         self._current_ai_text = ""
         self._bubbles: list[tuple[QWidget, ChatBubble]] = []
         self._generating = False
+        self._followup_widget: QWidget | None = None
         self._parser: ReasoningStreamParser | None = None
         self._reasoning: ReasoningBlock | None = None
         self._reasoning_blocks: list[ReasoningBlock] = []
@@ -135,6 +140,12 @@ class ChatPanel(QWidget):
         self.input_text.send_requested.connect(self._submit)
         input_layout.addWidget(self.input_text)
 
+        # L1: attachment chips row (hidden until files are attached)
+        self._attach_row = QHBoxLayout()
+        self._attach_row.setContentsMargins(0, 0, 0, 0)
+        self._attachments: list[tuple[str, str]] = []  # (name, path)
+        input_layout.addLayout(self._attach_row)
+
         # Agent controls row
         controls = QHBoxLayout()
         controls.setSpacing(8)
@@ -146,6 +157,15 @@ class ChatPanel(QWidget):
         self.agent_mode_btn.setMaximumWidth(160)
         self.agent_mode_btn.clicked.connect(self._on_agent_toggled)
         controls.addWidget(self.agent_mode_btn)
+
+        # L1: paperclip for text-file attachments
+        from PySide6.QtWidgets import QFileDialog as _QFD  # local: dialog only here
+        self.attach_btn = QPushButton("📎")
+        self.attach_btn.setMaximumWidth(35)
+        self.attach_btn.setMinimumHeight(35)
+        self.attach_btn.setToolTip("Attach text files (.txt .md .rst .py .json …)")
+        self.attach_btn.clicked.connect(self._pick_attachments)
+        controls.addWidget(self.attach_btn)
 
         self.workspace_label = QLabel("📁")
         self.workspace_label.setToolTip("Workspace folder")
@@ -189,15 +209,54 @@ class ChatPanel(QWidget):
         layout.addWidget(input_frame)
 
     # ------------------------------------------------------------------
-    # Generation state (Send <-> Stop swap, GPT4All-style)
+    # Follow-up suggestion chips (D3)
     # ------------------------------------------------------------------
+    def show_followups(self, questions: list) -> None:
+        """Render clickable suggested questions above the composer."""
+        self.hide_followups()
+        if not questions:
+            return
+        from PySide6.QtWidgets import QFrame
+        bar = QFrame()
+        bar.setObjectName("followupBar")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(20, 4, 20, 4)
+        row.setSpacing(6)
+        for q in questions[:3]:
+            btn = QPushButton(q)
+            btn.setObjectName("followupChip")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip("Ask this follow-up")
+            btn.clicked.connect(lambda _c=False, t=q: self._ask_followup(t))
+            row.addWidget(btn, 1)
+        self._followup_widget = bar
+        self.layout().insertWidget(self.layout().count() - 1, bar)
+
+    def hide_followups(self) -> None:
+        w = getattr(self, "_followup_widget", None)
+        if w is not None:
+            w.setParent(None)
+            self._followup_widget = None
+
+    def _ask_followup(self, text: str) -> None:
+        if getattr(self, "_generating", False):
+            return
+        self.hide_followups()
+        self.input_text.clear()
+        self.message_submitted.emit(text)
+
     def set_generating(self, generating: bool) -> None:
         """While a reply streams, Send turns into a Stop button."""
         self._generating = bool(generating)
-        if self._generating:
+        for _container, bubble in self._bubbles:
+            bubble.links_locked = self._generating
+        if self._current_ai_bubble is not None:
+            self._current_ai_bubble.links_locked = self._generating
+        if generating:
             self.send_btn.setText("⏹ Stop")
             self.send_btn.setEnabled(True)
             self.send_btn.setToolTip("Stop generating")
+            self.hide_followups()
         else:
             self.send_btn.setText("Send")
             self.send_btn.setEnabled(bool(self.input_text.toPlainText().strip()))
@@ -246,6 +305,8 @@ class ChatPanel(QWidget):
         """Start a new empty AI bubble that tokens will stream into."""
         self._current_ai_text = ""
         self.stopped_in_reasoning = False
+        self.last_thinking_ms: int | None = None
+        self.hide_followups()
         self._parser = ReasoningStreamParser()
         self._reasoning = ReasoningBlock()
         self._apply_block_theme(self._reasoning)
@@ -261,6 +322,8 @@ class ChatPanel(QWidget):
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, self._reasoning)
         self._reasoning_blocks.append(self._reasoning)
         container = _BubbleRow(self._current_ai_bubble, is_user=False)
+        self._current_ai_bubble.links_locked = True  # unlock when done
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, self._current_ai_bubble))
         self._maybe_hide_empty_state()
@@ -329,6 +392,8 @@ class ChatPanel(QWidget):
         )
         if self._reasoning is not None:
             if self._reasoning.body.text().strip():
+                dur = self._reasoning._duration_secs
+                self.last_thinking_ms = int(dur * 1000) if dur else None
                 self._reasoning.finish_thinking()
             else:
                 # Plain model output - drop the unused thinking card.
@@ -336,6 +401,8 @@ class ChatPanel(QWidget):
                 if self._reasoning in self._reasoning_blocks:
                     self._reasoning_blocks.remove(self._reasoning)
             self._reasoning = None
+        for _c, bubble in self._bubbles:  # unlock links once done
+            bubble.links_locked = False
         text = self._current_ai_text.strip()
         self._current_ai_bubble = None
         self._current_ai_text = ""
@@ -426,10 +493,14 @@ class ChatPanel(QWidget):
             self.stop_requested.emit()
             return
         text = self.input_text.toPlainText().strip()
-        if not text:
+        attachments = self._attachment_text()
+        if not text and not attachments:
             return
+        if not text and attachments:
+            text = "Please review the attached file(s)."
         self.input_text.clear()
-        self.message_submitted.emit(text)
+        self.clear_attachments()
+        self.message_submitted.emit(text + attachments)
 
     def _on_input_changed(self) -> None:
         if getattr(self, "_generating", False):
@@ -472,6 +543,71 @@ class ChatPanel(QWidget):
         self.input_text.setFocus()
         self.send_btn.setEnabled(bool(text.strip()))
 
+    # ------------------------------------------------------------------
+    # L1: attachments
+    # ------------------------------------------------------------------
+    MAX_ATTACHMENT_CHARS = 20_000
+
+    def _pick_attachments(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Attach text files", "",
+            "Text files (*.txt *.md *.rst *.py *.json *.csv *.log *.yaml *.yml);;All files (*)",
+        )
+        for p in paths:
+            name = Path(p).name
+            if any(existing == name for existing, _p in self._attachments):
+                continue
+            self._attachments.append((name, p))
+            chip = QPushButton(f"📄 {name}  ✕")
+            chip.setObjectName("attachmentChip")
+            chip.setToolTip(p)
+            chip.setFlat(True)
+            chip.setCursor(Qt.CursorShape.PointingHandCursor)
+            chip.clicked.connect(lambda _c=False, n=name: self._remove_attachment(n))
+            self._attach_row.addWidget(chip)
+        self._attach_row.parentWidget().updateGeometry()
+
+    def _remove_attachment(self, name: str) -> None:
+        self._attachments = [(n, p) for n, p in self._attachments if n != name]
+        while self._attach_row.count():
+            item = self._attach_row.takeAt(0)
+            w = item.widget()
+            if w is not None and (w.text() == f"📄 {name}  ✕"):
+                w.setParent(None)
+                break
+
+    def _attachment_text(self) -> str:
+        """Render attachments as fenced blocks appended to the message."""
+        blocks = []
+        remaining = self.MAX_ATTACHMENT_CHARS
+        for name, path in list(self._attachments):
+            try:
+                content = Path(path).read_text(encoding="utf-8", errors="replace")
+            except Exception as e:  # noqa: BLE001 - unreadable => note & skip
+                blocks.append(f"--- Attached file: {name} ---\n(unreadable: {e})")
+                continue
+            content = content[:remaining]
+            remaining -= len(content)
+            suffix = "\n…(truncated)" if remaining <= 0 else ""
+            blocks.append(f"--- Attached file: {name} ---\n```text\n{content}{suffix}\n```")
+            if remaining <= 0:
+                break
+        return "".join("\n\n" + b for b in blocks)
+
+    def clear_attachments(self) -> None:
+        self._attachments.clear()
+        while self._attach_row.count():
+            item = self._attach_row.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+
+    def set_feedback_on_bubble(self, bubble: ChatBubble, status: str) -> None:
+        """K5 entry point used by MainWindow after persisting feedback."""
+        # Currently a no-op hook; visual state lives in session data.
+        _ = bubble, status
+
     def _on_agent_toggled(self, checked: bool) -> None:
         self.is_agent_mode = checked
         self.agent_mode_btn.setText("🤖 Agent Mode: ON" if checked else "🤖 Agent Mode: OFF")
@@ -490,6 +626,7 @@ class ChatPanel(QWidget):
         self._apply_bubble_theme(bubble)
         if not is_user:
             bubble.on_regenerate = self.regenerate_requested.emit
+            bubble.on_feedback = self.feedback_requested.emit
         else:
             bubble.on_edit = self.edit_last_requested.emit
 

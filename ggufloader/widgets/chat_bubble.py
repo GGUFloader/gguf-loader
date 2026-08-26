@@ -152,7 +152,7 @@ class _BubbleText(QTextEdit):
         event.accept()
 
     def mouseReleaseEvent(self, event) -> None:
-        """Click a code-card header (⧉ lang) to copy its raw code."""
+        """Code-card copy headers + safe link opening (post-generation)."""
         anchor = self.anchorAt(event.pos())
         if anchor and anchor.startswith("__copy__"):
             from PySide6.QtWidgets import QApplication
@@ -163,6 +163,14 @@ class _BubbleText(QTextEdit):
                     QApplication.clipboard().setText(codes[idx])
             except Exception:  # noqa: BLE001
                 pass
+            event.accept()
+            return
+        if anchor and anchor.startswith(("http://", "https://")):
+            bubble = getattr(self, "bubble", None)
+            locked = bool(getattr(bubble, "links_locked", False))
+            if not locked:
+                from PySide6.QtGui import QDesktopServices, QUrl
+                QDesktopServices.openUrl(QUrl(anchor))
             event.accept()
             return
         super().mouseReleaseEvent(event)
@@ -202,8 +210,13 @@ class ChatBubble(QFrame):
         self.rich_enabled = not is_user
         # Optional callback fired from the context menu ("Regenerate").
         self.on_regenerate = None
+        # Optional K5 feedback callback: called with "up" or "down".
+        self.on_feedback = None
         # Optional callback fired from the context menu ("Edit message").
         self.on_edit = None
+        # While True (generation active) links don't open — prevents
+        # clicking half-streamed URLs.
+        self.links_locked = False
         # Raw code bodies for the click-to-copy headers (rich mode).
         self._code_segments: list = []
         self.setup_ui(text)
@@ -222,6 +235,11 @@ class ChatBubble(QFrame):
             if self.on_regenerate is not None:
                 regen = menu.addAction("↻ Regenerate response")
                 actions[regen] = self.on_regenerate
+            if self.on_feedback is not None:
+                up = menu.addAction("👍 Good response")
+                actions[up] = lambda: self.on_feedback("up")
+                down = menu.addAction("👎 Bad response…")
+                actions[down] = lambda: self.on_feedback("down")
         elif self.on_edit is not None:
             edit_action = menu.addAction("✏ Edit message")
             actions[edit_action] = lambda: self.on_edit(self.text)

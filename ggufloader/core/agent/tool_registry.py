@@ -9,6 +9,7 @@ Python (no Qt) so it can be unit tested in isolation.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -288,6 +289,72 @@ class RunCommandTool(Tool):
         }
 
 
+class RunPythonTool(Tool):
+    """Execute Python source inside the workspace (approval-gated).
+
+    Runs via ``sys.executable -c <code>`` - full interpreter access, so
+    like run_command it always requires human approval. Errors are
+    reported back so the model can self-correct.
+    """
+
+    name = "run_python"
+    description = ("Execute Python code inside the workspace and return stdout/stderr "
+                   "(approval required before it runs)")
+    schema = {
+        "type": "object",
+        "properties": {
+            "code": {"type": "string",
+                     "description": "Python source code to execute; the working directory is the workspace"},
+            "timeout": {"type": "integer",
+                        "description": "Max seconds to wait (default 60)"},
+        },
+        "required": ["code"],
+    }
+
+    def requires_approval(self, params: Dict[str, Any]) -> bool:
+        return True
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        code = params.get("code", "")
+        if not code or not code.strip():
+            return {"status": "error", "error": "Code is required", "tool_name": self.name}
+        try:
+            timeout = int(params.get("timeout", 60))
+        except (TypeError, ValueError):
+            timeout = 60
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", code],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return {"status": "error",
+                    "error": f"Python code timed out after {timeout}s",
+                    "tool_name": self.name}
+        except Exception as e:  # noqa: BLE001
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+        out = (proc.stdout or "")[:8000]
+        err = (proc.stderr or "")[:2000]
+        result: Dict[str, Any] = {
+            "status": "success" if proc.returncode == 0 else "error",
+            "tool_name": self.name,
+            "exit_code": proc.returncode,
+        }
+        if out.strip():
+            result["result"] = out
+        if proc.returncode != 0:
+            result["error"] = f"exit {proc.returncode}: {err}" if err else \
+                f"exited with code {proc.returncode}"
+        elif err.strip():
+            result["stderr"] = err
+        return result
+
+
 class GitTool(Tool):
     """Run git inside the workspace; write operations require approval."""
 
@@ -442,7 +509,7 @@ def tool_content_for_context(result: Dict[str, Any], max_chars: int = 4000) -> O
 
 ALL_TOOL_CLASSES = (
     ListDirectoryTool, ReadFileTool, WriteFileTool, EditFileTool,
-    SearchFilesTool, RunCommandTool, GitTool,
+    SearchFilesTool, RunCommandTool, RunPythonTool, GitTool,
 )
 
 

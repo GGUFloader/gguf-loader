@@ -24,16 +24,17 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Signal, QObject
+from PySide6.QtCore import QSettings, Signal, QObject
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel,
-    QMainWindow, QMessageBox, QSplitter, QVBoxLayout, QWidget,
+    QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
+    QLabel, QMainWindow, QMenu, QMessageBox, QSplitter, QSystemTrayIcon,
+    QVBoxLayout, QWidget,
 )
 
 from ggufloader.addon_manager import AddonManager
 from ggufloader.config import (
-    CHAT_MAX_TOKENS, WINDOW_SIZE, WINDOW_TITLE, get_paths,
+    CHAT_MAX_TOKENS, MIN_WINDOW_SIZE, WINDOW_SIZE, WINDOW_TITLE, get_paths,
 )
 from ggufloader.core.llm.model_backend import ModelBackend
 from ggufloader.core.llm.model_params import load_model_params
@@ -68,6 +69,13 @@ class _TitleBridge(QObject):
         self.title_ready.emit(session_id, title)
 
 
+class _FollowupBridge(QObject):
+    questions_ready = Signal(list)
+
+    def emit_questions(self, questions: list) -> None:
+        self.questions_ready.emit(questions)
+
+
 class MainWindow(QMainWindow, ThemeMixin):
     """Main application window."""
 
@@ -97,8 +105,10 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._chat_model_params: dict = {}
         self._chat_system_prompt: Optional[str] = None
         self._naming_busy = False
+        self._followups_busy = False
         self._title_bridge = _TitleBridge()
         self._title_bridge.title_ready.connect(self._on_title_ready)
+        self._followup_bridge = _FollowupBridge()
 
         self._init_window()
         self._build_ui()
@@ -120,12 +130,58 @@ class MainWindow(QMainWindow, ThemeMixin):
     # ------------------------------------------------------------------
     def _init_window(self) -> None:
         self.setWindowTitle(WINDOW_TITLE)
-        self.setMinimumSize(800, 500)
-        self.resize(*WINDOW_SIZE)
+        self.setMinimumSize(*MIN_WINDOW_SIZE)
+        self._settings = QSettings("GGUFLoader", "App")
+        geo = self._settings.value("window_geometry")
+        restored = False
+        if isinstance(geo, (bytes, bytearray, str)) and geo:
+            try:
+                if self.restoreGeometry(
+                    bytes.fromhex(geo) if isinstance(geo, str) else bytes(geo)
+                ):
+                    restored = True
+            except Exception:  # noqa: BLE001 - corrupt geometry is ignorable
+                restored = False
+        if not restored:
+            self.resize(*WINDOW_SIZE)
 
         icon_path = find_icon("icon.ico")
         if Path(icon_path).exists():
             self.setWindowIcon(QIcon(icon_path))
+        self._tray_icon = self._build_tray(icon_path)
+
+    def _build_tray(self, icon_path: str):
+        """System tray with Show/Quit; minimize-to-tray toggle in View menu."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return None
+        tray = QSystemTrayIcon(QIcon(icon_path) if Path(icon_path).exists() else QIcon(), self)
+        menu = QMenu()
+        show_action = menu.addAction("Show GGUF Loader")
+        quit_action = menu.addAction("Quit")
+        show_action.triggered.connect(self._show_from_tray)
+        quit_action.triggered.connect(self.close)
+        tray.setContextMenu(menu)
+        tray.setToolTip(WINDOW_TITLE)
+        tray.activated.connect(lambda reason:
+                               self._show_from_tray() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
+        tray.show()
+        return tray
+
+    def _show_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        # Persist window geometry for the next launch.
+        self._settings.setValue("window_geometry",
+                                bytes(self.saveGeometry().toBase64()).hex())
+        if self._minimize_to_tray_action.isChecked() and \
+                getattr(self, "_tray_icon", None) is not None:
+            event.ignore()
+            self.hide()
+            return
+        super().closeEvent(event)
 
     def _build_ui(self) -> None:
         self._build_menu_bar()
@@ -181,6 +237,15 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.dark_mode_action.setChecked(self.is_dark_mode)
         self.dark_mode_action.toggled.connect(self._on_dark_mode_toggled)
         view_menu.addAction(self.dark_mode_action)
+
+        self._minimize_to_tray_action = QAction("Minimize to tray", self)
+        self._minimize_to_tray_action.setCheckable(True)
+        self._minimize_to_tray_action.setChecked(
+            self._settings.value("minimize_to_tray", "false") in (True, "true", "1")
+        )
+        self._minimize_to_tray_action.toggled.connect(
+            lambda v: self._settings.setValue("minimize_to_tray", bool(v)))
+        view_menu.addAction(self._minimize_to_tray_action)
 
         text_menu = view_menu.addMenu("Text Size")
         self._text_size_actions: dict[int, QAction] = {}
@@ -292,12 +357,16 @@ class MainWindow(QMainWindow, ThemeMixin):
         p.stop_requested.connect(self._stop_generation)
         p.regenerate_requested.connect(self._regenerate_last)
         p.edit_last_requested.connect(self._edit_last_prompt)
+        p.feedback_requested.connect(self._on_feedback)
         s.context_combo.currentIndexChanged.connect(self._on_context_changed)
+        s.params_requested.connect(self._open_model_params)
 
         self.sidebar.new_chat_requested.connect(self._on_new_chat)
         self.sidebar.session_selected.connect(self._on_session_selected)
         self.sidebar.session_rename_requested.connect(self._on_session_rename)
         self.sidebar.session_delete_requested.connect(self._on_session_delete)
+        self._followup_bridge.questions_ready.connect(
+            self.chat_panel.show_followups)
 
     def _wire_services(self) -> None:
         m = self._model_service
@@ -415,7 +484,29 @@ class MainWindow(QMainWindow, ThemeMixin):
         info = f"✅ Loaded: {Path(backend.model_path).name}"
         info += self._apply_model_profile(backend)
         self.sidebar.set_model_info(info)
+        self.sidebar.set_params_enabled(True)
         self.sidebar.set_status("Model ready! Start chatting...")
+
+    def _open_model_params(self) -> None:
+        """C1-lite dialog: per-model sampling + system prompt overrides."""
+        backend = self._model_service.backend
+        if not self._model_service.is_loaded or backend is None:
+            QMessageBox.information(self, "No Model", "Load a model first.")
+            return
+        from ggufloader.ui.model_params_dialog import ModelParamsDialog
+        dlg = ModelParamsDialog(
+            self, backend.model_path,
+            current_params=self._chat_model_params,
+            current_system_prompt=self._chat_system_prompt,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        # Re-resolve: file override now reflects the dialog's save/reset.
+        self._apply_model_profile(backend)
+        sp = dlg.system_prompt_override()
+        if sp:
+            self._chat_system_prompt = sp
+        self._on_model_loaded(backend)
         self.chat_panel.add_system_message("\U0001F916 AI Assistant loaded and ready to help!")
         self._set_model_chip("ok", f"\u25CF {Path(backend.model_path).name}")
         self.model_loaded.emit(backend)
@@ -427,6 +518,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         QMessageBox.critical(self, "Model Loading Error", message)
 
     def _on_model_unloaded(self) -> None:
+        self.sidebar.set_params_enabled(False)
         self._set_model_chip("", "\u25CB No model loaded")
 
     def _set_model_chip(self, state: str, text: str) -> None:
@@ -490,6 +582,25 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._agent_service.stop()
         self.chat_panel.set_generating(False)
         self.chat_panel.agent_panel.finish_streaming()
+
+    def _on_feedback(self, status: str, message_text: str) -> None:
+        """K5: persist 👍/👎 (with optional better-response) on the session."""
+        if self._session is None:
+            self.chat_panel.add_system_message(
+                "ℹ️ Feedback needs a saved session — send a message first.")
+            return
+        note = None
+        if status == "down":
+            note, _ = QInputDialog.getMultiLineText(
+                self, "Bad response",
+                "Optionally write a better response:", "")
+        if self._store.set_last_assistant_feedback(
+                self._session, message_text, status, note):
+            self._save_session_quiet()
+            emoji = "👍" if status == "up" else "👎"
+            self.chat_panel.add_system_message(f"{emoji} Feedback saved.")
+        else:
+            self.chat_panel.add_system_message("⚠️ Could not match that reply in this session.")
 
     def _pop_last_exchange_records(self) -> Optional[str]:
         """Drop the newest user+assistant pair from history and session."""
@@ -580,9 +691,17 @@ class MainWindow(QMainWindow, ThemeMixin):
             self.conversation_history.append({"role": "assistant", "content": response})
             if self._session is not None:
                 self._store.append_message(self._session, "assistant", response)
+                # D1: persist thinking duration when the model reasoned.
+                ms = getattr(self.chat_panel, "last_thinking_ms", None)
+                if ms is not None:
+                    msgs = self._session.get("messages") or []
+                    if msgs and msgs[-1].get("role") == "assistant":
+                        msgs[-1]["thinking_ms"] = int(ms)
                 self._save_session_quiet()
                 self._refresh_session_list()
                 self._maybe_generate_title(response)
+                if not self.chat_panel.is_agent_mode:
+                    self._maybe_generate_followups(response)
         elif getattr(self.chat_panel, "stopped_in_reasoning", False):
             self.chat_panel.add_system_message(
                 "⚠️ The model hit the token limit while still reasoning and never "
@@ -633,6 +752,37 @@ class MainWindow(QMainWindow, ThemeMixin):
                 and not self._session.get("title"):
             self._session["title"] = title
         self._refresh_session_list()
+
+    def _maybe_generate_followups(self, assistant_reply: str) -> None:
+        """Async suggested-follow-up chips (GPT4All D3 parity)."""
+        from ggufloader.core.llm.followups import FOLLOWUP_PROMPT, extract_questions
+        if self._followups_busy or not assistant_reply.strip():
+            return
+        last_user = next((m.get("content", "") for m in
+                          reversed(self.conversation_history)
+                          if m.get("role") == "user"), "")[:500]
+        if not last_user:
+            return
+        self._followups_busy = True
+
+        def work() -> None:
+            try:
+                backend = self._model_service.backend
+                out = backend.chat(
+                    [{"role": "user", "content":
+                        FOLLOWUP_PROMPT + f"\n\nUser: {last_user}\n\nAssistant: {assistant_reply[:600]}"}],
+                    max_tokens=140,
+                    temperature=0.3, top_k=80, top_p=0.9,
+                )
+                qs = extract_questions(out)
+                if qs:
+                    self._followup_bridge.emit_questions(qs)
+            except Exception as e:  # noqa: BLE001
+                logger.debug("Followup generation failed: %s", e)
+            finally:
+                self._followups_busy = False
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _on_generation_error(self, message: str) -> None:
         self.chat_panel.finish_streaming()

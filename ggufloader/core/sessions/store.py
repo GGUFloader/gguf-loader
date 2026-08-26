@@ -36,7 +36,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2: assistant msgs may carry thinking_ms / feedback / feedback_note
 TITLE_MAX_CHARS = 40
 
 
@@ -152,6 +152,19 @@ class SessionStore:
         session["messages"].append({"role": role, "content": content, "ts": _now()})
         if role == "user" and not session.get("title"):
             session["title"] = derive_title(content)
+
+    def set_last_assistant_feedback(self, session: Dict[str, Any],
+                                    content: str, feedback: str,
+                                    note: Optional[str] = None) -> bool:
+        """Attach 👍/👎 (and optional better-response note) to the newest
+        assistant message whose content matches *content* (K5)."""
+        for msg in reversed(session.get("messages", [])):
+            if msg.get("role") == "assistant" and msg.get("content") == content:
+                msg["feedback"] = feedback  # "up" | "down"
+                if note is not None:
+                    msg["feedback_note"] = note
+                return True
+        return False
 
     def append_tool_result(self, session: Dict[str, Any], result: Dict[str, Any]) -> None:
         """Append a tool event (persisted for transcript replay)."""

@@ -14,7 +14,7 @@ def store(tmp_path):
 
 def test_create_defaults(store):
     s = store.create()
-    assert s["version"] == 1
+    assert s["version"] == 2
     assert s["mode"] == "chat"
     assert s["workspace"] is None
     assert s["title"] is None

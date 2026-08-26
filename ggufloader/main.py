@@ -15,7 +15,7 @@ import sys
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from ggufloader.resource_manager import find_icon, get_dll_path
+from ggufloader.resource_manager import find_config_dir, find_icon, get_dll_path, find_logs_dir
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,6 +71,14 @@ def main() -> int:
             return 0
 
     setup_library_path()
+
+    # O2: file logging with previous-run retention (log.txt / log-prev.txt)
+    try:
+        from ggufloader.logging_setup import setup_file_logging
+        log_file = setup_file_logging(find_logs_dir())
+        logger.info("Logging to %s", log_file)
+    except Exception as e:  # noqa: BLE001
+        print(f"File logging unavailable: {e}")
 
     app = QApplication(sys.argv)
     app.setApplicationName("GGUF Loader")
