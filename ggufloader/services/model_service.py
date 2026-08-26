@@ -35,11 +35,13 @@ class ModelLoadWorker(QObject):
         self.model_path: str = ""
         self.use_gpu: bool = False
         self.n_ctx: int = 32768
+        self.n_gpu_layers: int = -1
 
     @Slot()
     def process(self) -> None:
         try:
-            backend = ModelBackend(self.model_path, use_gpu=self.use_gpu, n_ctx=self.n_ctx)
+            backend = ModelBackend(self.model_path, use_gpu=self.use_gpu,
+                                   n_ctx=self.n_ctx, n_gpu_layers=self.n_gpu_layers)
             backend.load()
             self.loaded.emit(backend)
         except Exception as e:  # noqa: BLE001 - surface any failure to the UI
@@ -77,7 +79,8 @@ class ModelService(QObject):
     def is_loaded(self) -> bool:
         return self._backend is not None
 
-    def load(self, model_path: str, use_gpu: bool = False, n_ctx: int = 32768) -> None:
+    def load(self, model_path: str, use_gpu: bool = False, n_ctx: int = 32768,
+             n_gpu_layers: int = -1) -> None:
         """Load *model_path* in the background."""
         self.unload()
 
@@ -86,6 +89,7 @@ class ModelService(QObject):
         worker.model_path = model_path
         worker.use_gpu = use_gpu
         worker.n_ctx = n_ctx
+        worker.n_gpu_layers = n_gpu_layers
         worker.moveToThread(thread)
 
         thread.started.connect(worker.process)

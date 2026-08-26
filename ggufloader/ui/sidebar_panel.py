@@ -96,6 +96,21 @@ class SettingsSidebar(QFrame):
         self.install_gpu_btn.clicked.connect(self.install_gpu_requested.emit)
         layout.addWidget(self.install_gpu_btn)
 
+        # B2: GPU layers control (how many transformer blocks offloaded)
+        gpu_layers_row = QHBoxLayout()
+        gpu_layers_row.addWidget(QLabel("GPU Layers:"))
+        from PySide6.QtWidgets import QSpinBox as _QSB
+        self.gpu_layers_spin = _QSB()
+        self.gpu_layers_spin.setRange(0, 128)
+        self.gpu_layers_spin.setValue(128)
+        self.gpu_layers_spin.setSpecialValueText("Auto (all)")
+        self.gpu_layers_spin.setToolTip("0 = CPU only, Auto = offload all layers")
+        self.gpu_layers_spin.setMinimumHeight(30)
+        self.gpu_layers_spin.setFixedWidth(110)
+        gpu_layers_row.addWidget(self.gpu_layers_spin)
+        gpu_layers_row.addStretch(1)
+        layout.addLayout(gpu_layers_row)
+
         self.gpu_install_status = QLabel("")
         self.gpu_install_status.setObjectName("mutedLabel")
         self.gpu_install_status.setWordWrap(True)
@@ -138,6 +153,26 @@ class SettingsSidebar(QFrame):
         self.new_chat_btn.setMinimumHeight(38)
         self.new_chat_btn.clicked.connect(self.new_chat_requested.emit)
         layout.addWidget(self.new_chat_btn)
+
+        # Chat search/filter bar
+        self.session_search = QWidget()
+        search_layout = QHBoxLayout(self.session_search)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.setSpacing(4)
+        self.session_search_input = QWidget()
+        self.session_search_input.setObjectName("searchInput")
+        search_inner = QHBoxLayout(self.session_search_input)
+        search_inner.setContentsMargins(6, 2, 6, 2)
+        search_inner.setSpacing(4)
+        from PySide6.QtWidgets import QLineEdit as _QLE
+        self._search_field = _QLE()
+        self._search_field.setPlaceholderText("🔍 Search chats...")
+        self._search_field.setClearButtonEnabled(True)
+        self._search_field.textChanged.connect(self._filter_sessions)
+        search_inner.addWidget(self._search_field)
+        self.session_search_input.setMinimumHeight(28)
+        search_layout.addWidget(self.session_search_input)
+        layout.addWidget(self.session_search)
 
         self.session_list = QListWidget()
         self.session_list.setObjectName("sessionList")
@@ -187,6 +222,19 @@ class SettingsSidebar(QFrame):
 
     def set_params_enabled(self, enabled: bool) -> None:
         self.params_btn.setEnabled(bool(enabled))
+
+    def set_gpu_layers_max(self, max_layers: int) -> None:
+        try:
+            self.gpu_layers_spin.setMaximum(max(1, int(max_layers)))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def get_gpu_layers(self) -> int:
+        try:
+            v = int(self.gpu_layers_spin.value())
+            return -1 if v >= self.gpu_layers_spin.maximum() else v
+        except Exception:  # noqa: BLE001
+            return -1
 
     def get_processing_mode(self) -> str:
         return "GPU Accelerated" if self.gpu_button.isChecked() else "CPU Only"
@@ -318,6 +366,28 @@ class SettingsSidebar(QFrame):
         if then.year == datetime.now().year:
             return then.strftime("%B")
         return str(then.year)
+
+    def _filter_sessions(self, text: str) -> None:
+        """Hide session items that don't match the search text."""
+        query = text.strip().lower()
+        for i in range(self.session_list.count()):
+            item = self.session_list.item(i)
+            if not query:
+                item.setHidden(False)
+                continue
+            # Headers always visible when there's a match below them
+            item_text = (item.text() or "").lower()
+            item.setHidden(query not in item_text and item.data(Qt.UserRole) is not None)
+        # Show date headers that have visible items after them
+        visible_below = False
+        for i in range(self.session_list.count() - 1, -1, -1):
+            item = self.session_list.item(i)
+            if item.data(Qt.UserRole) is None:
+                # Date header - hide if no visible items below
+                item.setHidden(not visible_below)
+                visible_below = False
+            elif not item.isHidden():
+                visible_below = True
 
     def _on_session_clicked(self, item: QListWidgetItem) -> None:
         session_id = item.data(Qt.UserRole)

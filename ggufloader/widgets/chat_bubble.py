@@ -212,6 +212,8 @@ class ChatBubble(QFrame):
         self.on_regenerate = None
         # Optional K5 feedback callback: called with "up" or "down".
         self.on_feedback = None
+        # Optional callback fired from the context menu ("Delete message").
+        self.on_delete = None
         # Optional callback fired from the context menu ("Edit message").
         self.on_edit = None
         # While True (generation active) links don't open — prevents
@@ -240,6 +242,9 @@ class ChatBubble(QFrame):
                 actions[up] = lambda: self.on_feedback("up")
                 down = menu.addAction("👎 Bad response…")
                 actions[down] = lambda: self.on_feedback("down")
+        if self.on_delete is not None:
+            delete_action = menu.addAction("🗑 Delete message")
+            actions[delete_action] = lambda: self.on_delete(self.text)
         elif self.on_edit is not None:
             edit_action = menu.addAction("✏ Edit message")
             actions[edit_action] = lambda: self.on_edit(self.text)
@@ -307,7 +312,12 @@ class ChatBubble(QFrame):
                 header = (f'<a href="__copy__{idx}">⧉ {lang or "code"} '
                           f"— click to copy</a><br>")
                 cursor.insertHtml(header)
-                cursor.insertText(code.rstrip("\n"), mono)
+                raw = code.rstrip("\n")
+                try:
+                    from ggufloader.widgets.syntax_highlighter import insert_highlighted_code
+                    insert_highlighted_code(cursor, raw, lang, self._is_dark_mode, mono)
+                except Exception:  # noqa: BLE001 - fallback to plain mono
+                    cursor.insertText(raw, mono)
                 cursor.insertBlock()
                 first_block = True  # trailing block already added by code
                 idx += 1

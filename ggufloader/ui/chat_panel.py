@@ -49,6 +49,7 @@ class ChatPanel(QWidget):
     stop_requested = Signal()
     regenerate_requested = Signal()
     edit_last_requested = Signal(str)
+    delete_message_requested = Signal(str)  # content of message to delete
     feedback_requested = Signal(str, str)  # status ("up"/"down"), message text
     attach_requested = Signal()
 
@@ -627,8 +628,10 @@ class ChatPanel(QWidget):
         if not is_user:
             bubble.on_regenerate = self.regenerate_requested.emit
             bubble.on_feedback = self.feedback_requested.emit
+            bubble.on_delete = lambda t=text: self.delete_message_requested.emit(t)
         else:
             bubble.on_edit = self.edit_last_requested.emit
+            bubble.on_delete = lambda t=text: self.delete_message_requested.emit(t)
 
         container = _BubbleRow(bubble, is_user, is_rtl=bubble.is_rtl)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)

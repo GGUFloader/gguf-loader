@@ -269,6 +269,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         help_menu = bar.addMenu("&Help")
         action = help_menu.addAction("Send Feedback")
         action.triggered.connect(self._show_feedback_dialog)
+        action = help_menu.addAction("Check for Updates…")
+        action.triggered.connect(self._check_for_updates)
         help_menu.addSeparator()
         action = help_menu.addAction("About GGUF Loader")
         action.triggered.connect(self._show_about)
@@ -296,6 +298,44 @@ class MainWindow(QMainWindow, ThemeMixin):
             "Local LLM runtime for GGUF models.<br><br>"
             "Built by Hussain Nazary \u00B7 @hussainnazary2",
         )
+
+    def _check_for_updates(self) -> None:
+        """O4: Check for updates via release JSON (GPT4All parity)."""
+        import urllib.request
+        import json as _json
+        from ggufloader import __version__
+
+        def _worker() -> None:
+            try:
+                url = ("https://api.github.com/repos/hussainnazary2/"
+                       "gguf-loader/releases/latest")
+                req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.v3+json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = _json.loads(resp.read().decode())
+                tag = (data.get("tag_name") or "").lstrip("v")
+                body = data.get("body") or ""
+                html_url = data.get("html_url") or ""
+                if tag and tag != __version__:
+                    msg = (f"A new version is available: <b>{tag}</b><br><br>"
+                           f"You are running <b>v{__version__}</b>.<br><br>"
+                           f"{body[:300]}")
+                    if html_url:
+                        reply = QMessageBox.information(
+                            self, "Update Available",
+                            msg, QMessageBox.Open | QMessageBox.Cancel)
+                        if reply == QMessageBox.Open:
+                            import webbrowser
+                            webbrowser.open(html_url)
+                else:
+                    QMessageBox.information(
+                        self, "No Updates",
+                        f"GGUF Loader v{__version__} is up to date.")
+            except Exception as e:  # noqa: BLE001
+                QMessageBox.warning(
+                    self, "Update Check Failed",
+                    f"Could not check for updates:\n{e}")
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _populate_addons_menu(self) -> None:
         """Rebuild the Addons menu from the loaded addons."""
@@ -357,6 +397,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         p.stop_requested.connect(self._stop_generation)
         p.regenerate_requested.connect(self._regenerate_last)
         p.edit_last_requested.connect(self._edit_last_prompt)
+        p.delete_message_requested.connect(self._on_delete_message)
         p.feedback_requested.connect(self._on_feedback)
         s.context_combo.currentIndexChanged.connect(self._on_context_changed)
         s.params_requested.connect(self._open_model_params)
@@ -381,6 +422,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         c.finished.connect(lambda: self.chat_panel.set_generating(False))
         c.error.connect(lambda _m: self.chat_panel.set_generating(False))
         c.token_received.connect(self.chat_panel.stream_token)
+        c.rate_update.connect(self._on_rate_update)
         c.finished.connect(self._on_generation_finished)
         c.error.connect(self._on_generation_error)
 
@@ -419,11 +461,13 @@ class MainWindow(QMainWindow, ThemeMixin):
     def _load_model(self, path: str) -> None:
         use_gpu = self.sidebar.get_processing_mode() == "GPU Accelerated"
         n_ctx = self.sidebar.get_context_size()
+        n_gpu_layers = self.sidebar.get_gpu_layers() if use_gpu else 0
 
         self.sidebar.set_loading(True)
         self.sidebar.set_model_info("")
         self.sidebar.set_status("Loading model...")
-        self._model_service.load(path, use_gpu=use_gpu, n_ctx=n_ctx)
+        self._model_service.load(path, use_gpu=use_gpu, n_ctx=n_ctx,
+                                 n_gpu_layers=n_gpu_layers)
 
     def _on_context_changed(self, _index: int) -> None:
         """Context changes only take effect when the model is reloaded."""
@@ -667,6 +711,40 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._refresh_session_list()
         self.chat_panel.refill_input(popped if popped is not None else text)
 
+    def _on_delete_message(self, text: str) -> None:
+        """Delete a single message from the current session and UI."""
+        if getattr(self.chat_panel, "_generating", False):
+            self.chat_panel.add_system_message("ℹ️ Cannot delete while generating.")
+            return
+        # Find and remove from conversation_history
+        removed = False
+        for i, msg in enumerate(self.conversation_history):
+            if msg.get("content") == text:
+                self.conversation_history.pop(i)
+                removed = True
+                break
+        # Remove from session
+        if self._session is not None:
+            msgs = self._session.get("messages") or []
+            for j, m in enumerate(msgs):
+                if m.get("content") == text:
+                    msgs.pop(j)
+                    removed = True
+                    break
+            self._save_session_quiet()
+        if removed:
+            # Find and remove the bubble from UI
+            for _container, bubble in list(self._bubbles):
+                if bubble.text == text:
+                    _container.setParent(None)
+                    self._bubbles.remove((_container, bubble))
+                    break
+            self._maybe_hide_empty_state()
+            self._refresh_session_list()
+            self.chat_panel.add_system_message("🗑 Message deleted.")
+        else:
+            self.chat_panel.add_system_message("ℹ️ Message not found.")
+
     def _fit_messages_to_context(
         self, messages: list[dict], params: dict
     ) -> tuple[list[dict], bool, bool]:
@@ -795,6 +873,10 @@ class MainWindow(QMainWindow, ThemeMixin):
                 self._followups_busy = False
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _on_rate_update(self, tokens_per_sec: float) -> None:
+        """Update the sidebar with live token generation rate."""
+        self.sidebar.set_status(f"⚡ {tokens_per_sec:.1f} tokens/sec")
 
     def _on_generation_error(self, message: str) -> None:
         self.chat_panel.finish_streaming()
