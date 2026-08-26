@@ -40,7 +40,7 @@ classifiers = [
 # build anything from source.
 dependencies = [
     "PySide6>=6.8,<6.12",
-    "llama-cpp-python==0.3.34",
+    "llama-cpp-python==0.3.35",
     "langgraph>=0.6.11,<0.7",
     "langgraph-checkpoint-sqlite>=2.0.11,<3",
     "langchain-core>=0.3.86,<0.4",
