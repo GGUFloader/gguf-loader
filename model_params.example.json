@@ -1,0 +1,6 @@
+{
+  "_comment": "Per-model chat sampling overrides. Keys are lowercased substrings matched against the model file name (first hit wins). Allowed keys: temperature, top_k, top_p, repeat_penalty, max_tokens. Copy this file to your config dir as model_params.json.",
+  "lfm2.5": {"temperature": 0.2, "top_k": 80, "repeat_penalty": 1.05},
+  "qwen3": {"temperature": 0.6},
+  "gemma": {"temperature": 0.7, "top_k": 64}
+}

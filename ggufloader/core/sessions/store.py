@@ -30,7 +30,7 @@ import json
 import logging
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -40,10 +40,23 @@ SCHEMA_VERSION = 1
 TITLE_MAX_CHARS = 40
 
 
+_last_stamp = ""
+
+
 def _now() -> str:
-    # Millisecond precision keeps list ordering deterministic when several
-    # sessions are saved within the same second.
-    return datetime.now().isoformat(timespec="milliseconds")
+    """Millisecond ISO stamp, guaranteed strictly increasing per process.
+
+    Windows' system clock only ticks every ~15ms, so two saves inside one
+    tick would otherwise collide and break "newest first" ordering.
+    """
+    global _last_stamp
+    stamp = datetime.now().isoformat(timespec="milliseconds")
+    if stamp <= _last_stamp:
+        stamp = (
+            datetime.fromisoformat(_last_stamp) + timedelta(milliseconds=1)
+        ).isoformat(timespec="milliseconds")
+    _last_stamp = stamp
+    return stamp
 
 
 def derive_title(text: str, max_chars: int = TITLE_MAX_CHARS) -> str:

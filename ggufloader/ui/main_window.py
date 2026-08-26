@@ -31,8 +31,12 @@ from PySide6.QtWidgets import (
 )
 
 from ggufloader.addon_manager import AddonManager
-from ggufloader.config import CHAT_MAX_TOKENS, MAX_TOKENS, WINDOW_SIZE, WINDOW_TITLE, get_paths
+from ggufloader.config import (
+    CHAT_MAX_TOKENS, WINDOW_SIZE, WINDOW_TITLE, get_paths,
+)
 from ggufloader.core.llm.model_backend import ModelBackend
+from ggufloader.core.llm.model_params import load_model_params
+from ggufloader.core.llm.model_profiles import resolve_chat_config
 from ggufloader.core.llm.prompt_builder import PromptBuilder
 from ggufloader.core.sessions import SessionStore
 from ggufloader.resource_manager import find_icon
@@ -72,6 +76,9 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._store = SessionStore(get_paths()["chats"])
         self._session: Optional[dict] = None
         self._current_session_id: Optional[str] = None
+        # Auto-configured per loaded model (see _apply_model_profile).
+        self._chat_model_params: dict = {}
+        self._chat_system_prompt: Optional[str] = None
 
         self._init_window()
         self._build_ui()
@@ -324,6 +331,26 @@ class MainWindow(QMainWindow, ThemeMixin):
                 "ℹ️ Reload the model (Load GGUF Model) to apply the new context size."
             )
 
+    def _apply_model_profile(self, backend: ModelBackend) -> str:
+        """Detect the model family and auto-configure chat for it.
+
+        Returns a human-readable detection line for the sidebar.
+        """
+        try:
+            config = resolve_chat_config(backend.model_path)
+        except Exception as e:  # noqa: BLE001 - never block chat on routing
+            logger.warning("Model-profile detection failed: %s", e)
+            config = {"label": "Generic instruct", "detected_via": "fallback",
+                      "params": {}, "system_prompt": None}
+        self._chat_model_params = dict(config.get("params") or {})
+        self._chat_model_params.setdefault("max_tokens", CHAT_MAX_TOKENS)
+        self._chat_system_prompt = config.get("system_prompt")
+        return (
+            f"\n🧭 Auto-config: {config.get('label')} "
+            f"({config.get('detected_via')}) · "
+            f"temp {self._chat_model_params.get('temperature')}"
+        )
+
     def _on_model_loaded(self, backend: ModelBackend) -> None:
         self.sidebar.set_loading(False)
         info = f"✅ Loaded: {Path(backend.model_path).name}"
@@ -334,6 +361,7 @@ class MainWindow(QMainWindow, ThemeMixin):
                 f"model was trained for ({trained} tokens) — expect degraded output. "
                 "Pick a smaller context or a longer-context model."
             )
+        info += self._apply_model_profile(backend)
         self.sidebar.set_model_info(info)
         self.sidebar.set_status("Model ready! Start chatting...")
         self.chat_panel.add_system_message("\U0001F916 AI Assistant loaded and ready to help!")
@@ -376,22 +404,19 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.chat_panel.add_user_message(text)
         self.conversation_history.append({"role": "user", "content": text})
 
-        # Template-aware chat: llama.cpp renders the messages through the
-        # model's embedded chat template (like Ollama). No generic stop
-        # strings and no repeat penalty - both degrade structured output.
+        # Automatic model routing: detect family from GGUF metadata /
+        # filename, apply its recommended sampling + system prompt, then
+        # let the user's model_params.json override anything.
         messages = self._prompt_builder.build_messages(
-            self.conversation_history[:-1], text
+            self.conversation_history[:-1], text,
+            system_prompt=self._chat_system_prompt,
         )
+        params = {
+            "max_tokens": CHAT_MAX_TOKENS,
+            **self._chat_model_params,
+        }
         self.chat_panel.begin_streaming()
-        self._chat_service.generate(
-            self._model_service.backend,
-            messages=messages,
-            max_tokens=CHAT_MAX_TOKENS,
-            temperature=0.7,
-            top_p=0.9,
-            top_k=40,
-            repeat_penalty=1.1,  # Ollama's default; prevents degenerate loops
-        )
+        self._chat_service.generate(self._model_service.backend, messages=messages, **params)
 
     def _on_generation_finished(self) -> None:
         response = self.chat_panel.finish_streaming()

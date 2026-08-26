@@ -16,6 +16,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from shiboken6 import isValid
 
 from ggufloader.core.llm.model_backend import ModelBackend
+from ggufloader.core.llm.prompt_builder import CHAT_STOP_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,10 @@ class ChatWorker(QObject):
             kwargs = dict(self.params)
             if self.messages is not None:
                 # Template-aware path: llama.cpp applies the model's own
-                # chat template; EOS handling comes from the template, so
-                # no generic text stop sequences are injected.
+                # chat template. Stop strings back the template up - when
+                # a model's special tokens degrade to plain text, EOS is
+                # never detected and generation would fill the context.
+                kwargs["stop"] = CHAT_STOP_TOKENS
                 for token in self.backend.chat_stream(self.messages, **kwargs):
                     if self._stop_event.is_set():
                         break

@@ -77,7 +77,15 @@ def test_chat_stream_passes_messages_and_no_text_stops():
     call = fake.calls[0]
     assert call["messages"] is msgs
     assert call["stream"] is True and call["max_tokens"] == 99
-    assert "stop" not in call
+    assert "stop" not in call  # caller decides; service layer adds them
+
+
+def test_service_layer_injects_template_backstop_stops():
+    from ggufloader.core.llm.prompt_builder import CHAT_STOP_TOKENS
+    assert "<|im_end|>" in CHAT_STOP_TOKENS      # LFM2 / Qwen / ChatML
+    assert "<|eot_id|>" in CHAT_STOP_TOKENS      # Llama 3
+    assert "user:" not in CHAT_STOP_TOKENS       # no generic text traps
+    assert "###" not in CHAT_STOP_TOKENS         # markdown must survive
 
 
 def test_chat_requires_loaded_model():

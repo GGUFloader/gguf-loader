@@ -8,7 +8,7 @@ prompt and bounded conversation history.
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Answer questions clearly and concisely."
@@ -31,6 +31,19 @@ STOP_TOKENS = [
     "\nHuman:", "\nUser:", "Human:", "User:",
 ]
 
+# End-of-turn markers passed as *stop strings* alongside the chat
+# template. When a model's special tokens degrade to plain text (weak
+# quant, template fallback), the runtime never sees EOS and generation
+# runs until the context window fills - these strings catch that case.
+CHAT_STOP_TOKENS = [
+    "<|im_end|>",      # ChatML / LFM2 / Qwen turn end
+    "<|endoftext|>",   # GPT-style / LFM2
+    "<|eot_id|>",      # Llama 3 turn end
+    "</s>",            # Mistral / Llama 2
+    "<|end_of_text|>", # Llama 3
+    "<|return|>",      # gpt-oss final
+]
+
 
 class PromptBuilder:
     """Formats conversation history + user message into a single prompt."""
@@ -39,7 +52,8 @@ class PromptBuilder:
         self.system_prompt = system_prompt
 
     def build_messages(
-        self, history: List[Dict[str, str]], user_message: str, max_history: int = 8
+        self, history: List[Dict[str, str]], user_message: str,
+        max_history: int = 8, system_prompt: Optional[str] = None,
     ) -> List[Dict[str, str]]:
         """Return a chat *messages* list for create_chat_completion.
 
@@ -48,7 +62,7 @@ class PromptBuilder:
         being flattened into ``User:/Assistant:`` text.
         """
         messages: List[Dict[str, str]] = [
-            {"role": "system", "content": self.system_prompt}
+            {"role": "system", "content": system_prompt or self.system_prompt}
         ]
         for msg in history[-max_history:]:
             role = msg.get("role", "user")

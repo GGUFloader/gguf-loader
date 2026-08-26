@@ -20,6 +20,7 @@ from shiboken6 import isValid
 
 from ggufloader.core.agent import GraphAgent, ToolRegistry
 from ggufloader.core.llm.model_backend import ModelBackend
+from ggufloader.core.llm.prompt_builder import CHAT_STOP_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,7 @@ class AgentService(QObject):
                 top_p=0.9,
                 top_k=40,
                 repeat_penalty=1.1,  # Ollama's default
+                stop=CHAT_STOP_TOKENS,
             )
 
         tools = ToolRegistry(Path(workspace))

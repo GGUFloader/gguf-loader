@@ -15,6 +15,15 @@ MAX_TOKENS = 2048
 # the chat budget must cover thought + answer or generation dies mid-think.
 CHAT_MAX_TOKENS = 16384
 
+# Chat sampling defaults. Low temperature matches Ollama's baked-in
+# recommendations for small instruct models (e.g. LiquidAI LFM2.5 ships
+# temp 0.2 / top_k 80 / repeat 1.05): at 0.7+ such models spiral into
+# unclosed <think> loops until the context window fills.
+CHAT_TEMPERATURE = 0.2
+CHAT_TOP_K = 80
+CHAT_TOP_P = 0.9
+CHAT_REPEAT_PENALTY = 1.05
+
 # English System Prompts
 ENGLISH_SYSTEM_PROMPTS = {
     "helpful_assistant": {

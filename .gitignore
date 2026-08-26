@@ -143,6 +143,10 @@ chats/
 exports/
 config/
 
+# Local llama.cpp reference checkout + prebuilt binaries
+llama.cpp/
+llama.cpp-bin/
+
 # Benchmarks
 .benchmarks/
 

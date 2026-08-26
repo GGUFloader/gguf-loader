@@ -1,0 +1,64 @@
+"""Per-model chat parameter overrides.
+
+Some models need non-default sampling to behave (LiquidAI LFM2.5 needs
+temperature 0.2; creative models may want 0.8). Overrides live in an
+optional ``model_params.json`` looked up in the config dir first, then
+next to the package root:
+
+    {
+      "lfm2.5": {"temperature": 0.2, "top_k": 80, "repeat_penalty": 1.05},
+      "qwen3": {"temperature": 0.6}
+    }
+
+Keys are lowercased substrings matched against the model file name
+(first hit wins); values override any of: temperature, top_k, top_p,
+repeat_penalty, max_tokens.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
+
+OVERRIDABLE_KEYS = ("temperature", "top_k", "top_p", "repeat_penalty", "max_tokens")
+
+
+def _candidate_files() -> list:
+    from ggufloader.resource_manager import find_config_dir
+
+    return [Path(find_config_dir()) / "model_params.json"]
+
+
+def load_model_params(model_path: str, overrides_file: Optional[Path] = None) -> Dict[str, float]:
+    """Resolve chat parameter overrides for *model_path* ({} when none)."""
+    path = Path(overrides_file) if overrides_file else None
+    candidates = [path] if path else _candidate_files()
+    table: Dict[str, dict] = {}
+    for candidate in candidates:
+        if candidate is None or not Path(candidate).is_file():
+            continue
+        try:
+            # utf-8-sig tolerates a BOM (PowerShell's UTF8 encoding writes one)
+            data = json.loads(Path(candidate).read_text(encoding="utf-8-sig"))
+            if isinstance(data, dict):
+                table = {str(k).lower(): v for k, v in data.items() if isinstance(v, dict)}
+            break
+        except Exception as e:  # noqa: BLE001 - bad file must not break chat
+            logger.warning("Could not read %s: %s", candidate, e)
+            break
+
+    name = Path(model_path).name.lower()
+    for key, params in table.items():
+        if key and key in name:
+            clean = {
+                k: v for k, v in params.items()
+                if k in OVERRIDABLE_KEYS and isinstance(v, (int, float))
+            }
+            if clean:
+                logger.info("Model params override via '%s': %s", key, clean)
+                return clean
+    return {}
