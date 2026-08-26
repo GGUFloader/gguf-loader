@@ -138,12 +138,13 @@ def read_model_limits(path: str | Path) -> Dict[str, Optional[int]]:
 # ---------------------------------------------------------------------------
 
 def _p(temperature: float, top_k: int, top_p: float,
-       repeat_penalty: float = 1.05) -> Dict[str, float]:
+       repeat_penalty: float = 1.05, min_p: float = 0.0) -> Dict[str, float]:
     return {
         "temperature": temperature,
         "top_k": top_k,
         "top_p": top_p,
         "repeat_penalty": repeat_penalty,
+        "min_p": min_p,
     }
 
 
@@ -239,7 +240,7 @@ def resolve_chat_config(model_path: str) -> Dict[str, Any]:
     meta = read_gguf_general_metadata(model_path)
     profile, how = detect_family(meta, model_path)
     params = {k: v for k, v in profile.items()
-              if k in ("temperature", "top_k", "top_p", "repeat_penalty")}
+              if k in ("temperature", "top_k", "top_p", "repeat_penalty", "min_p")}
     user = load_model_params(model_path)
     params.update(user)
     arch = (meta.get("architecture") or "").lower()

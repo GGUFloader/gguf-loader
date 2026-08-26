@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
@@ -38,6 +38,13 @@ class SettingsSidebar(QFrame):
         self.setMinimumWidth(280)
         self.setMaximumWidth(400)
         self.setFrameStyle(QFrame.StyledPanel)
+        self._pending_delete_id: str | None = None
+        self._pending_delete_timer = QTimer(self)
+        self._pending_delete_timer.setSingleShot(True)
+        self._pending_delete_timer.setInterval(3000)
+        self._pending_delete_timer.timeout.connect(self._cancel_pending_delete)
+        self._last_sessions: list[dict] = []
+        self._last_active_id: str | None = None
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -228,6 +235,8 @@ class SettingsSidebar(QFrame):
     # ------------------------------------------------------------------
     def set_sessions(self, sessions: list[dict], active_id: str | None = None) -> None:
         """Re-render the session list; *sessions* comes from SessionStore."""
+        self._last_sessions = list(sessions)
+        self._last_active_id = active_id
         self.session_list.blockSignals(True)
         self.session_list.clear()
         current_bucket: str | None = None
@@ -247,19 +256,48 @@ class SettingsSidebar(QFrame):
                 item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
                 tooltip = f"Corrupt session file: {meta.get('error', '')}"
             else:
-                title = meta.get("title") or "New Chat"
-                badge = " \U0001F916" if meta.get("mode") == "agent" else ""
-                label = f"{title}{badge}\n{self._relative_time(meta.get('updated', ''))}"
-                item = QListWidgetItem(label)
-                item.setData(Qt.UserRole, meta["id"])
-                if meta["id"] == active_id:
-                    font = item.font()
-                    font.setBold(True)
-                    item.setFont(font)
-                    self.session_list.setCurrentItem(item)
-            item.setToolTip(tooltip if meta.get("corrupt") else (meta.get("title") or "New Chat"))
+                sid = meta["id"]
+                is_pending = sid == self._pending_delete_id
+                if is_pending:
+                    label = f"⚠️ Delete '{meta.get('title') or 'New Chat'}'?\n  ✓ Confirm   ✕ Cancel (3s)"
+                    item = QListWidgetItem(label)
+                    item.setData(Qt.UserRole, sid)
+                    item.setBackground(self.palette().color(self.backgroundRole()).darker(110))
+                    tooltip = "Click to confirm delete — auto-cancels after 3 seconds"
+                else:
+                    title = meta.get("title") or "New Chat"
+                    badge = " \U0001F916" if meta.get("mode") == "agent" else ""
+                    label = f"{title}{badge}\n{self._relative_time(meta.get('updated', ''))}"
+                    item = QListWidgetItem(label)
+                    item.setData(Qt.UserRole, sid)
+                    if sid == active_id:
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                        self.session_list.setCurrentItem(item)
+                    tooltip = meta.get("title") or "New Chat"
+            item.setToolTip(tooltip)
             self.session_list.addItem(item)
         self.session_list.blockSignals(False)
+
+    def _enter_delete_confirm(self, session_id: str) -> None:
+        self._pending_delete_id = session_id
+        self._pending_delete_timer.start()
+        self.set_sessions(self._last_sessions, self._last_active_id)
+
+    def _confirm_pending_delete(self) -> None:
+        if self._pending_delete_id:
+            sid = self._pending_delete_id
+            self._pending_delete_id = None
+            self._pending_delete_timer.stop()
+            self.set_sessions(self._last_sessions, self._last_active_id)
+            self.session_delete_requested.emit(sid)
+
+    def _cancel_pending_delete(self) -> None:
+        if self._pending_delete_id is not None:
+            self._pending_delete_id = None
+            self._pending_delete_timer.stop()
+            self.set_sessions(self._last_sessions, self._last_active_id)
 
     @staticmethod
     def _date_bucket(iso_stamp: str) -> str:
@@ -283,14 +321,25 @@ class SettingsSidebar(QFrame):
 
     def _on_session_clicked(self, item: QListWidgetItem) -> None:
         session_id = item.data(Qt.UserRole)
-        if session_id:
-            self.session_selected.emit(session_id)
+        if not session_id:
+            return
+        # Two-step delete: clicking the pending item confirms
+        if self._pending_delete_id == session_id:
+            self._confirm_pending_delete()
+            return
+        if self._pending_delete_id is not None:
+            self._cancel_pending_delete()
+        self.session_selected.emit(session_id)
 
     def _show_session_menu(self, pos) -> None:
         item = self.session_list.itemAt(pos)
         if item is None or not item.data(Qt.UserRole):
             return
         session_id = item.data(Qt.UserRole)
+        # If this item is already pending delete, second right-click cancels
+        if self._pending_delete_id == session_id:
+            self._cancel_pending_delete()
+            return
         menu = QMenu(self)
         # Popup windows clear to black on Windows unless themed explicitly.
         from ggufloader.widgets.chat_bubble import _styled_text_menu
@@ -299,9 +348,11 @@ class SettingsSidebar(QFrame):
         delete_action = menu.addAction("Delete")
         chosen = menu.exec(self.session_list.mapToGlobal(pos))
         if chosen is rename_action:
+            if self._pending_delete_id is not None:
+                self._cancel_pending_delete()
             self.session_rename_requested.emit(session_id)
         elif chosen is delete_action:
-            self.session_delete_requested.emit(session_id)
+            self._enter_delete_confirm(session_id)
 
     @staticmethod
     def _relative_time(iso_stamp: str) -> str:

@@ -24,7 +24,7 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-OVERRIDABLE_NUMERIC = ("temperature", "top_k", "top_p", "repeat_penalty", "max_tokens")
+OVERRIDABLE_NUMERIC = ("temperature", "top_k", "top_p", "repeat_penalty", "max_tokens", "min_p")
 OVERRIDABLE_KEYS = OVERRIDABLE_NUMERIC + ("system_prompt",)
 
 

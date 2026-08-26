@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import List, Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
@@ -30,6 +31,7 @@ class ChatWorker(QObject):
     """
 
     token_received = Signal(str)
+    rate_update = Signal(float)  # tokens per second
     finished = Signal()
     error = Signal(str)
 
@@ -41,22 +43,26 @@ class ChatWorker(QObject):
         self.messages: Optional[List[dict]] = None
         self.stop_tokens: List[str] = []
         self.params: dict = {}
+        self._token_count = 0
+        self._start_time = 0.0
+        self._last_rate_time = 0.0
 
     @Slot()
     def process(self) -> None:
+        self._token_count = 0
+        self._start_time = time.monotonic()
+        self._last_rate_time = self._start_time
         try:
             kwargs = dict(self.params)
             if self.messages is not None:
-                # Template-aware path: llama.cpp applies the model's own
-                # chat template. Stop strings back the template up - when
-                # a model's special tokens degrade to plain text, EOS is
-                # never detected and generation would fill the context.
                 kwargs["stop"] = CHAT_STOP_TOKENS
                 for token in self.backend.chat_stream(self.messages, **kwargs):
                     if self._stop_event.is_set():
                         break
                     if token:
+                        self._token_count += 1
                         self.token_received.emit(token)
+                        self._maybe_emit_rate()
             else:
                 kwargs["stream"] = True
                 kwargs["stop"] = self.stop_tokens
@@ -64,11 +70,22 @@ class ChatWorker(QObject):
                     if self._stop_event.is_set():
                         break
                     if token:
+                        self._token_count += 1
                         self.token_received.emit(token)
+                        self._maybe_emit_rate()
             self.finished.emit()
         except Exception as e:  # noqa: BLE001
             logger.error("Chat generation failed: %s", e)
             self.error.emit(str(e))
+
+    def _maybe_emit_rate(self) -> None:
+        """Emit tokens/sec every ~1 second (GPT4All TokenTimer parity)."""
+        now = time.monotonic()
+        elapsed = now - self._last_rate_time
+        if elapsed >= 1.0:
+            tps = self._token_count / max(0.001, now - self._start_time)
+            self.rate_update.emit(round(tps, 1))
+            self._last_rate_time = now
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -79,6 +96,7 @@ class ChatService(QObject):
 
     started = Signal()
     token_received = Signal(str)
+    rate_update = Signal(float)  # tokens per second
     finished = Signal()
     error = Signal(str)
 

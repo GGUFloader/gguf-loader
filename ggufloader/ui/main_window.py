@@ -452,6 +452,18 @@ class MainWindow(QMainWindow, ThemeMixin):
         if config.get("is_embedding_model"):
             extra += ("\nℹ️ This looks like an *embedding* model — it cannot "
                       "converse. Load a chat/instruct GGUF instead.")
+        # O5: warn when file size may exceed available memory
+        try:
+            from ggufloader.utils import get_system_ram_bytes
+            ram = get_system_ram_bytes()
+            fsize = Path(backend.model_path).stat().st_size if Path(backend.model_path).exists() else 0
+            if ram and fsize and fsize > ram * 0.55:
+                gb = fsize / (1024 ** 3)
+                ram_gb = ram / (1024 ** 3)
+                extra += (f"\n⚠️ Model size {gb:.1f} GB is large for {ram_gb:.0f} GB RAM — "
+                          "expect slow loading or swapping. Try a smaller quant.")
+        except Exception:  # noqa: BLE001
+            pass
 
         # ---- GPU honesty (B1) + GGUF limits (B3) ----
         gpu = backend.gpu_status
@@ -865,15 +877,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._refresh_session_list()
 
     def _on_session_delete(self, session_id: str) -> None:
-        confirm = QMessageBox.question(
-            self,
-            "Delete Chat",
-            "Delete this chat session permanently?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if confirm != QMessageBox.Yes:
-            return
+        # Sidebar already handles two-step inline confirmation with 3s
+        # auto-cancel, so no additional QMessageBox is needed here.
         self._store.delete(session_id)
         if session_id == self._current_session_id:
             self._on_new_chat()
