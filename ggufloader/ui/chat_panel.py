@@ -302,6 +302,33 @@ class ChatPanel(QWidget):
         self._maybe_hide_empty_state()
         self.scroll_to_bottom()
 
+    def add_rag_sources(self, chunks: list) -> None:
+        """Show RAG source citations after a response that used context."""
+        if not chunks:
+            return
+        from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
+        bar = QFrame()
+        bar.setObjectName("ragSourcesBar")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(20, 4, 20, 4)
+        row.setSpacing(6)
+        sources_label = QLabel("📚 Sources:")
+        sources_label.setObjectName("ragSourcesLabel")
+        row.addWidget(sources_label)
+        for i, chunk in enumerate(chunks[:3], 1):
+            # Shorten path for display
+            path = chunk.doc_path.replace("\\", "/").split("/")
+            short = path[-1] if path else "doc"
+            btn = QPushButton(f"{short}")
+            btn.setObjectName("ragSourceChip")
+            btn.setToolTip(chunk.text[:200] + "...")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            row.addWidget(btn)
+        row.addStretch(1)
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, bar)
+        self._maybe_hide_empty_state()
+        self.scroll_to_bottom()
+
     def begin_streaming(self) -> None:
         """Start a new empty AI bubble that tokens will stream into."""
         self._current_ai_text = ""

@@ -83,10 +83,12 @@ def read_gguf_general_metadata(
 ) -> Dict[str, Any]:
     """Return model metadata from the GGUF header (no tensor access).
 
-    Collects every ``general.*`` string plus scalar ``<arch>.context_length``
-    and ``<arch>.block_count`` entries (the arch prefix is unknown before
-    parsing, hence suffix-matching). Raises nothing; returns {} for
-    non-GGUF or unreadable files.
+    Collects:
+    - Every ``general.*`` string (architecture, name, etc.)
+    - ``tokenizer.chat_template`` for template-based system prompt detection
+    - Scalar ``<arch>.context_length`` and ``<arch>.block_count`` entries
+
+    Raises nothing; returns {} for non-GGUF or unreadable files.
     """
     out: Dict[str, Any] = {}
     try:
@@ -104,12 +106,16 @@ def read_gguf_general_metadata(
                 key = _read_str(f)
                 (vtype,) = struct.unpack("<I", f.read(4))
                 want_string = key.startswith("general.") and vtype == _T_STRING
+                # Read tokenizer.chat_template for template detection
+                want_template = key == "tokenizer.chat_template" and vtype == _T_STRING
                 want_limit = (
                     vtype in (4, 10)  # uint32 / uint64
                     and (key.endswith(".context_length") or key.endswith(".block_count"))
                 )
                 if want_string:
                     out[key[len("general."):]] = _read_str(f)
+                elif want_template:
+                    out["chat_template"] = _read_str(f)
                 elif want_limit:
                     out[key] = _skip_or_read(f, vtype, False)
                 else:
@@ -133,79 +139,285 @@ def read_model_limits(path: str | Path) -> Dict[str, Optional[int]]:
     return {"max_context": ctx, "layers": layers}
 
 
-# ---------------------------------------------------------------------------
-# Family profiles
-# ---------------------------------------------------------------------------
+def estimate_memory(path: str | Path, n_ctx: int = 32768,
+                    n_gpu_layers: int = 0) -> Dict[str, Any]:
+    """Estimate VRAM/RAM requirements for loading a model.
 
-def _p(temperature: float, top_k: int, top_p: float,
-       repeat_penalty: float = 1.05, min_p: float = 0.0) -> Dict[str, float]:
+    Returns ``{"model_gb": float, "kv_gb": float, "total_gb": float,
+    "fits_ram": bool, "fits_vram": bool, "layers": int|None,
+    "quant": str|None}``.
+
+    Heuristic: GGUF file size ≈ model weights in memory. KV cache is
+    approximated as ``n_ctx × 2 × layers × head_dim × 2 bytes`` where
+    head_dim defaults to 128 (typical for modern LLMs).
+    """
+    p = Path(path)
+    file_size = p.stat().st_size if p.exists() else 0
+    model_gb = file_size / (1024 ** 3)
+
+    meta = read_gguf_general_metadata(p)
+    layers = next(
+        (v for k, v in sorted(meta.items()) if k.endswith(".block_count")),
+        None,
+    )
+    quant = meta.get("general.quantization_version")
+    # Try to detect quant from filename
+    name_lower = p.name.lower()
+    for q in ("q2_k", "q3_k", "q4_0", "q4_k", "q5_k", "q6_k", "q8_0",
+              "f16", "f32", "iq4_xs"):
+        if q in name_lower:
+            quant = q
+            break
+
+    # KV cache estimation
+    if layers is not None and layers > 0:
+        # Modern LLMs: head_dim ≈ 128, 2 for key+value, float16 = 2 bytes
+        head_dim = 128
+        kv_per_layer = n_ctx * 2 * head_dim * 2  # bytes
+        kv_gb = (layers * kv_per_layer) / (1024 ** 3)
+    else:
+        # Fallback: KV cache ≈ 20% of model size per 32K context
+        kv_gb = model_gb * 0.2 * (n_ctx / 32768)
+
+    total_gb = model_gb + kv_gb
+
+    # Check available memory
+    ram_gb = _get_available_ram_gb()
+    vram_gb = _get_available_vram_gb()
+
+    fits_ram = total_gb <= ram_gb * 0.9 if ram_gb > 0 else True
+    fits_vram = (model_gb + kv_gb * 0.5) <= vram_gb * 0.9 if vram_gb > 0 else False
+
     return {
-        "temperature": temperature,
-        "top_k": top_k,
-        "top_p": top_p,
-        "repeat_penalty": repeat_penalty,
-        "min_p": min_p,
+        "model_gb": round(model_gb, 2),
+        "kv_gb": round(kv_gb, 2),
+        "total_gb": round(total_gb, 2),
+        "fits_ram": fits_ram,
+        "fits_vram": fits_vram,
+        "layers": layers,
+        "quant": quant,
+        "ram_gb": round(ram_gb, 1),
+        "vram_gb": round(vram_gb, 1),
     }
 
 
-# Match order matters: first hit wins. `archs` matches the GGUF
-# general.architecture string, `names` matches filename/metadata name.
-FAMILY_PROFILES = [
+def _get_available_ram_gb() -> float:
+    """Get available system RAM in GB."""
+    try:
+        import psutil
+        return psutil.virtual_memory().total / (1024 ** 3)
+    except ImportError:
+        pass
+    try:
+        import os
+        if os.name == "nt":
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            c_ulonglong = ctypes.c_ulonglong
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", c_ulonglong),
+                    ("ullAvailPhys", c_ulonglong),
+                    ("ullTotalPageFile", c_ulonglong),
+                    ("ullAvailPageFile", c_ulonglong),
+                    ("ullTotalVirtual", c_ulonglong),
+                    ("ullAvailVirtual", c_ulonglong),
+                    ("ullAvailExtendedVirtual", c_ulonglong),
+                ]
+            mem = MEMORYSTATUSEX()
+            mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
+            return mem.ullTotalPhys / (1024 ** 3)
+        else:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal:"):
+                        return int(line.split()[1]) / (1024 ** 2)
+    except Exception:  # noqa: BLE001
+        pass
+    return 0.0
+
+
+def _get_available_vram_gb() -> float:
+    """Get available GPU VRAM in GB (best-effort)."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split("\n")
+            if lines:
+                return float(lines[0].strip()) / 1024  # MB to GB
+    except Exception:  # noqa: BLE001
+        pass
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
+# Template auto-detection
+# ---------------------------------------------------------------------------
+
+def _template_supports_system(template: str) -> bool:
+    """Auto-detect whether a chat template supports system messages.
+
+    This is the Ollama-style smart detection: parse the actual template
+    string to determine if system messages are accepted.
+    """
+    if not template:
+        return True  # assume yes if no template
+
+    # Patterns that indicate system messages are NOT supported:
+    # 1. Mistral-style: strict alternation + only user/assistant
+    if "raise_exception" in template:
+        if "Conversation roles must alternate" in template:
+            return False
+        if "Only user and assistant roles are supported" in template:
+            return False
+
+    # 2. Templates that only loop over user/assistant (no system handling)
+    # Check if template has explicit system handling
+    has_system = (
+        "system" in template.lower()
+        or "<<SYS>>" in template
+        or "<|start_header_id|>system" in template
+        or "<|im_start|>system" in template
+    )
+
+    # 3. If template only has user/assistant roles in the loop, no system
+    if not has_system:
+        # Check if the loop only processes user and assistant
+        if "message['role'] == 'user'" in template or 'message["role"] == "user"' in template:
+            if "message['role'] == 'assistant'" in template or 'message["role"] == "assistant"' in template:
+                if "message['role'] == 'system'" not in template and 'message["role"] == "system"' not in template:
+                    return False
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Family profiles (loaded from model_families.json)
+# ---------------------------------------------------------------------------
+
+import json as _json
+from pathlib import Path as _Path
+
+def _load_family_profiles() -> List[Dict[str, Any]]:
+    """Load model family profiles from model_families.json."""
+    json_path = _Path(__file__).parent.parent.parent / "config" / "model_families.json"
+    if not json_path.exists():
+        logger.warning("model_families.json not found at %s", json_path)
+        return _FALLBACK_PROFILES
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = _json.load(f)
+        families = data.get("families", [])
+        # Convert to internal format
+        profiles = []
+        for fam in families:
+            params = fam.get("params", {})
+            profiles.append({
+                "family": fam["id"],
+                "label": fam.get("name", fam["id"]),
+                "archs": tuple(fam.get("arch_patterns", [])),
+                "names": tuple(fam.get("name_patterns", [])),
+                "supports_system_prompt": fam.get("supports_system_prompt", True),
+                "temperature": params.get("temperature", 0.7),
+                "top_k": params.get("top_k", 40),
+                "top_p": params.get("top_p", 0.9),
+                "repeat_penalty": params.get("repeat_penalty", 1.05),
+                "min_p": params.get("min_p", 0.0),
+                "max_tokens": params.get("max_tokens", 4096),
+                "context_length": fam.get("context_length", 4096),
+                "notes": fam.get("notes", ""),
+            })
+        logger.info("Loaded %d model families from model_families.json", len(profiles))
+        return profiles
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Failed to load model_families.json: %s", e)
+        return _FALLBACK_PROFILES
+
+
+# Fallback profiles when JSON is unavailable
+FALLBACK_PROFILES = [
     {
         "family": "liquid-lfm",
         "label": "LiquidAI LFM2",
         "archs": ("lfm2",),
         "names": ("lfm2", "lfm 2"),
-        **_p(0.2, 80, 0.9, 1.05),
+        "supports_system_prompt": True,
+        "temperature": 0.2, "top_k": 80, "top_p": 0.9,
+        "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
     },
     {
         "family": "qwen3",
         "label": "Qwen3",
         "archs": ("qwen3", "qwen3moe"),
         "names": ("qwen3",),
-        **_p(0.6, 20, 0.95, 1.05),
-    },
-    {
-        "family": "deepseek-r1",
-        "label": "DeepSeek-R1 distill",
-        "archs": (),
-        "names": ("deepseek-r1", "r1-distill"),
-        **_p(0.6, 40, 0.95, 1.1),
+        "supports_system_prompt": True,
+        "temperature": 0.6, "top_k": 20, "top_p": 0.95,
+        "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
     },
     {
         "family": "llama3",
         "label": "Meta Llama 3.x",
         "archs": ("llama",),
         "names": ("llama-3", "llama3", "meta-llama-3"),
-        **_p(0.6, 40, 0.9, 1.1),
+        "supports_system_prompt": True,
+        "temperature": 0.6, "top_k": 40, "top_p": 0.9,
+        "repeat_penalty": 1.1, "min_p": 0.0, "max_tokens": 4096,
     },
     {
-        "family": "gemma3",
-        "label": "Google Gemma 3",
-        "archs": ("gemma3", "gemma2"),
-        "names": ("gemma",),
-        **_p(1.0, 64, 0.95, 1.05),
+        "family": "mistral",
+        "label": "Mistral",
+        "archs": (),
+        "names": ("mistral",),
+        "supports_system_prompt": False,
+        "temperature": 0.7, "top_k": 40, "top_p": 0.9,
+        "repeat_penalty": 1.1, "min_p": 0.0, "max_tokens": 4096,
     },
     {
         "family": "gpt-oss",
         "label": "OpenAI gpt-oss",
         "archs": ("gpt_oss",),
         "names": ("gpt-oss", "gptoss"),
-        **_p(1.0, 40, 1.0, 1.05),
+        "supports_system_prompt": True,
+        "temperature": 1.0, "top_k": 40, "top_p": 1.0,
+        "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
     },
 ]
+
+# Load profiles on module import
+FAMILY_PROFILES = _load_family_profiles()
 
 # Applied when nothing matches: conservative defaults that behave well on
 # most small instruct quants (see the LFM2.5 degeneration incident).
 GENERIC_PROFILE = {
     "family": "generic",
     "label": "Generic instruct",
-    **_p(0.2, 80, 0.9, 1.05),
+    "archs": (),
+    "names": (),
+    "supports_system_prompt": True,
+    "temperature": 0.2,
+    "top_k": 80,
+    "top_p": 0.9,
+    "repeat_penalty": 1.05,
+    "min_p": 0.0,
+    "max_tokens": 4096,
 }
 
 
 def detect_family(metadata: Dict[str, str], model_path: str | Path) -> Tuple[Dict[str, Any], str]:
-    """Return ``(profile, how_detected)`` for the given model."""
+    """Return ``(profile, how_detected)`` for the given model.
+
+    Detection order (Ollama-style):
+    1. GGUF architecture string (e.g. "llama", "qwen2", "gemma3")
+    2. Filename/metadata name substring match
+    3. Fallback to generic profile
+    """
     arch = (metadata.get("architecture") or "").lower()
     name = (
         metadata.get("name", "")
@@ -214,13 +426,18 @@ def detect_family(metadata: Dict[str, str], model_path: str | Path) -> Tuple[Dic
         + " "
         + Path(str(model_path)).name.lower()
     )
+    # 1. Try architecture match first (most reliable)
     if arch:
         for prof in FAMILY_PROFILES:
-            if any(a in arch for a in prof["archs"]):
+            archs = prof.get("archs", ())
+            if any(a in arch for a in archs):
                 return prof, f"gguf arch '{arch}'"
+    # 2. Try filename/name match
     for prof in FAMILY_PROFILES:
-        if any(n in name for n in prof["names"]):
+        names = prof.get("names", ())
+        if any(n in name for n in names):
             return prof, "filename match"
+    # 3. Fallback
     return GENERIC_PROFILE, "no match"
 
 
@@ -249,6 +466,13 @@ def resolve_chat_config(model_path: str) -> Dict[str, Any]:
         arch in ("nomic-bert", "bert", "jina-bert", "jina-bert-v2")
         or "embed" in name_blob
     )
+    # Auto-detect system prompt support from the actual template string
+    chat_template = meta.get("chat_template", "")
+    supports_system = profile.get("supports_system_prompt", True)
+    if chat_template:
+        # Override family default with actual template detection
+        supports_system = _template_supports_system(chat_template)
+
     return {
         "family": profile["family"],
         "label": profile.get("label", profile["family"]),
@@ -256,5 +480,7 @@ def resolve_chat_config(model_path: str) -> Dict[str, Any]:
         "params": params,
         "system_prompt": None,
         "is_embedding_model": is_embedding_model,
+        "supports_system_prompt": supports_system,
+        "chat_template": chat_template,
         "meta": meta,
     }

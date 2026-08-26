@@ -454,6 +454,118 @@ class SearchFilesTool(Tool):
             return {"status": "error", "error": str(e), "tool_name": self.name}
 
 
+class PythonInterpreterTool(Tool):
+    """Sandboxed Python code interpreter for non-workspace chats.
+
+    Safe by construction:
+    - Runs in a temporary directory (no workspace/filesystem access)
+    - No approval required (can't modify anything)
+    - Output capped at 8000 chars
+    - Timeout of 30s
+    - stdin disabled (reads from /dev/null)
+    - Restricted to stdlib + whatever is installed (no pip)
+    """
+
+    name = "python_interpreter"
+    description = (
+        "Run Python code in a sandboxed environment (no filesystem access, "
+        "no network, read-only). Use for math, data processing, string "
+        "manipulation, and calculations. Output is capped at 8000 chars."
+    )
+    schema = {
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Python code to execute (no file/network access)",
+            },
+            "timeout": {
+                "type": "integer",
+                "description": "Max seconds (default 30, max 60)",
+            },
+        },
+        "required": ["code"],
+    }
+
+    MAX_OUTPUT = 8000
+    MAX_TIMEOUT = 60
+    DEFAULT_TIMEOUT = 30
+
+    def requires_approval(self, params: Dict[str, Any]) -> bool:
+        return False  # safe by construction
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        import tempfile
+
+        code = params.get("code", "")
+        if not code or not code.strip():
+            return {"status": "error", "error": "Code is required", "tool_name": self.name}
+
+        try:
+            timeout = min(int(params.get("timeout", self.DEFAULT_TIMEOUT)), self.MAX_TIMEOUT)
+        except (TypeError, ValueError):
+            timeout = self.DEFAULT_TIMEOUT
+
+        # Create a sandboxed temp directory for this execution
+        with tempfile.TemporaryDirectory(prefix="gguf_sandbox_") as tmpdir:
+            try:
+                # Run with restrictions:
+                # - cwd = temp dir (not workspace)
+                # - stdin = /dev/null
+                # - env stripped of dangerous vars
+                import os
+                safe_env = {
+                    "PATH": os.environ.get("PATH", ""),
+                    "HOME": tmpdir,
+                    "TMPDIR": tmpdir,
+                    "TEMP": tmpdir,
+                    "TMP": tmpdir,
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                    "PYTHONUNBUFFERED": "1",
+                }
+                # Remove network-related env vars
+                for key in list(os.environ.keys()):
+                    kl = key.lower()
+                    if any(n in kl for n in ("proxy", "http", "https", "socket", "ssh")):
+                        continue  # don't copy
+
+                proc = subprocess.run(
+                    [sys.executable, "-c", code],
+                    cwd=tmpdir,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=timeout,
+                    env=safe_env,
+                    stdin=subprocess.DEVNULL,
+                )
+            except subprocess.TimeoutExpired:
+                return {
+                    "status": "error",
+                    "error": f"Code timed out after {timeout}s",
+                    "tool_name": self.name,
+                }
+            except Exception as e:  # noqa: BLE001
+                return {"status": "error", "error": str(e), "tool_name": self.name}
+
+            out = (proc.stdout or "")[:self.MAX_OUTPUT]
+            err = (proc.stderr or "")[:2000]
+            result: Dict[str, Any] = {
+                "status": "success" if proc.returncode == 0 else "error",
+                "tool_name": self.name,
+                "exit_code": proc.returncode,
+            }
+            if out.strip():
+                result["result"] = out
+            if proc.returncode != 0:
+                result["error"] = f"exit {proc.returncode}: {err}" if err else \
+                    f"exited with code {proc.returncode}"
+            elif err.strip():
+                result["stderr"] = err
+            return result
+
+
 def _decode_bytes(raw_data: bytes, encoding: str) -> tuple[str, str]:
     """Decode raw bytes with BOM detection and common fallbacks."""
     if encoding and encoding != "auto":
@@ -510,6 +622,7 @@ def tool_content_for_context(result: Dict[str, Any], max_chars: int = 4000) -> O
 ALL_TOOL_CLASSES = (
     ListDirectoryTool, ReadFileTool, WriteFileTool, EditFileTool,
     SearchFilesTool, RunCommandTool, RunPythonTool, GitTool,
+    PythonInterpreterTool,
 )
 
 

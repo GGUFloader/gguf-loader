@@ -97,6 +97,13 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._agent_service = AgentService(self)
         self._gpu_install_service = GpuInstallService(self)
         self._prompt_builder = PromptBuilder()
+        # E: LocalDocs RAG system
+        self._rag_enabled = False
+        self._rag_store = None
+        self._rag_retriever = None
+        self._last_rag_chunks: Optional[list] = None
+        # Advanced settings dialog (created on demand)
+        self._advanced_settings_dialog = None
         self.conversation_history: list[dict] = []
         self._store = SessionStore(get_paths()["chats"])
         self._session: Optional[dict] = None
@@ -220,6 +227,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         file_menu = bar.addMenu("&File")
         action = file_menu.addAction("Load Model\u2026")
         action.triggered.connect(self._choose_and_load_model)
+        action = file_menu.addAction("Download Model from HuggingFace\u2026")
+        action.triggered.connect(self._open_hf_downloader)
         action = file_menu.addAction("Clear Chat")
         action.triggered.connect(self._clear_chat)
         action = file_menu.addAction("Copy Conversation")
@@ -401,6 +410,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         p.feedback_requested.connect(self._on_feedback)
         s.context_combo.currentIndexChanged.connect(self._on_context_changed)
         s.params_requested.connect(self._open_model_params)
+        s.advanced_settings_requested.connect(self._open_advanced_settings)
 
         self.sidebar.new_chat_requested.connect(self._on_new_chat)
         self.sidebar.session_selected.connect(self._on_session_selected)
@@ -408,6 +418,10 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.sidebar.session_delete_requested.connect(self._on_session_delete)
         self._followup_bridge.questions_ready.connect(
             self.chat_panel.show_followups)
+
+        # E: RAG signals
+        self.sidebar.rag_toggled.connect(self._on_rag_toggled)
+        self.sidebar.rag_scan_requested.connect(self._on_rag_scan)
 
     def _wire_services(self) -> None:
         m = self._model_service
@@ -456,7 +470,21 @@ class MainWindow(QMainWindow, ThemeMixin):
         )
         if not file_path:
             return
+        self._show_memory_estimate(file_path)
         self._load_model(file_path)
+
+    def _show_memory_estimate(self, path: str) -> None:
+        """B4: Show memory estimate before loading a model."""
+        try:
+            from ggufloader.core.llm.model_profiles import estimate_memory
+            n_ctx = self.sidebar.get_context_size()
+            use_gpu = self.sidebar.get_processing_mode() == "GPU Accelerated"
+            n_gpu_layers = self.sidebar.get_gpu_layers() if use_gpu else 0
+            estimate = estimate_memory(path, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers)
+            self.sidebar.set_memory_estimate(estimate)
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Memory estimate failed: %s", e)
+            self.sidebar.set_memory_estimate({})
 
     def _load_model(self, path: str) -> None:
         use_gpu = self.sidebar.get_processing_mode() == "GPU Accelerated"
@@ -490,6 +518,12 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._chat_model_params = dict(config.get("params") or {})
         self._chat_model_params.setdefault("max_tokens", CHAT_MAX_TOKENS)
         self._chat_system_prompt = config.get("system_prompt")
+
+        # Set template capabilities from actual template string (Ollama-style)
+        self._prompt_builder.set_template_flags(
+            config.get("supports_system_prompt", True),
+            config.get("chat_template", ""),
+        )
 
         # ---- M3: embedding models are not chat models ----
         extra = ""
@@ -567,6 +601,57 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._set_model_chip("ok", f"\u25CF {Path(backend.model_path).name}")
         self.model_loaded.emit(backend)
 
+    def _open_advanced_settings(self) -> None:
+        """Open the Advanced Settings dialog."""
+        from ggufloader.ui.advanced_settings_dialog import AdvancedSettingsDialog
+
+        # Build current config from sidebar + internal state
+        current_config = {
+            "temperature": self._chat_model_params.get("temperature", 0.2),
+            "top_p": self._chat_model_params.get("top_p", 0.9),
+            "min_p": self._chat_model_params.get("min_p", 0.0),
+            "top_k": self._chat_model_params.get("top_k", 80),
+            "repeat_penalty": self._chat_model_params.get("repeat_penalty", 1.05),
+            "max_tokens": self._chat_model_params.get("max_tokens", 16384),
+            "gpu_layers": 128,  # default auto
+            "rag_enabled": self._rag_enabled,
+            "rag_folder": self.sidebar.get_rag_folder() if hasattr(self.sidebar, 'get_rag_folder') else "",
+        }
+
+        dlg = AdvancedSettingsDialog(self, current_config)
+
+        # Show memory estimate if a model is loaded
+        backend = self._model_service.backend
+        if backend is not None:
+            try:
+                from ggufloader.core.llm.model_profiles import estimate_memory
+                n_ctx = self.sidebar.get_context_size()
+                estimate = estimate_memory(backend.model_path, n_ctx=n_ctx)
+                dlg.set_memory_estimate(estimate)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Connect signals
+        dlg.params_requested.connect(self._open_model_params)
+        dlg.rag_toggled.connect(self._on_rag_toggled)
+        dlg.rag_scan_requested.connect(self._on_rag_scan)
+
+        # Show RAG status
+        if self._rag_store is not None:
+            n_docs = self._rag_store.count_documents()
+            n_chunks = self._rag_store.count_chunks()
+            dlg.set_rag_status(f"📚 {n_docs} docs, {n_chunks} chunks indexed")
+
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            # Apply settings from the dialog
+            values = dlg.get_values()
+            self._chat_model_params["temperature"] = values["temperature"]
+            self._chat_model_params["top_p"] = values["top_p"]
+            self._chat_model_params["min_p"] = values["min_p"]
+            self._chat_model_params["top_k"] = values["top_k"]
+            self._chat_model_params["repeat_penalty"] = values["repeat_penalty"]
+            self._chat_model_params["max_tokens"] = values["max_tokens"]
+
     def _on_model_error(self, message: str) -> None:
         self.sidebar.set_loading(False)
         self.sidebar.set_status(f"❌ Error: {message}")
@@ -574,7 +659,6 @@ class MainWindow(QMainWindow, ThemeMixin):
         QMessageBox.critical(self, "Model Loading Error", message)
 
     def _on_model_unloaded(self) -> None:
-        self.sidebar.set_params_enabled(False)
         self._set_model_chip("", "\u25CB No model loaded")
 
     def _set_model_chip(self, state: str, text: str) -> None:
@@ -607,12 +691,25 @@ class MainWindow(QMainWindow, ThemeMixin):
 
     def _generate_reply(self, user_text: str) -> None:
         """Stream an assistant reply for an already-recorded user turn."""
+        # E: RAG retrieval when enabled
+        rag_chunks = None
+        if self._rag_enabled and self._rag_retriever is not None:
+            try:
+                rag_chunks = self._rag_retriever.search(user_text, top_k=3)
+                if rag_chunks:
+                    logger.info("RAG: %d chunks retrieved for '%s'",
+                                len(rag_chunks), user_text[:50])
+            except Exception as e:  # noqa: BLE001
+                logger.warning("RAG retrieval failed: %s", e)
+        self._last_rag_chunks = rag_chunks
+
         # Automatic model routing: detect family from GGUF metadata /
         # filename, apply its recommended sampling + system prompt, then
         # let the user's model_params.json override anything.
         messages = self._prompt_builder.build_messages(
             self.conversation_history[:-1], user_text,
             system_prompt=self._chat_system_prompt,
+            rag_chunks=rag_chunks,
         )
         params = {
             "max_tokens": CHAT_MAX_TOKENS,
@@ -777,6 +874,10 @@ class MainWindow(QMainWindow, ThemeMixin):
 
     def _on_generation_finished(self) -> None:
         response = self.chat_panel.finish_streaming()
+        # E: Show RAG sources if context was used
+        if self._last_rag_chunks:
+            self.chat_panel.add_rag_sources(self._last_rag_chunks)
+            self._last_rag_chunks = None
         if response:
             self.conversation_history.append({"role": "assistant", "content": response})
             if self._session is not None:
@@ -1097,6 +1198,110 @@ class MainWindow(QMainWindow, ThemeMixin):
         """Restart the app with the same interpreter, then close this instance."""
         subprocess.Popen([sys.executable, "main.py"], cwd=Path(__file__).resolve().parent.parent)
         self.close()
+
+    # ------------------------------------------------------------------
+    # G: HuggingFace model downloads
+    # ------------------------------------------------------------------
+    def _open_hf_downloader(self) -> None:
+        """Open the HuggingFace model search and download dialog."""
+        from ggufloader.ui.hf_download_dialog import HFDownloadDialog
+        from ggufloader.config import get_paths
+        models_dir = get_paths()["models"]
+        dlg = HFDownloadDialog(self, models_dir)
+        dlg.model_downloaded.connect(self._on_hf_model_downloaded)
+        dlg.exec()
+
+    def _on_hf_model_downloaded(self, path: str) -> None:
+        """Handle a model downloaded from HuggingFace."""
+        self.chat_panel.add_system_message(
+            f"✅ Downloaded: {Path(path).name}\n"
+            f"Use 'Load Model' to load it."
+        )
+
+    # ------------------------------------------------------------------
+    # E: LocalDocs RAG
+    # ------------------------------------------------------------------
+    def _on_rag_toggled(self, enabled: bool) -> None:
+        """Enable/disable RAG context injection."""
+        self._rag_enabled = enabled
+        if enabled and self._rag_store is None:
+            self._init_rag_store()
+        if enabled:
+            self.chat_panel.add_system_message(
+                "📚 LocalDocs RAG enabled. Select a folder and scan to index documents."
+            )
+        else:
+            self.chat_panel.add_system_message("📚 LocalDocs RAG disabled.")
+
+    def _init_rag_store(self) -> None:
+        """Initialize the RAG SQLite store and retriever."""
+        try:
+            from ggufloader.core.rag.store import ChunkStore
+            from ggufloader.core.rag.retrieve import Retriever
+            db_path = get_paths()["cache"] / "localdocs.db"
+            self._rag_store = ChunkStore(db_path)
+            self._rag_retriever = Retriever(self._rag_store)
+            n_docs = self._rag_store.count_documents()
+            n_chunks = self._rag_store.count_chunks()
+            self.sidebar.set_rag_status(
+                f"📚 {n_docs} docs, {n_chunks} chunks indexed"
+            )
+            logger.info("RAG store initialized: %d docs, %d chunks", n_docs, n_chunks)
+        except Exception as e:  # noqa: BLE001
+            logger.error("RAG store init failed: %s", e)
+            self.sidebar.set_rag_status(f"❌ RAG init failed: {e}")
+            self._rag_enabled = False
+            self.sidebar.set_rag_enabled(False)
+
+    def _on_rag_scan(self) -> None:
+        """Scan the configured folder and index documents for RAG."""
+        folder = self.sidebar.get_rag_folder()
+        if not folder or not Path(folder).is_dir():
+            QMessageBox.warning(self, "RAG", "Please select a valid document folder.")
+            return
+        if self._rag_store is None:
+            self._init_rag_store()
+        if self._rag_store is None:
+            return
+
+        self.sidebar.set_rag_status("🔄 Scanning and indexing documents...")
+        self.sidebar.rag_scan_btn.setEnabled(False)
+
+        def _worker() -> None:
+            try:
+                from ggufloader.core.rag.ingest import ingest_folder
+                result = ingest_folder(
+                    self._rag_store, folder,
+                    on_progress=lambda path, i, total: None,
+                )
+                # Update UI on main thread
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self._on_rag_scan_done(result))
+            except Exception as e:  # noqa: BLE001
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self._on_rag_scan_error(str(e)))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_rag_scan_done(self, result) -> None:
+        """Handle RAG scan completion."""
+        self.sidebar.rag_scan_btn.setEnabled(True)
+        n_docs = self._rag_store.count_documents() if self._rag_store else 0
+        n_chunks = self._rag_store.count_chunks() if self._rag_store else 0
+        self.sidebar.set_rag_status(
+            f"📚 {n_docs} docs, {n_chunks} chunks indexed"
+        )
+        self.chat_panel.add_system_message(
+            f"📚 LocalDocs indexed: {result.summary}"
+        )
+        if result.errors:
+            logger.warning("RAG ingest errors: %s", result.errors[:5])
+
+    def _on_rag_scan_error(self, error: str) -> None:
+        """Handle RAG scan failure."""
+        self.sidebar.rag_scan_btn.setEnabled(True)
+        self.sidebar.set_rag_status(f"❌ Scan failed: {error}")
+        logger.error("RAG scan failed: %s", error)
 
     # ------------------------------------------------------------------
     # Agent mode

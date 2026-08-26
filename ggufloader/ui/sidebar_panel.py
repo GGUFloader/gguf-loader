@@ -32,6 +32,9 @@ class SettingsSidebar(QFrame):
     session_rename_requested = Signal(str)
     session_delete_requested = Signal(str)
     params_requested = Signal()
+    rag_scan_requested = Signal()
+    rag_toggled = Signal(bool)
+    advanced_settings_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -75,6 +78,13 @@ class SettingsSidebar(QFrame):
         self.model_info.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         layout.addWidget(self.model_info)
 
+        # B4: Memory estimate before load
+        self.memory_estimate = QLabel("")
+        self.memory_estimate.setObjectName("memoryEstimate")
+        self.memory_estimate.setWordWrap(True)
+        self.memory_estimate.setVisible(False)
+        layout.addWidget(self.memory_estimate)
+
         layout.addWidget(self._section_label("GPU Acceleration"))
 
         self.gpu_button = QPushButton("\U0001F680 GPU Acceleration: OFF")
@@ -96,21 +106,6 @@ class SettingsSidebar(QFrame):
         self.install_gpu_btn.clicked.connect(self.install_gpu_requested.emit)
         layout.addWidget(self.install_gpu_btn)
 
-        # B2: GPU layers control (how many transformer blocks offloaded)
-        gpu_layers_row = QHBoxLayout()
-        gpu_layers_row.addWidget(QLabel("GPU Layers:"))
-        from PySide6.QtWidgets import QSpinBox as _QSB
-        self.gpu_layers_spin = _QSB()
-        self.gpu_layers_spin.setRange(0, 128)
-        self.gpu_layers_spin.setValue(128)
-        self.gpu_layers_spin.setSpecialValueText("Auto (all)")
-        self.gpu_layers_spin.setToolTip("0 = CPU only, Auto = offload all layers")
-        self.gpu_layers_spin.setMinimumHeight(30)
-        self.gpu_layers_spin.setFixedWidth(110)
-        gpu_layers_row.addWidget(self.gpu_layers_spin)
-        gpu_layers_row.addStretch(1)
-        layout.addLayout(gpu_layers_row)
-
         self.gpu_install_status = QLabel("")
         self.gpu_install_status.setObjectName("mutedLabel")
         self.gpu_install_status.setWordWrap(True)
@@ -124,15 +119,13 @@ class SettingsSidebar(QFrame):
         self.context_combo.setMinimumHeight(35)
         layout.addWidget(self.context_combo)
 
-        params_row = QHBoxLayout()
-        self.params_btn = QPushButton("\u2699 Model Params")
-        self.params_btn.setObjectName("gpuInstallBtn")
-        self.params_btn.setMinimumHeight(34)
-        self.params_btn.setEnabled(False)  # enabled once a model loads
-        self.params_btn.setToolTip("Per-model sampling + system prompt overrides")
-        self.params_btn.clicked.connect(self.params_requested.emit)
-        params_row.addWidget(self.params_btn, 1)
-        layout.addLayout(params_row)
+        # Advanced Settings button
+        self.advanced_btn = QPushButton("⚙ Advanced Settings")
+        self.advanced_btn.setObjectName("gpuInstallBtn")
+        self.advanced_btn.setMinimumHeight(36)
+        self.advanced_btn.setToolTip("GPU layers, model params, LocalDocs RAG, and more")
+        self.advanced_btn.clicked.connect(self.advanced_settings_requested.emit)
+        layout.addWidget(self.advanced_btn)
 
         # Progress + status
         self.progress_bar = QProgressBar()
@@ -207,6 +200,42 @@ class SettingsSidebar(QFrame):
     def set_model_info(self, text: str) -> None:
         self.model_info.setText(text)
 
+    def set_memory_estimate(self, estimate: dict) -> None:
+        """Show memory estimate for a model file before loading."""
+        if not estimate:
+            self.memory_estimate.setVisible(False)
+            return
+        model_gb = estimate.get("model_gb", 0)
+        kv_gb = estimate.get("kv_gb", 0)
+        total_gb = estimate.get("total_gb", 0)
+        layers = estimate.get("layers")
+        quant = estimate.get("quant", "")
+        ram_gb = estimate.get("ram_gb", 0)
+        vram_gb = estimate.get("vram_gb", 0)
+        fits_ram = estimate.get("fits_ram", True)
+        fits_vram = estimate.get("fits_vram", False)
+
+        # Build the estimate text
+        parts = [f"📦 Model: {model_gb:.1f} GB"]
+        if kv_gb > 0.01:
+            parts.append(f"💾 KV cache: {kv_gb:.1f} GB")
+        parts.append(f"⚡ Total: {total_gb:.1f} GB")
+        if layers:
+            parts.append(f"🧱 Layers: {layers}")
+        if quant:
+            parts.append(f"🔧 Quant: {quant}")
+
+        # Memory warnings
+        if not fits_ram and ram_gb > 0:
+            parts.append(f"\n⚠️ Requires {total_gb:.1f} GB but only {ram_gb:.0f} GB RAM available")
+        elif fits_vram and vram_gb > 0:
+            parts.append(f"\n✅ Fits in GPU VRAM ({vram_gb:.0f} GB)")
+        elif ram_gb > 0:
+            parts.append(f"\n✅ Fits in system RAM ({ram_gb:.0f} GB)")
+
+        self.memory_estimate.setText("\n".join(parts))
+        self.memory_estimate.setVisible(True)
+
     def set_status(self, text: str) -> None:
         self.status_label.setText(text)
         # Color the status by its emoji marker (QSS selects on the property).
@@ -221,20 +250,13 @@ class SettingsSidebar(QFrame):
         self.status_label.style().polish(self.status_label)
 
     def set_params_enabled(self, enabled: bool) -> None:
-        self.params_btn.setEnabled(bool(enabled))
-
-    def set_gpu_layers_max(self, max_layers: int) -> None:
-        try:
-            self.gpu_layers_spin.setMaximum(max(1, int(max_layers)))
-        except Exception:  # noqa: BLE001
-            pass
+        """Enable/disable the per-model params button (now a no-op, kept for compat)."""
+        pass  # params button moved to AdvancedSettingsDialog
 
     def get_gpu_layers(self) -> int:
-        try:
-            v = int(self.gpu_layers_spin.value())
-            return -1 if v >= self.gpu_layers_spin.maximum() else v
-        except Exception:  # noqa: BLE001
-            return -1
+        """Get GPU layers from advanced settings dialog (returns -1 = auto)."""
+        # The actual value lives in AdvancedSettingsDialog; this is a fallback
+        return -1
 
     def get_processing_mode(self) -> str:
         return "GPU Accelerated" if self.gpu_button.isChecked() else "CPU Only"

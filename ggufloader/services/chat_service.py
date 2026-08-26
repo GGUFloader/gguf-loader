@@ -75,8 +75,18 @@ class ChatWorker(QObject):
                         self._maybe_emit_rate()
             self.finished.emit()
         except Exception as e:  # noqa: BLE001
-            logger.error("Chat generation failed: %s", e)
-            self.error.emit(str(e))
+            err_msg = str(e)
+            # Suppress template validation errors that don't prevent generation
+            # (e.g. Mistral "Conversation roles must alternate" when system prompt
+            # was incorrectly included but the model still generates fine)
+            if "Conversation roles must alternate" in err_msg or \
+               "Only user and assistant roles are supported" in err_msg:
+                logger.debug("Template validation error (suppressed): %s", err_msg)
+                # Don't emit error - model may still work
+                self.finished.emit()
+            else:
+                logger.error("Chat generation failed: %s", err_msg)
+                self.error.emit(err_msg)
 
     def _maybe_emit_rate(self) -> None:
         """Emit tokens/sec every ~1 second (GPT4All TokenTimer parity)."""

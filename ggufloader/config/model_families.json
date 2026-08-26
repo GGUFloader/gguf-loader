@@ -1,0 +1,897 @@
+{
+  "_comment": "Model family configurations for auto-detection. When a model is loaded, its filename and GGUF metadata are matched against these patterns to automatically apply the right settings.",
+  "_version": "1.0",
+  "families": [
+    {
+      "id": "liquid-lfm",
+      "name": "LiquidAI LFM",
+      "name_patterns": [
+        "lfm",
+        "lfm2",
+        "lfm-2",
+        "liquid"
+      ],
+      "arch_patterns": [
+        "lfm2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "top_k": 80,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "LiquidAI LFM2 needs very low temperature to avoid degeneration"
+    },
+    {
+      "id": "llama3",
+      "name": "Meta Llama 3.x",
+      "name_patterns": [
+        "llama-3",
+        "llama3",
+        "meta-llama-3",
+        "llama-3.1",
+        "llama-3.2",
+        "llama-3.3",
+        "llama4"
+      ],
+      "arch_patterns": [
+        "llama"
+      ],
+      "version_patterns": [
+        "-3-",
+        "-3.1",
+        "-3.2",
+        "-3.3",
+        "llama4"
+      ],
+      "params": {
+        "temperature": 0.6,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Llama 3 uses <|start_header_id|>system<|end_header_id|> format"
+    },
+    {
+      "id": "llama2",
+      "name": "Meta Llama 2",
+      "name_patterns": [
+        "llama-2",
+        "llama2",
+        "meta-llama-2"
+      ],
+      "arch_patterns": [
+        "llama"
+      ],
+      "version_patterns": [
+        "-2-"
+      ],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "Llama 2 uses [INST] <<SYS>> system prompt <</SYS>> format"
+    },
+    {
+      "id": "qwen1.5",
+      "name": "Qwen 1.5",
+      "name_patterns": [
+        "qwen1.5",
+        "qwen-1.5"
+      ],
+      "arch_patterns": [
+        "qwen2"
+      ],
+      "version_patterns": [
+        "-1.5"
+      ],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "Qwen uses ChatML format"
+    },
+    {
+      "id": "qwen2",
+      "name": "Qwen 2",
+      "name_patterns": [
+        "qwen2",
+        "qwen-2"
+      ],
+      "arch_patterns": [
+        "qwen2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "Qwen 2 uses ChatML format"
+    },
+    {
+      "id": "qwen2.5",
+      "name": "Qwen 2.5",
+      "name_patterns": [
+        "qwen2.5",
+        "qwen-2.5"
+      ],
+      "arch_patterns": [
+        "qwen2"
+      ],
+      "version_patterns": [
+        "-2.5"
+      ],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "Qwen 2.5 uses ChatML format"
+    },
+    {
+      "id": "qwen3",
+      "name": "Qwen 3",
+      "name_patterns": [
+        "qwen3",
+        "qwen-3"
+      ],
+      "arch_patterns": [
+        "qwen3",
+        "qwen3moe"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "Qwen 3 uses ChatML format, supports thinking mode"
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral",
+      "name_patterns": [
+        "mistral",
+        "mistral-7b",
+        "mistral-small",
+        "mistral-large"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 32768,
+      "notes": "Mistral uses strict [INST] alternation, no system message support"
+    },
+    {
+      "id": "mixtral",
+      "name": "Mixtral (Mixture of Experts)",
+      "name_patterns": [
+        "mixtral",
+        "mixtral-8x7b",
+        "mixtral-8x22b"
+      ],
+      "arch_patterns": [
+        "mixtral"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 32768,
+      "notes": "Mixtral inherits Mistral template"
+    },
+    {
+      "id": "deepseek-r1",
+      "name": "DeepSeek R1",
+      "name_patterns": [
+        "deepseek-r1",
+        "r1-distill"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.0,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "DeepSeek R1 uses thinking mode, higher max_tokens for reasoning"
+    },
+    {
+      "id": "deepseek-v2",
+      "name": "DeepSeek V2",
+      "name_patterns": [
+        "deepseek-v2"
+      ],
+      "arch_patterns": [
+        "deepseek2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "DeepSeek V2 uses ChatML format"
+    },
+    {
+      "id": "deepseek-v3",
+      "name": "DeepSeek V3",
+      "name_patterns": [
+        "deepseek-v3"
+      ],
+      "arch_patterns": [
+        "deepseek2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "DeepSeek V3 uses ChatML format"
+    },
+    {
+      "id": "deepseek-coder",
+      "name": "DeepSeek Coder",
+      "name_patterns": [
+        "deepseek-coder"
+      ],
+      "arch_patterns": [
+        "deepseek"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.3,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 16384,
+      "notes": "DeepSeek Coder uses lower temperature for code generation"
+    },
+    {
+      "id": "gemma1",
+      "name": "Google Gemma 1",
+      "name_patterns": [
+        "gemma-1",
+        "gemma1",
+        "gemma-7b",
+        "gemma-2b"
+      ],
+      "arch_patterns": [
+        "gemma"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 64,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Gemma uses <start_of_turn>user format"
+    },
+    {
+      "id": "gemma2",
+      "name": "Google Gemma 2",
+      "name_patterns": [
+        "gemma-2",
+        "gemma2"
+      ],
+      "arch_patterns": [
+        "gemma2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 64,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Gemma 2 uses <start_of_turn>user format"
+    },
+    {
+      "id": "gemma3",
+      "name": "Google Gemma 3",
+      "name_patterns": [
+        "gemma-3",
+        "gemma3"
+      ],
+      "arch_patterns": [
+        "gemma3",
+        "gemma2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 64,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "Gemma 3 supports higher temperature, long context"
+    },
+    {
+      "id": "phi2",
+      "name": "Microsoft Phi-2",
+      "name_patterns": [
+        "phi-2",
+        "phi2"
+      ],
+      "arch_patterns": [
+        "phi2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": false,
+      "context_length": 2048,
+      "notes": "Phi-2 is a small model, use conservative settings"
+    },
+    {
+      "id": "phi3",
+      "name": "Microsoft Phi-3",
+      "name_patterns": [
+        "phi-3",
+        "phi3"
+      ],
+      "arch_patterns": [
+        "phi3"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "Phi-3 uses <|user|> format, supports long context"
+    },
+    {
+      "id": "phi4",
+      "name": "Microsoft Phi-4",
+      "name_patterns": [
+        "phi-4",
+        "phi4"
+      ],
+      "arch_patterns": [
+        "phi4"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 16384,
+      "notes": "Phi-4 uses <|user|> format"
+    },
+    {
+      "id": "command-r",
+      "name": "Cohere Command R",
+      "name_patterns": [
+        "command-r",
+        "cohere"
+      ],
+      "arch_patterns": [
+        "command-r"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "Command R uses <|START_OF_TURN_TOKEN|> format"
+    },
+    {
+      "id": "yi",
+      "name": "01.AI Yi",
+      "name_patterns": [
+        "yi-",
+        "yi_",
+        "01-ai"
+      ],
+      "arch_patterns": [
+        "yi"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 200000,
+      "notes": "Yi uses ChatML format, supports very long context"
+    },
+    {
+      "id": "codellama",
+      "name": "Meta CodeLlama",
+      "name_patterns": [
+        "codellama",
+        "code-llama"
+      ],
+      "arch_patterns": [
+        "llama"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.1,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 16384,
+      "notes": "CodeLlama uses very low temperature for code"
+    },
+    {
+      "id": "nous-hermes",
+      "name": "Nous Hermes",
+      "name_patterns": [
+        "nous-hermes",
+        "hermes"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Nous Hermes uses ChatML format"
+    },
+    {
+      "id": "openchat",
+      "name": "OpenChat",
+      "name_patterns": [
+        "openchat",
+        "open-chat"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "OpenChat uses ChatML format"
+    },
+    {
+      "id": "stablelm",
+      "name": "Stability AI StableLM",
+      "name_patterns": [
+        "stablelm",
+        "stable-lm"
+      ],
+      "arch_patterns": [
+        "stablelm"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 8192,
+      "notes": "StableLM uses custom format"
+    },
+    {
+      "id": "solar",
+      "name": "Upstage Solar",
+      "name_patterns": [
+        "solar",
+        "solar-10"
+      ],
+      "arch_patterns": [
+        "llama"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "Solar is a Llama fine-tune"
+    },
+    {
+      "id": "internlm",
+      "name": "InternLM",
+      "name_patterns": [
+        "internlm",
+        "intern-lm"
+      ],
+      "arch_patterns": [
+        "internlm"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 2048,
+      "notes": "InternLM uses ChatML format"
+    },
+    {
+      "id": "baichuan",
+      "name": "Baichuan",
+      "name_patterns": [
+        "baichuan"
+      ],
+      "arch_patterns": [
+        "baichuan"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 4096,
+      "notes": "Baichuan uses custom format"
+    },
+    {
+      "id": "falcon",
+      "name": "Technology Innovation Institute Falcon",
+      "name_patterns": [
+        "falcon"
+      ],
+      "arch_patterns": [
+        "falcon"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": false,
+      "context_length": 2048,
+      "notes": "Falcon uses User:/Assistant: format"
+    },
+    {
+      "id": "mpt",
+      "name": "MosaicML MPT",
+      "name_patterns": [
+        "mpt",
+        "mpt-7b",
+        "mpt-30b"
+      ],
+      "arch_patterns": [
+        "mpt"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "MPT uses <|im_start|> format"
+    },
+    {
+      "id": "orca",
+      "name": "Microsoft Orca",
+      "name_patterns": [
+        "orca",
+        "orca-2"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "Orca is a Llama fine-tune"
+    },
+    {
+      "id": "neural-chat",
+      "name": "Intel Neural Chat",
+      "name_patterns": [
+        "neural-chat",
+        "neural_chat"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "Neural Chat is an Intel Mistral fine-tune"
+    },
+    {
+      "id": "vicuna",
+      "name": "Vicuna",
+      "name_patterns": [
+        "vicuna"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": false,
+      "context_length": 4096,
+      "notes": "Vicuna uses USER:/ASSISTANT: format"
+    },
+    {
+      "id": "wizard",
+      "name": "WizardLM",
+      "name_patterns": [
+        "wizard",
+        "wizardlm",
+        "wizard-coder"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "WizardLM uses ChatML format"
+    },
+    {
+      "id": "zephyr",
+      "name": "HuggingFace Zephyr",
+      "name_patterns": [
+        "zephyr"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Zephyr uses ChatML format"
+    },
+    {
+      "id": "dolphin",
+      "name": "Dolphin",
+      "name_patterns": [
+        "dolphin"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "Dolphin is uncensored, based on various architectures"
+    },
+    {
+      "id": "codestral",
+      "name": "Mistral Codestral",
+      "name_patterns": [
+        "codestral"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.1,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": false,
+      "context_length": 32768,
+      "notes": "Codestral is a code model, very low temperature"
+    },
+    {
+      "id": "gpt-oss",
+      "name": "OpenAI GPT-OSS",
+      "name_patterns": [
+        "gpt-oss",
+        "gptoss"
+      ],
+      "arch_patterns": [
+        "gpt_oss"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "GPT-OSS uses ChatML format with harmony channels"
+    },
+    {
+      "id": "generic",
+      "name": "Generic Model",
+      "name_patterns": [],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "top_k": 80,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 4096,
+      "notes": "Fallback for unknown models"
+    }
+  ]
+}
