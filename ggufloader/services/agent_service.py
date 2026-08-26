@@ -20,7 +20,6 @@ from shiboken6 import isValid
 
 from ggufloader.core.agent import GraphAgent, ToolRegistry
 from ggufloader.core.llm.model_backend import ModelBackend
-from ggufloader.core.llm.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -138,14 +137,18 @@ class AgentService(QObject):
             self._engine = None
 
         def llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.1):
-            return backend.generate_stream(
-                prompt,
+            # Template-aware single-turn chat call: the agent's raw prompt
+            # is delivered as one user message so llama.cpp wraps it in the
+            # model's native template (better instruction adherence than a
+            # bare completion). No repeat penalty / text stops - they hurt
+            # the strict JSON protocol output.
+            return backend.chat_stream(
+                [{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
                 top_p=0.9,
-                repeat_penalty=1.1,
                 top_k=40,
-                stop=PromptBuilder.stop_tokens(),
+                repeat_penalty=1.1,  # Ollama's default
             )
 
         tools = ToolRegistry(Path(workspace))

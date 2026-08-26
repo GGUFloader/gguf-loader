@@ -74,7 +74,7 @@ class GraphAgent:
         llm: LLMCallable,
         workspace: str | Path,
         tools: Optional[ToolRegistry] = None,
-        max_tokens: int = 2048,
+        max_tokens: int = 16384,
         max_steps: int = 8,
         json_retries: int = 2,
         checkpoint_path: Optional[str | Path] = None,
@@ -273,6 +273,10 @@ class GraphAgent:
                 "raw_response": raw,
                 "step": step + 1,
             }
+
+        reasoning = (action.get("reasoning") or "").strip()
+        if reasoning:
+            writer({"event": "status", "text": f"💭 {reasoning}"})
 
         calls = [
             c for c in (action.get("tool_calls") or [])

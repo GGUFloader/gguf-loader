@@ -9,10 +9,13 @@ entirely in the launcher scripts (launch.sh / launch.bat).
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QLabel, QListWidget, QListWidgetItem, QMenu,
+    QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ggufloader.config import DEFAULT_CONTEXT_SIZES, FONT_FAMILY
@@ -24,6 +27,10 @@ class SettingsSidebar(QFrame):
     load_model_requested = Signal()
     install_gpu_requested = Signal()
     gpu_toggled = Signal(bool)
+    new_chat_requested = Signal()
+    session_selected = Signal(str)
+    session_rename_requested = Signal(str)
+    session_delete_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -105,6 +112,23 @@ class SettingsSidebar(QFrame):
         self.status_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         layout.addWidget(self.status_label)
 
+        # ---- Chats section ----
+        layout.addWidget(self._section_label("Chats"))
+
+        self.new_chat_btn = QPushButton("\u2795 New Chat")
+        self.new_chat_btn.setObjectName("primaryButton")
+        self.new_chat_btn.setMinimumHeight(38)
+        self.new_chat_btn.clicked.connect(self.new_chat_requested.emit)
+        layout.addWidget(self.new_chat_btn)
+
+        self.session_list = QListWidget()
+        self.session_list.setObjectName("sessionList")
+        self.session_list.setMinimumHeight(140)
+        self.session_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.session_list.customContextMenuRequested.connect(self._show_session_menu)
+        self.session_list.itemClicked.connect(self._on_session_clicked)
+        layout.addWidget(self.session_list, 1)
+
         layout.addStretch()
 
     def _section_label(self, text: str) -> QLabel:
@@ -184,3 +208,67 @@ class SettingsSidebar(QFrame):
             return int(self.context_combo.currentText())
         except ValueError:
             return 32768
+
+    # ------------------------------------------------------------------
+    # Chat sessions (called by the main window)
+    # ------------------------------------------------------------------
+    def set_sessions(self, sessions: list[dict], active_id: str | None = None) -> None:
+        """Re-render the session list; *sessions* comes from SessionStore."""
+        self.session_list.blockSignals(True)
+        self.session_list.clear()
+        for meta in sessions:
+            if meta.get("corrupt"):
+                label = f"\u26a0 {meta['id']}"
+                item = QListWidgetItem(label)
+                item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+                tooltip = f"Corrupt session file: {meta.get('error', '')}"
+            else:
+                title = meta.get("title") or "New Chat"
+                badge = " \U0001F916" if meta.get("mode") == "agent" else ""
+                label = f"{title}{badge}\n{self._relative_time(meta.get('updated', ''))}"
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, meta["id"])
+                if meta["id"] == active_id:
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+                    self.session_list.setCurrentItem(item)
+            item.setToolTip(tooltip if meta.get("corrupt") else (meta.get("title") or "New Chat"))
+            self.session_list.addItem(item)
+        self.session_list.blockSignals(False)
+
+    def _on_session_clicked(self, item: QListWidgetItem) -> None:
+        session_id = item.data(Qt.UserRole)
+        if session_id:
+            self.session_selected.emit(session_id)
+
+    def _show_session_menu(self, pos) -> None:
+        item = self.session_list.itemAt(pos)
+        if item is None or not item.data(Qt.UserRole):
+            return
+        session_id = item.data(Qt.UserRole)
+        menu = QMenu(self)
+        rename_action = menu.addAction("Rename\u2026")
+        delete_action = menu.addAction("Delete")
+        chosen = menu.exec(self.session_list.mapToGlobal(pos))
+        if chosen is rename_action:
+            self.session_rename_requested.emit(session_id)
+        elif chosen is delete_action:
+            self.session_delete_requested.emit(session_id)
+
+    @staticmethod
+    def _relative_time(iso_stamp: str) -> str:
+        try:
+            then = datetime.fromisoformat(iso_stamp)
+        except (TypeError, ValueError):
+            return ""
+        seconds = max(0, int((datetime.now() - then).total_seconds()))
+        if seconds < 60:
+            return "now"
+        if seconds < 3600:
+            return f"{seconds // 60}m"
+        if seconds < 86400:
+            return f"{seconds // 3600}h"
+        if seconds < 7 * 86400:
+            return f"{seconds // 86400}d"
+        return then.strftime("%b %d")

@@ -138,6 +138,11 @@ _bubble_*.png
 models/*.gguf
 models/*.bin
 
+# User data created at runtime (chat sessions, exports, local config)
+chats/
+exports/
+config/
+
 # Benchmarks
 .benchmarks/
 

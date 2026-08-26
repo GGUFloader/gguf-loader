@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Dict, Iterator
+from typing import Any, Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +75,54 @@ class ModelBackend:
     def is_loaded(self) -> bool:
         return self._llama is not None
 
+    @property
+    def n_ctx_train(self) -> Optional[int]:
+        """Tokens the model was trained for (None when unavailable).
+
+        Running far beyond this degrades quality even though llama.cpp
+        happily accepts a larger ``n_ctx``.
+        """
+        if self._llama is None:
+            return None
+        try:
+            return int(self._llama.n_ctx_train())
+        except Exception:  # noqa: BLE001 - depends on llama-cpp version
+            return None
+
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
+    def chat_stream(self, messages: List[Dict[str, str]], **kwargs: Any) -> Iterator[str]:
+        """Stream assistant content for a chat *messages* list.
+
+        Uses ``llama.create_chat_completion``, which renders the messages
+        through the GGUF's own embedded chat template (Llama-3, Qwen,
+        Mistral, gpt-oss harmony, ...) - the same mechanism Ollama uses.
+        This matches the format the model was instruction-tuned on and is
+        strongly preferred over hand-built ``User:/Assistant:`` strings.
+
+        Yields content deltas (plain text chunks).
+        """
+        kwargs = dict(kwargs)
+        kwargs["stream"] = True
+        kwargs["messages"] = messages
+        with self._lock:
+            llama = self._require_llama()
+            stream = llama.create_chat_completion(**kwargs)
+            for chunk in stream:
+                choices = chunk.get("choices") or [{}]
+                delta = choices[0].get("delta") or {}
+                text = delta.get("content")
+                if text:
+                    yield text
+
+    def chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> str:
+        """Non-streaming :meth:`chat_stream`; returns the full reply."""
+        parts: List[str] = []
+        for piece in self.chat_stream(messages, **kwargs):
+            parts.append(piece)
+        return "".join(parts)
+
     def generate_stream(self, prompt: str, **kwargs: Any) -> Iterator[str]:
         """Stream raw text tokens for *prompt*.
 

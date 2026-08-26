@@ -26,14 +26,15 @@ from typing import Optional
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
-    QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-    QSplitter, QVBoxLayout, QWidget,
+    QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow,
+    QMessageBox, QSplitter, QVBoxLayout, QWidget,
 )
 
 from ggufloader.addon_manager import AddonManager
-from ggufloader.config import MAX_TOKENS, WINDOW_SIZE, WINDOW_TITLE
+from ggufloader.config import CHAT_MAX_TOKENS, MAX_TOKENS, WINDOW_SIZE, WINDOW_TITLE, get_paths
 from ggufloader.core.llm.model_backend import ModelBackend
 from ggufloader.core.llm.prompt_builder import PromptBuilder
+from ggufloader.core.sessions import SessionStore
 from ggufloader.resource_manager import find_icon
 from ggufloader.services.agent_service import AgentService
 from ggufloader.services.chat_service import ChatService
@@ -68,6 +69,9 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._gpu_install_service = GpuInstallService(self)
         self._prompt_builder = PromptBuilder()
         self.conversation_history: list[dict] = []
+        self._store = SessionStore(get_paths()["chats"])
+        self._session: Optional[dict] = None
+        self._current_session_id: Optional[str] = None
 
         self._init_window()
         self._build_ui()
@@ -75,6 +79,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._load_addons()
         self._populate_addons_menu()
         self._refresh_gpu_support_status()
+        self._restore_last_session()
 
         logger.info("MainWindow initialized")
 
@@ -255,6 +260,12 @@ class MainWindow(QMainWindow, ThemeMixin):
         p.agent_mode_toggled.connect(self._on_agent_mode_toggled)
         p.workspace_selected.connect(lambda _path: self._maybe_init_agent())
         p.workspace_browse_btn.clicked.connect(self._browse_workspace)
+        s.context_combo.currentIndexChanged.connect(self._on_context_changed)
+
+        self.sidebar.new_chat_requested.connect(self._on_new_chat)
+        self.sidebar.session_selected.connect(self._on_session_selected)
+        self.sidebar.session_rename_requested.connect(self._on_session_rename)
+        self.sidebar.session_delete_requested.connect(self._on_session_delete)
 
     def _wire_services(self) -> None:
         m = self._model_service
@@ -268,6 +279,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         c.token_received.connect(self.chat_panel.stream_token)
         c.finished.connect(self._on_generation_finished)
         c.error.connect(self._on_generation_error)
+
+        self.model_loaded.connect(lambda _backend: self._maybe_init_agent())
 
         a = self._agent_service
         a.response_generated.connect(self._on_agent_response)
@@ -304,9 +317,24 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.sidebar.set_status("Loading model...")
         self._model_service.load(path, use_gpu=use_gpu, n_ctx=n_ctx)
 
+    def _on_context_changed(self, _index: int) -> None:
+        """Context changes only take effect when the model is reloaded."""
+        if self._model_service.is_loaded:
+            self.sidebar.set_status(
+                "ℹ️ Reload the model (Load GGUF Model) to apply the new context size."
+            )
+
     def _on_model_loaded(self, backend: ModelBackend) -> None:
         self.sidebar.set_loading(False)
-        self.sidebar.set_model_info(f"✅ Loaded: {Path(backend.model_path).name}")
+        info = f"✅ Loaded: {Path(backend.model_path).name}"
+        trained = backend.n_ctx_train
+        if trained and self.sidebar.get_context_size() > trained:
+            info += (
+                f"\n⚠️ Context {self.sidebar.get_context_size()} exceeds what this "
+                f"model was trained for ({trained} tokens) — expect degraded output. "
+                "Pick a smaller context or a longer-context model."
+            )
+        self.sidebar.set_model_info(info)
         self.sidebar.set_status("Model ready! Start chatting...")
         self.chat_panel.add_system_message("\U0001F916 AI Assistant loaded and ready to help!")
         self._set_model_chip("ok", f"\u25CF {Path(backend.model_path).name}")
@@ -340,26 +368,44 @@ class MainWindow(QMainWindow, ThemeMixin):
             self._send_to_agent(text)
             return
 
+        self._ensure_current_session("chat")
+        self._store.append_message(self._session, "user", text)
+        self._save_session_quiet()
+        self._refresh_session_list()
+
         self.chat_panel.add_user_message(text)
         self.conversation_history.append({"role": "user", "content": text})
 
-        prompt = self._prompt_builder.build(self.conversation_history, text)
+        # Template-aware chat: llama.cpp renders the messages through the
+        # model's embedded chat template (like Ollama). No generic stop
+        # strings and no repeat penalty - both degrade structured output.
+        messages = self._prompt_builder.build_messages(
+            self.conversation_history[:-1], text
+        )
         self.chat_panel.begin_streaming()
         self._chat_service.generate(
             self._model_service.backend,
-            prompt,
-            stop_tokens=self._prompt_builder.stop_tokens(),
-            max_tokens=MAX_TOKENS,
+            messages=messages,
+            max_tokens=CHAT_MAX_TOKENS,
             temperature=0.7,
             top_p=0.9,
-            repeat_penalty=1.1,
             top_k=40,
+            repeat_penalty=1.1,  # Ollama's default; prevents degenerate loops
         )
 
     def _on_generation_finished(self) -> None:
         response = self.chat_panel.finish_streaming()
         if response:
             self.conversation_history.append({"role": "assistant", "content": response})
+            if self._session is not None:
+                self._store.append_message(self._session, "assistant", response)
+                self._save_session_quiet()
+                self._refresh_session_list()
+        elif getattr(self.chat_panel, "stopped_in_reasoning", False):
+            self.chat_panel.add_system_message(
+                "⚠️ The model hit the token limit while still reasoning and never "
+                "reached an answer. Try a shorter question or raise the token budget."
+            )
         self.generation_finished.emit()
 
     def _on_generation_error(self, message: str) -> None:
@@ -369,8 +415,142 @@ class MainWindow(QMainWindow, ThemeMixin):
 
     def _clear_chat(self) -> None:
         self.conversation_history.clear()
+        if self._session is not None:
+            self._session["messages"] = []
+            self._session["title"] = None
+            self._save_session_quiet()
         self.chat_panel.clear_chat()
         self.chat_panel.add_system_message("🤖 Chat cleared. Ready for new conversation!")
+        self._refresh_session_list()
+
+    # ------------------------------------------------------------------
+    # Chat sessions
+    # ------------------------------------------------------------------
+    def _ensure_current_session(self, mode: str, workspace: str | None = None) -> dict:
+        """Return the open session, creating/upgrading it lazily."""
+        if self._session is None:
+            self._session = self._store.create(mode, workspace)
+        elif mode == "agent":
+            self._session["mode"] = "agent"
+            if workspace:
+                self._session["workspace"] = workspace
+        self._current_session_id = self._session["id"]
+        return self._session
+
+    def _save_session_quiet(self) -> None:
+        """Persist the open session; failures surface as a system message."""
+        if self._session is None:
+            return
+        try:
+            self._store.save(self._session)
+        except Exception as e:  # noqa: BLE001 - never crash chat on I/O errors
+            logger.error("Failed to save session: %s", e)
+            self.chat_panel.add_system_message("⚠️ Failed to save chat session")
+
+    def _refresh_session_list(self) -> None:
+        self.sidebar.set_sessions(self._store.list_sessions(), self._current_session_id)
+
+    def _on_new_chat(self) -> None:
+        """Start a fresh conversation; the previous one stays saved."""
+        self._session = None
+        self._current_session_id = None
+        self.conversation_history.clear()
+        self.chat_panel.clear_chat()
+        self._refresh_session_list()
+
+    def _on_session_selected(self, session_id: str) -> None:
+        if session_id == self._current_session_id:
+            return
+        session = self._store.load(session_id)
+        if session is None:
+            return
+        self._stop_running_work()
+        self._save_session_quiet()
+        self._open_session(session)
+
+    def _on_session_rename(self, session_id: str) -> None:
+        session = self._store.load(session_id)
+        current_title = (session or {}).get("title") or ""
+        title, ok = QInputDialog.getText(
+            self, "Rename Chat", "Session title:", text=current_title
+        )
+        if not ok:
+            return
+        self._store.rename(session_id, title)
+        if session_id == self._current_session_id and self._session is not None:
+            self._session["title"] = title.strip() or None
+        self._refresh_session_list()
+
+    def _on_session_delete(self, session_id: str) -> None:
+        confirm = QMessageBox.question(
+            self,
+            "Delete Chat",
+            "Delete this chat session permanently?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        self._store.delete(session_id)
+        if session_id == self._current_session_id:
+            self._on_new_chat()
+        else:
+            self._refresh_session_list()
+
+    def _stop_running_work(self) -> None:
+        """Cancel any in-flight generation before switching sessions."""
+        self._agent_service.stop()
+        self._chat_service.stop()
+        self.chat_panel.finish_streaming()
+        self.chat_panel.agent_panel.finish_streaming()
+
+    def _open_session(self, session: dict) -> None:
+        """Load *session* into the UI (bubbles / agent transcript)."""
+        self._session = session
+        self._current_session_id = session["id"]
+        messages = session.get("messages") or []
+        self.conversation_history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in messages
+            if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)
+        ]
+
+        p = self.chat_panel
+        p.clear_chat()
+        agent_mode = session.get("mode") == "agent"
+        p.set_agent_mode(agent_mode)
+        p.show_agent_controls(agent_mode)
+        p.set_agent_panel_visible(agent_mode)
+        if agent_mode:
+            workspace = session.get("workspace")
+            if workspace:
+                p.set_workspace(workspace)
+            p.set_placeholder("Type your message to the agent...")
+        else:
+            p.set_placeholder("Type your message here...")
+
+        target = p.agent_panel if agent_mode else p
+        for msg in messages:
+            role = msg.get("role")
+            if role == "user":
+                target.add_user_message(str(msg.get("content", "")))
+            elif role == "assistant":
+                target.add_ai_message(str(msg.get("content", "")))
+            elif role == "tool":
+                result = msg.get("tool_result")
+                if isinstance(result, dict):
+                    p.agent_panel.add_tool_card(result)
+
+        self._refresh_session_list()
+
+    def _restore_last_session(self) -> None:
+        """Reopen the most recently updated session at startup."""
+        for meta in self._store.list_sessions():
+            if not meta.get("corrupt"):
+                session = self._store.load(meta["id"])
+                if session is not None:
+                    self._open_session(session)
+                return
 
     # ------------------------------------------------------------------
     # GPU support installer
@@ -458,6 +638,8 @@ class MainWindow(QMainWindow, ThemeMixin):
             p.set_agent_status("⚪ Ready")
             p.set_placeholder("Type your message here...")
             self._agent_service.stop()
+            # Leave agent mode: return the display to the normal chat page.
+            p.set_agent_panel_visible(False)
             return
 
         p.set_placeholder("Type your message to the agent...")
@@ -497,6 +679,12 @@ class MainWindow(QMainWindow, ThemeMixin):
             return
         panel = self.chat_panel.agent_panel
         panel.add_user_message(text)
+
+        self._ensure_current_session("agent", self.chat_panel.get_workspace())
+        self._store.append_message(self._session, "user", text)
+        self._save_session_quiet()
+        self._refresh_session_list()
+
         # The graph streams the final answer's tokens into a live bubble.
         panel.begin_streaming()
         self._agent_service.process_message(engine, text)
@@ -515,20 +703,30 @@ class MainWindow(QMainWindow, ThemeMixin):
         streamed = self.chat_panel.agent_panel.finish_streaming()
         if not streamed:
             self.chat_panel.agent_panel.add_ai_message(response)
+        if response and self._session is not None:
+            self._store.append_message(self._session, "assistant", response)
+            self._save_session_quiet()
+            self._refresh_session_list()
 
     def _on_agent_cancelled(self) -> None:
         panel = self.chat_panel.agent_panel
         panel.finish_streaming()
         panel.mark_cancelled()
         panel.add_status("⏹ Agent run cancelled")
+        self._save_session_quiet()
+        self._refresh_session_list()
 
     def _on_agent_tool_executed(self, result: dict) -> None:
         self.chat_panel.agent_panel.add_tool_card(result)
+        if self._session is not None and isinstance(result, dict):
+            self._store.append_tool_result(self._session, result)
 
     def _on_agent_error(self, message: str) -> None:
         self.chat_panel.agent_panel.finish_streaming()
         self.chat_panel.agent_panel.add_status(f"❌ Error: {message}")
         self.chat_panel.set_agent_status("🟢 Ready")
+        self._save_session_quiet()
+        self._refresh_session_list()
 
     # ------------------------------------------------------------------
     # Appearance / feedback

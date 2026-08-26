@@ -37,6 +37,7 @@ class ChatWorker(QObject):
         self._stop_event = threading.Event()
         self.backend: Optional[ModelBackend] = None
         self.prompt: str = ""
+        self.messages: Optional[List[dict]] = None
         self.stop_tokens: List[str] = []
         self.params: dict = {}
 
@@ -44,13 +45,23 @@ class ChatWorker(QObject):
     def process(self) -> None:
         try:
             kwargs = dict(self.params)
-            kwargs["stream"] = True
-            kwargs["stop"] = self.stop_tokens
-            for token in self.backend.generate_stream(self.prompt, **kwargs):
-                if self._stop_event.is_set():
-                    break
-                if token:
-                    self.token_received.emit(token)
+            if self.messages is not None:
+                # Template-aware path: llama.cpp applies the model's own
+                # chat template; EOS handling comes from the template, so
+                # no generic text stop sequences are injected.
+                for token in self.backend.chat_stream(self.messages, **kwargs):
+                    if self._stop_event.is_set():
+                        break
+                    if token:
+                        self.token_received.emit(token)
+            else:
+                kwargs["stream"] = True
+                kwargs["stop"] = self.stop_tokens
+                for token in self.backend.generate_stream(self.prompt, **kwargs):
+                    if self._stop_event.is_set():
+                        break
+                    if token:
+                        self.token_received.emit(token)
             self.finished.emit()
         except Exception as e:  # noqa: BLE001
             logger.error("Chat generation failed: %s", e)
@@ -76,16 +87,22 @@ class ChatService(QObject):
     def generate(
         self,
         backend: ModelBackend,
-        prompt: str,
+        prompt: str = "",
         stop_tokens: Optional[List[str]] = None,
+        messages: Optional[List[dict]] = None,
         **params: object,
     ) -> None:
-        """Start streaming a response for *prompt* using *backend*."""
+        """Start streaming a response.
+
+        Pass *messages* (role/content dicts) for the template-aware chat
+        path, or *prompt* for the legacy raw-completion path.
+        """
         self.stop()
 
         worker = ChatWorker()
         worker.backend = backend
         worker.prompt = prompt
+        worker.messages = messages
         worker.stop_tokens = stop_tokens or []
         worker.params = params
 

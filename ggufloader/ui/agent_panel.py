@@ -19,7 +19,9 @@ from PySide6.QtWidgets import (
 )
 
 from ggufloader.config import CHAT_BUBBLE_FONT_SIZE, FONT_FAMILY
+from ggufloader.core.reasoning import ReasoningStreamParser, format_answer, split_reasoning
 from ggufloader.widgets.chat_bubble import ChatBubble, _BubbleRow
+from ggufloader.widgets.reasoning_block import ReasoningBlock
 
 
 class AgentPanel(QWidget):
@@ -33,6 +35,9 @@ class AgentPanel(QWidget):
         self._current_ai_bubble: ChatBubble | None = None
         self._current_ai_text = ""
         self._bubbles: list[tuple[QWidget, ChatBubble]] = []
+        self._parser: ReasoningStreamParser | None = None
+        self._reasoning: ReasoningBlock | None = None
+        self._reasoning_blocks: list[ReasoningBlock] = []
         self._pending_approvals: list[tuple[QFrame, QLabel, QPushButton, QPushButton]] = []
         self._build_ui()
 
@@ -64,16 +69,37 @@ class AgentPanel(QWidget):
         self._add_bubble(text, is_user=True)
 
     def add_ai_message(self, text: str) -> None:
-        self._add_bubble(text, is_user=False)
+        """Render a complete AI message, splitting off any thought block."""
+        thought, answer = split_reasoning(text)
+        if thought:
+            self._insert_static_reasoning(thought)
+        self._add_bubble(answer or text, is_user=False)
+
+    def _insert_static_reasoning(self, thought: str) -> None:
+        block = ReasoningBlock()
+        block.set_font_size(self._font_size)
+        block.update_style(self._is_dark)
+        block.body.setPlainText(thought)
+        block.set_summary("\U0001F4AD Thought process")
+        self.col.insertWidget(self.col.count() - 1, block)
+        self._reasoning_blocks.append(block)
 
     def begin_streaming(self) -> None:
         """Start a new empty AI bubble that tokens will stream into."""
         self._current_ai_text = ""
+        self._parser = ReasoningStreamParser()
+        self._reasoning = ReasoningBlock()
+        self._reasoning.set_font_size(self._font_size)
+        self._reasoning.update_style(self._is_dark)
+        self._reasoning.begin()
+        self._reasoning.setVisible(False)  # until the first thought arrives
         self._current_ai_bubble = ChatBubble("", is_user=False)
         self._apply_bubble_theme(self._current_ai_bubble)
         # Hidden until the first token arrives (no empty card flash).
         self._current_ai_bubble.setVisible(False)
         row = _BubbleRow(self._current_ai_bubble, is_user=False)
+        self.col.insertWidget(self.col.count() - 1, self._reasoning)
+        self._reasoning_blocks.append(self._reasoning)
         self.col.insertWidget(self.col.count() - 1, row)
         self._bubbles.append((row, self._current_ai_bubble))
         self.scroll_to_bottom()
@@ -81,13 +107,47 @@ class AgentPanel(QWidget):
     def stream_token(self, token: str) -> None:
         if self._current_ai_bubble is None:
             return
-        self._current_ai_bubble.setVisible(True)
-        self._current_ai_text += token
-        self._current_ai_bubble.update_text(self._current_ai_text)
+        parser = self._parser or ReasoningStreamParser()
+        for kind, text in parser.feed(token):
+            if kind == "thought":
+                if not text:
+                    continue
+                if self._reasoning is not None and not self._reasoning.isVisible():
+                    self._reasoning.setVisible(True)
+                if self._reasoning is not None:
+                    self._reasoning.append_thought(text)
+            else:
+                if self._reasoning is not None and not self._reasoning._finished:
+                    self._reasoning.finish_thinking()
+                self._current_ai_bubble.setVisible(True)
+                self._current_ai_text += text
+                self._current_ai_bubble.update_text(
+                    format_answer(self._current_ai_text))
         self.scroll_to_bottom()
 
     def finish_streaming(self) -> str:
-        """Finalize the streaming bubble; returns the accumulated text."""
+        """Finalize the streaming bubble; returns the clean answer text."""
+        if self._parser is not None:
+            for kind, text in self._parser.finish():
+                if kind == "thought":
+                    if self._reasoning is not None and text:
+                        self._reasoning.append_thought(text)
+                        self._reasoning.setVisible(True)
+                else:
+                    self._current_ai_bubble.setVisible(True)
+                    self._current_ai_text += text
+                    self._current_ai_bubble.update_text(
+                        format_answer(self._current_ai_text))
+            self._parser = None
+        if self._reasoning is not None:
+            if self._reasoning.body.text().strip():
+                self._reasoning.finish_thinking()
+            else:
+                # Plain model output - drop the unused thinking card.
+                self._reasoning.setParent(None)
+                if self._reasoning in self._reasoning_blocks:
+                    self._reasoning_blocks.remove(self._reasoning)
+            self._reasoning = None
         text = self._current_ai_text.strip()
         self._current_ai_bubble = None
         self._current_ai_text = ""
@@ -227,6 +287,9 @@ class AgentPanel(QWidget):
         self._bubbles.clear()
         self._current_ai_bubble = None
         self._current_ai_text = ""
+        self._parser = None
+        self._reasoning = None
+        self._reasoning_blocks.clear()
         self._pending_approvals.clear()
 
     # ------------------------------------------------------------------
@@ -236,11 +299,15 @@ class AgentPanel(QWidget):
         self._is_dark = is_dark
         for _row, bubble in self._bubbles:
             bubble.update_style(is_dark)
+        for block in self._reasoning_blocks:
+            block.update_style(is_dark)
 
     def apply_font_size(self, size: int) -> None:
         self._font_size = size
         for _row, bubble in self._bubbles:
             bubble.set_font_size(size)
+        for block in self._reasoning_blocks:
+            block.set_font_size(size)
 
     def _apply_bubble_theme(self, bubble: ChatBubble) -> None:
         bubble.set_font_size(self._font_size)

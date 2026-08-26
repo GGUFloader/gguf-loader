@@ -16,8 +16,10 @@ from PySide6.QtWidgets import (
 )
 
 from ggufloader.config import BUBBLE_FONT_SIZE, CHAT_BUBBLE_FONT_SIZE, FONT_FAMILY
+from ggufloader.core.reasoning import ReasoningStreamParser, format_answer, split_reasoning
 from ggufloader.ui.agent_panel import AgentPanel
 from ggufloader.widgets.chat_bubble import ChatBubble, _BubbleRow
+from ggufloader.widgets.reasoning_block import ReasoningBlock
 
 
 class MessageInput(QTextEdit):
@@ -52,6 +54,9 @@ class ChatPanel(QWidget):
         self._current_ai_bubble: ChatBubble | None = None
         self._current_ai_text = ""
         self._bubbles: list[tuple[QWidget, ChatBubble]] = []
+        self._parser: ReasoningStreamParser | None = None
+        self._reasoning: ReasoningBlock | None = None
+        self._reasoning_blocks: list[ReasoningBlock] = []
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -186,7 +191,24 @@ class ChatPanel(QWidget):
         self._add_bubble(text, is_user=True)
 
     def add_ai_message(self, text: str) -> None:
-        self._add_bubble(text, is_user=False)
+        """Render a complete AI message, splitting off any thought block."""
+        thought, answer = split_reasoning(text)
+        if thought:
+            self._insert_static_reasoning(thought)
+        self._add_bubble(answer or text, is_user=False)
+
+    def _insert_static_reasoning(self, thought: str) -> None:
+        """Collapsed reasoning card for replayed/complete messages."""
+        block = ReasoningBlock()
+        self._apply_block_theme(block)
+        block.body.setPlainText(thought)
+        block.set_summary("\U0001F4AD Thought process")
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, block)
+        self._reasoning_blocks.append(block)
+
+    def _apply_block_theme(self, block: ReasoningBlock) -> None:
+        block.set_font_size(self._font_size)
+        block.update_style(self._is_dark)
 
     def add_system_message(self, text: str) -> None:
         label = QLabel(text)
@@ -204,12 +226,21 @@ class ChatPanel(QWidget):
     def begin_streaming(self) -> None:
         """Start a new empty AI bubble that tokens will stream into."""
         self._current_ai_text = ""
-        self._current_ai_bubble = ChatBubble("", is_user=False)
-        self._apply_bubble_theme(self._current_ai_bubble)
+        self.stopped_in_reasoning = False
+        self._parser = ReasoningStreamParser()
+        self._reasoning = ReasoningBlock()
+        self._apply_block_theme(self._reasoning)
+        self._reasoning.begin()
+        self._reasoning.setVisible(False)  # until the first thought arrives
 
         # Hide the empty pill until the first token arrives, so no empty
         # card flashes on slow first tokens.
+        self._current_ai_bubble = ChatBubble("", is_user=False)
+        self._apply_bubble_theme(self._current_ai_bubble)
         self._current_ai_bubble.setVisible(False)
+
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, self._reasoning)
+        self._reasoning_blocks.append(self._reasoning)
         container = _BubbleRow(self._current_ai_bubble, is_user=False)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, self._current_ai_bubble))
@@ -219,13 +250,54 @@ class ChatPanel(QWidget):
     def stream_token(self, token: str) -> None:
         if self._current_ai_bubble is None:
             return
-        self._current_ai_bubble.setVisible(True)
-        self._current_ai_text += token
-        self._current_ai_bubble.update_text(self._current_ai_text)
+        parser = self._parser or ReasoningStreamParser()
+        for kind, text in parser.feed(token):
+            if kind == "thought":
+                if not text:
+                    continue
+                if self._reasoning is not None and not self._reasoning.isVisible():
+                    self._reasoning.setVisible(True)
+                if self._reasoning is not None:
+                    self._reasoning.append_thought(text)
+            else:
+                # First answer token: collapse the thinking block.
+                if self._reasoning is not None and not self._reasoning._finished:
+                    self._reasoning.finish_thinking()
+                self._current_ai_bubble.setVisible(True)
+                self._current_ai_text += text
+                self._current_ai_bubble.update_text(
+                    format_answer(self._current_ai_text))
         self.scroll_to_bottom()
 
     def finish_streaming(self) -> str:
-        """Finalize the streaming bubble; returns the accumulated text."""
+        """Finalize the streaming bubble; returns the clean answer text."""
+        had_thoughts = (
+            self._reasoning is not None and bool(self._reasoning.body.text().strip())
+        )
+        if self._parser is not None:
+            for kind, text in self._parser.finish():
+                if kind == "thought":
+                    if self._reasoning is not None and text:
+                        self._reasoning.append_thought(text)
+                        self._reasoning.setVisible(True)
+                else:
+                    self._current_ai_bubble.setVisible(True)
+                    self._current_ai_text += text
+                    self._current_ai_bubble.update_text(
+                        format_answer(self._current_ai_text))
+            self._parser = None
+        # Generation that ends inside the think block means the token
+        # budget ran out before any answer was produced.
+        self.stopped_in_reasoning = had_thoughts and not self._current_ai_text.strip()
+        if self._reasoning is not None:
+            if self._reasoning.body.text().strip():
+                self._reasoning.finish_thinking()
+            else:
+                # Plain model output - drop the unused thinking card.
+                self._reasoning.setParent(None)
+                if self._reasoning in self._reasoning_blocks:
+                    self._reasoning_blocks.remove(self._reasoning)
+            self._reasoning = None
         text = self._current_ai_text.strip()
         self._current_ai_bubble = None
         self._current_ai_text = ""
@@ -237,10 +309,19 @@ class ChatPanel(QWidget):
         self._bubbles.clear()
         self._current_ai_bubble = None
         self._current_ai_text = ""
+        self._parser = None
+        self._reasoning = None
+        self._reasoning_blocks.clear()
         if hasattr(self, "agent_panel"):
             self.agent_panel.clear()
-        if not self._bubbles:
-            self.empty_state.show()
+        # Remove every remaining widget (system labels included); the last
+        # layout item is the trailing stretch.
+        while self.chat_layout.count() > 1:
+            item = self.chat_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+        self._maybe_hide_empty_state()
 
     # ------------------------------------------------------------------
     # Agent mode controls
@@ -289,11 +370,15 @@ class ChatPanel(QWidget):
         self._font_size = size
         for _container, bubble in self._bubbles:
             bubble.set_font_size(size)
+        for block in self._reasoning_blocks:
+            block.set_font_size(size)
 
     def apply_theme(self, is_dark: bool) -> None:
         self._is_dark = is_dark
         for _container, bubble in self._bubbles:
             bubble.update_style(is_dark)
+        for block in self._reasoning_blocks:
+            block.update_style(is_dark)
 
     # ------------------------------------------------------------------
     # Internals
@@ -314,14 +399,24 @@ class ChatPanel(QWidget):
         self.agent_mode_btn.setText("🤖 Agent Mode: ON" if checked else "🤖 Agent Mode: OFF")
         self.agent_mode_toggled.emit(checked)
 
+    def set_agent_mode(self, on: bool) -> None:
+        """Programmatic toggle (no signal) - used when restoring sessions."""
+        self.agent_mode_btn.blockSignals(True)
+        self.is_agent_mode = bool(on)
+        self.agent_mode_btn.setChecked(bool(on))
+        self.agent_mode_btn.setText("🤖 Agent Mode: ON" if on else "🤖 Agent Mode: OFF")
+        self.agent_mode_btn.blockSignals(False)
+
     def _add_bubble(self, text: str, is_user: bool) -> None:
         bubble = ChatBubble(text, is_user)
         self._apply_bubble_theme(bubble)
-        self._maybe_hide_empty_state()
 
         container = _BubbleRow(bubble, is_user, is_rtl=bubble.is_rtl)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, bubble))
+        # Hide the empty state only after the bubble is registered, so the
+        # very first user message swaps the hero out immediately.
+        self._maybe_hide_empty_state()
         self.scroll_to_bottom()
 
     def _apply_bubble_theme(self, bubble: ChatBubble) -> None:
@@ -345,7 +440,10 @@ class ChatPanel(QWidget):
             return
         if getattr(self, "_agent_panel_visible", False):
             return
-        has_content = bool(self._bubbles) or self._current_ai_bubble is not None
+        has_bubbles = bool(self._bubbles) or self._current_ai_bubble is not None
+        # System labels live in the layout but not in _bubbles; the last
+        # layout item is the trailing stretch.
+        has_content = has_bubbles or self.chat_layout.count() > 1
         self.chat_stack.setCurrentIndex(1 if has_content else 0)
 
     def scroll_to_bottom(self) -> None:

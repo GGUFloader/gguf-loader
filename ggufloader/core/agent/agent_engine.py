@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 StatusCallback = Callable[[str], None]
 ToolCallback = Callable[[Dict[str, Any]], None]
 
-_SYSTEM_PROMPT = """You are Kiro, an AI assistant built to help developers. You're knowledgeable, decisive, and supportive.
+_SYSTEM_PROMPT = """You are an AI assistant built to help developers. You're knowledgeable, decisive, and supportive.
 
 Your workspace: __WORKSPACE__
 
@@ -385,6 +385,10 @@ class AgentEngine:
                     if self._issue_directive(user_message, status):
                         continue
                     break
+
+                reasoning = (action.get("reasoning") or "").strip()
+                if reasoning:
+                    status(f"💭 {reasoning}")
 
                 calls = [
                     c for c in (action.get("tool_calls") or [])

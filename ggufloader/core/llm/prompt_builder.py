@@ -14,6 +14,17 @@ DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Answer questions clearly and concisely."
 )
 
+# Chat-template markers that models sometimes echo into their output.
+# Feeding them back as history teaches the model to keep emitting them.
+_TEMPLATE_MARKERS = (
+    "[INST]", "<<SYS>>", "<</SYS>>", "[/INST]",
+    "<|im_start|>", "<|im_end|>", "<|start_header_id|>", "<|end_header_id|>",
+)
+
+
+def _has_template_artifacts(text: str) -> bool:
+    return any(marker in text for marker in _TEMPLATE_MARKERS)
+
 # Token-level stop sequences that terminate generation cleanly.
 STOP_TOKENS = [
     "<|im_end|>", "</s>", "user:", "assistant:", "###",
@@ -26,6 +37,29 @@ class PromptBuilder:
 
     def __init__(self, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> None:
         self.system_prompt = system_prompt
+
+    def build_messages(
+        self, history: List[Dict[str, str]], user_message: str, max_history: int = 8
+    ) -> List[Dict[str, str]]:
+        """Return a chat *messages* list for create_chat_completion.
+
+        llama.cpp renders this through the model's embedded chat template
+        (the model's native format), so roles stay structured instead of
+        being flattened into ``User:/Assistant:`` text.
+        """
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": self.system_prompt}
+        ]
+        for msg in history[-max_history:]:
+            role = msg.get("role", "user")
+            if role not in ("user", "assistant"):
+                continue
+            content = msg.get("content", "")
+            if not content or _has_template_artifacts(content):
+                continue  # template junk poisons the next generation
+            messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": user_message})
+        return messages
 
     def build(self, history: List[Dict[str, str]], user_message: str) -> str:
         """Return the full prompt text for *user_message*.

@@ -11,6 +11,9 @@ DEFAULT_CONTEXT_SIZES = ["512", "1024", "2048", "4096", "8192", "16384", "32768"
 
 # Generation
 MAX_TOKENS = 2048
+# Thinking models spend thousands of tokens reasoning before the answer;
+# the chat budget must cover thought + answer or generation dies mid-think.
+CHAT_MAX_TOKENS = 16384
 
 # English System Prompts
 ENGLISH_SYSTEM_PROMPTS = {
