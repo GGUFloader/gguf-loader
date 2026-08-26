@@ -251,13 +251,6 @@ class ModelBackend:
             n_prompt_val = 0
             if self._kv_cache_tokens is not None and self._kv_cache_state is not None:
                 try:
-                    rendered = llama.create_chat_completion(
-                        messages=messages, stream=False,
-                        max_tokens=1,
-                    )
-                    # Extract the prompt from the completion — not ideal but
-                    # the rendered prompt tokens are what we need.
-                    # Instead, approximate: tokenize the message contents.
                     all_text = " ".join(m.get("content", "") for m in messages)
                     tokens = llama.tokenize(all_text.encode("utf-8"), add_bos=True)
                     # Find longest common prefix
@@ -265,15 +258,31 @@ class ModelBackend:
                     lcp = 0
                     while lcp < min(len(tokens), len(old)) and tokens[lcp] == old[lcp]:
                         lcp += 1
+                    total_new = len(tokens)
+                    pct = (lcp / total_new * 100) if total_new > 0 else 0
                     if lcp > 64:  # only cache if we save meaningful tokens
                         use_n_prompt = True
                         n_prompt_val = lcp
                         try:
                             llama.load_state(self._kv_cache_state)
-                        except Exception:  # noqa: BLE001
+                            logger.info(
+                                "KV cache HIT: reused %d/%d tokens (%.0f%%) "
+                                "— skipping %d tokens",
+                                lcp, total_new, pct, lcp,
+                            )
+                        except Exception as e:  # noqa: BLE001
+                            logger.debug("KV cache load_state failed: %s", e)
                             use_n_prompt = False
-                except Exception:  # noqa: BLE001
-                    pass
+                    else:
+                        logger.debug(
+                            "KV cache MISS (below threshold): lcp=%d/%d "
+                            "(%.0f%%) — threshold is 64",
+                            lcp, total_new, pct,
+                        )
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("KV cache tokenization failed: %s", e)
+            else:
+                logger.debug("KV cache cold start (no previous state)")
 
             stream = llama.create_chat_completion(**kwargs)
 
@@ -296,7 +305,9 @@ class ModelBackend:
                 new_tokens = llama.tokenize(all_text.encode("utf-8"), add_bos=True)
                 self._kv_cache_tokens = new_tokens
                 self._kv_cache_state = llama.save_state()
-            except Exception:  # noqa: BLE001
+                logger.debug("KV cache saved: %d tokens for next turn", len(new_tokens))
+            except Exception as e:  # noqa: BLE001
+                logger.debug("KV cache save_state failed: %s", e)
                 self._kv_cache_tokens = None
                 self._kv_cache_state = None
 
