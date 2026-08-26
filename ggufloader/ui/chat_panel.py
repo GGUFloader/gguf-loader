@@ -352,7 +352,6 @@ class ChatPanel(QWidget):
         container = _BubbleRow(self._current_ai_bubble, is_user=False)
         self._current_ai_bubble.links_locked = True  # unlock when done
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
-        self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)
         self._bubbles.append((container, self._current_ai_bubble))
         self._maybe_hide_empty_state()
         self.scroll_to_bottom()
