@@ -127,18 +127,32 @@ class AgentPanel(QWidget):
 
     def finish_streaming(self) -> str:
         """Finalize the streaming bubble; returns the clean answer text."""
-        if self._parser is not None:
-            for kind, text in self._parser.finish():
-                if kind == "thought":
-                    if self._reasoning is not None and text:
-                        self._reasoning.append_thought(text)
-                        self._reasoning.setVisible(True)
-                else:
+        parser = self._parser
+        finish_events = parser.finish() if parser is not None else []
+        was_plain = getattr(parser, "final_state", "") == "prologue"
+        self._parser = None
+        for kind, text in finish_events:
+            if kind == "answer" or was_plain:
+                if text:
                     self._current_ai_bubble.setVisible(True)
                     self._current_ai_text += text
                     self._current_ai_bubble.update_text(
                         format_answer(self._current_ai_text))
-            self._parser = None
+            else:
+                if self._reasoning is not None and text:
+                    self._reasoning.append_thought(text)
+                    self._reasoning.setVisible(True)
+        # Plain reply: relocate streamed "thought" text into the bubble.
+        if was_plain and self._reasoning is not None:
+            pending = self._reasoning.body.text()
+            self._reasoning.setParent(None)
+            if self._reasoning in self._reasoning_blocks:
+                self._reasoning_blocks.remove(self._reasoning)
+            self._reasoning = None
+            self._current_ai_text = pending + self._current_ai_text
+            if self._current_ai_text and self._current_ai_bubble is not None:
+                self._current_ai_bubble.setVisible(True)
+                self._current_ai_bubble.update_text(format_answer(self._current_ai_text))
         if self._reasoning is not None:
             if self._reasoning.body.text().strip():
                 self._reasoning.finish_thinking()

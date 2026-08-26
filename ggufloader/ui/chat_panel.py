@@ -274,21 +274,40 @@ class ChatPanel(QWidget):
         had_thoughts = (
             self._reasoning is not None and bool(self._reasoning.body.text().strip())
         )
-        if self._parser is not None:
-            for kind, text in self._parser.finish():
-                if kind == "thought":
-                    if self._reasoning is not None and text:
-                        self._reasoning.append_thought(text)
-                        self._reasoning.setVisible(True)
-                else:
+        parser = self._parser
+        finish_events = parser.finish() if parser is not None else []
+        was_plain = getattr(parser, "final_state", "") == "prologue"
+        self._parser = None
+        for kind, text in finish_events:
+            if kind == "answer" or was_plain:
+                if text:
                     self._current_ai_bubble.setVisible(True)
                     self._current_ai_text += text
                     self._current_ai_bubble.update_text(
                         format_answer(self._current_ai_text))
-            self._parser = None
+            else:
+                if self._reasoning is not None and text:
+                    self._reasoning.append_thought(text)
+                    self._reasoning.setVisible(True)
+        # Plain reply: everything streamed "as thought" was actually the
+        # answer - move it out of the thinking card into the bubble.
+        if was_plain:
+            pending = ""
+            if self._reasoning is not None:
+                pending = self._reasoning.body.text()
+                self._reasoning.setParent(None)
+                if self._reasoning in self._reasoning_blocks:
+                    self._reasoning_blocks.remove(self._reasoning)
+                self._reasoning = None
+            self._current_ai_text = pending + self._current_ai_text
+            if self._current_ai_text and self._current_ai_bubble is not None:
+                self._current_ai_bubble.setVisible(True)
+                self._current_ai_bubble.update_text(format_answer(self._current_ai_text))
         # Generation that ends inside the think block means the token
         # budget ran out before any answer was produced.
-        self.stopped_in_reasoning = had_thoughts and not self._current_ai_text.strip()
+        self.stopped_in_reasoning = (
+            had_thoughts and not was_plain and not self._current_ai_text.strip()
+        )
         if self._reasoning is not None:
             if self._reasoning.body.text().strip():
                 self._reasoning.finish_thinking()

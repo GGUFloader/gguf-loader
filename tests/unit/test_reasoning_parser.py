@@ -19,6 +19,25 @@ def test_plain_text_is_answer():
     assert split_reasoning("Just a normal reply.") == ("", "Just a normal reply.")
 
 
+def test_plain_stream_emits_live_then_reclassifies():
+    """Prologue deltas stream as provisional thoughts; finish flags them."""
+    p = ReasoningStreamParser()
+    kinds = []
+    text = "Hello there, this is a plain answer longer than the hold window."
+    for ch in text:
+        for k, _t in p.feed(ch):
+            kinds.append(k)
+    # Live: text streams (as provisional thought events) while thinking
+    assert kinds and all(k == "thought" for k in kinds)
+    events = p.finish()
+    assert p.final_state == "prologue"
+    assert all(k == "answer" for k, _ in events)
+    from ggufloader.core.reasoning import _HOLD
+    assert "".join(t for _, t in events) == text[-_HOLD:]  # held-back tail
+    # split_reasoning still classifies the full text as answer
+    assert split_reasoning(text) == ("", text)
+
+
 def test_think_tags():
     t, a = split_reasoning("<think>private chain</think>Visible answer")
     assert t == "private chain"

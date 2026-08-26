@@ -45,7 +45,6 @@ _RE_THINK_CLOSE = re.compile(r"</think(?:ing)?>", re.IGNORECASE)
 _RE_ROLE_PREAMBLE = re.compile(r"(?:<\|?start\|?>)?\s*assistant\s*$", re.IGNORECASE)
 
 _HOLD = 20                # chars kept back in case a tag straddles chunks
-_PROLOGUE_LIMIT = 20000   # provisional text beyond this is flushed as answer
 
 Event = Tuple[str, str]
 
@@ -59,6 +58,7 @@ class ReasoningStreamParser:
         self._after_message = "thought"   # where await_message goes next
         self.saw_thoughts = False
         self._answer_started = False
+        self.final_state = "prologue"     # state at finish() - see panels
 
     # ------------------------------------------------------------------
     # Public API
@@ -72,7 +72,14 @@ class ReasoningStreamParser:
         return events
 
     def finish(self) -> List[Event]:
-        """Flush whatever is left according to the current state."""
+        """Flush whatever is left according to the current state.
+
+        ``final_state`` records where the stream ended: ``prologue``
+        means no marker ever appeared, so everything previously emitted
+        as "thought" was actually a plain answer (panels use this to
+        relocate the text into the reply bubble).
+        """
+        self.final_state = self._state
         events: List[Event] = []
         text = self._buf
         self._buf = ""
@@ -113,12 +120,15 @@ class ReasoningStreamParser:
         starts = [m for m in (think, chan, close) if m]
 
         if not starts:
-            # No marker yet - keep holding short provisional prefixes so a
-            # stray leading word can still be classified as a thought.
-            if len(buf) > _PROLOGUE_LIMIT:
-                cut = len(buf) - _HOLD
-                self._emit_answer(events, buf[:cut])
-                self._buf = buf[cut:]
+            # No marker yet. Stream the text live into the thinking block
+            # (provisionally): models with an invisible <think> opener
+            # would otherwise show nothing until the close tag arrived.
+            # If no marker EVER appears, finish() flags final_state ==
+            # 'prologue' and panels relocate the text to the answer bubble.
+            take = len(buf) - _HOLD
+            if take > 0:
+                self._emit_thought(events, buf[:take])
+                self._buf = buf[take:]
                 return True
             return False
 
@@ -233,15 +243,21 @@ def split_reasoning(text: str) -> Tuple[str, str]:
     """Split a complete model reply into ``(thought, answer)``.
 
     Markers are stripped from both parts. Plain replies come back as
-    ``("", text)``.
+    ``("", text)`` - including replies whose live deltas were streamed
+    provisionally as thoughts but never confirmed by any marker.
     """
     parser = ReasoningStreamParser()
+    events = [*parser.feed(text), *parser.finish()]
     thoughts: List[str] = []
     answers: List[str] = []
-    for kind, part in parser.feed(text):
-        (thoughts if kind == "thought" else answers).append(part)
-    for kind, part in parser.finish():
-        (thoughts if kind == "thought" else answers).append(part)
+    for kind, part in events:
+        if parser.final_state == "prologue":
+            # No marker ever appeared: the entire reply is the answer.
+            answers.append(part)
+        elif kind == "thought":
+            thoughts.append(part)
+        else:
+            answers.append(part)
     return "".join(thoughts).strip(), "".join(answers).strip()
 
 
