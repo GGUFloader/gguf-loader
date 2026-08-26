@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import threading
 from typing import Any, Dict, Iterator, List, Optional
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -25,6 +24,52 @@ try:
 except ImportError:  # pragma: no cover - depends on environment
     Llama = None
     LLAMA_AVAILABLE = False
+
+
+def holdback_stream(token_iter: Iterator[str], stops: List[str]) -> Iterator[str]:
+    """Yield tokens while withholding a tail that could complete a stop.
+
+    Mirrors GPT4All's partial-match rule (llmodel_shared.cpp:123-140): if
+    the emitted text currently ends with a proper prefix of any stop
+    sequence, those characters are withheld until more text resolves them.
+    llama.cpp already strips complete stops engine-side; this is the
+    safety net for splits it cannot see across chunk boundaries.
+    """
+    stops = [s for s in (stops or []) if s]
+    if not stops:
+        yield from token_iter
+        return
+    max_len = max(len(s) for s in stops)
+    pending = ""
+    for chunk in token_iter:
+        pending += chunk
+        if not pending:
+            continue
+        # 1. A complete stop inside the buffer: emit up to it, drop it.
+        cut = None
+        cut_len = 0
+        for s in stops:
+            idx = pending.find(s)
+            if idx != -1 and (cut is None or idx < cut):
+                cut = idx
+                cut_len = len(s)
+        if cut is not None:
+            if cut > 0:
+                yield pending[:cut]
+            pending = pending[cut + cut_len:]
+            continue
+        # 2. Release everything except a possible stop-prefix tail.
+        keep = 0
+        for k in range(min(max_len - 1, len(pending) - 1), 0, -1):
+            if any(s.startswith(pending[-k:]) for s in stops):
+                keep = k
+                break
+        release = len(pending) - keep
+        if release > 0:
+            yield pending[:release]
+            pending = pending[release:]
+    if pending:
+        yield pending
 
 
 class ModelBackend:
@@ -39,8 +84,8 @@ class ModelBackend:
     ) -> None:
         self.model_path = model_path
         self.use_gpu = use_gpu
-        self.n_ctx = n_ctx
-        self.n_gpu_layers = n_gpu_layers if use_gpu else 0
+        self.n_gpu_layers_requested = n_gpu_layers
+        self._n_ctx = n_ctx
         self._llama: Any = None
         self._lock = threading.Lock()
 
@@ -56,12 +101,12 @@ class ModelBackend:
             )
         logger.info(
             "Loading model %s (gpu_layers=%d, ctx=%d)",
-            self.model_path, self.n_gpu_layers, self.n_ctx,
+            self.model_path, self.n_gpu_layers_requested, self._n_ctx,
         )
         self._llama = Llama(
             model_path=self.model_path,
-            n_ctx=self.n_ctx,
-            n_gpu_layers=self.n_gpu_layers,
+            n_ctx=self._n_ctx,
+            n_gpu_layers=(self.n_gpu_layers_requested if self.use_gpu else 0),
             verbose=True,
         )
         return self
@@ -76,6 +121,24 @@ class ModelBackend:
         return self._llama is not None
 
     @property
+    def n_ctx(self) -> Optional[int]:
+        """Configured context window (None when no model loaded)."""
+        return self._n_ctx if self._llama is not None else None
+
+    def count_tokens(self, text: str) -> int:
+        """Tokenize *text* with the loaded model; falls back to chars/4."""
+        if self._llama is None or not text:
+            return max(1, len(text) // 4) if text else 0
+        try:
+            with self._lock:
+                tokens = self._llama.tokenize(
+                    text.encode("utf-8"), add_bos=False, special=False
+                )
+            return len(tokens)
+        except Exception:  # noqa: BLE001 - estimate beats crashing the UI
+            return max(1, len(text) // 4)
+
+    @property
     def n_ctx_train(self) -> Optional[int]:
         """Tokens the model was trained for (None when unavailable).
 
@@ -88,6 +151,40 @@ class ModelBackend:
             return int(self._llama.n_ctx_train())
         except Exception:  # noqa: BLE001 - depends on llama-cpp version
             return None
+
+    @property
+    def gpu_status(self) -> Dict[str, Any]:
+        """Honest GPU offload report for the loaded model.
+
+        ``build_supports_gpu`` reflects the installed wheel's compiled
+        backends; ``requested`` is the user's toggle. When the two
+        disagree, the model IS running on CPU no matter what the UI
+        promised - exactly what users need to be told.
+        """
+        build_supports_gpu = False
+        try:
+            from llama_cpp import llama_cpp as _lc
+
+            probe = getattr(_lc, "llama_supports_gpu_offload", None)
+            build_supports_gpu = bool(probe()) if callable(probe) else False
+        except Exception:  # noqa: BLE001 - probe is best-effort
+            pass
+        requested = bool(self.use_gpu and self.n_gpu_layers_requested != 0)
+        if requested and not build_supports_gpu:
+            state = "cpu_fallback"
+            reason = "this Python environment has a CPU-only llama.cpp build"
+        elif requested:
+            state = "gpu"
+            reason = ""
+        else:
+            state = "cpu_by_choice"
+            reason = "GPU Acceleration is toggled off"
+        return {
+            "state": state,
+            "reason": reason,
+            "requested": requested,
+            "build_supports_gpu": build_supports_gpu,
+        }
 
     # ------------------------------------------------------------------
     # Inference
@@ -106,15 +203,20 @@ class ModelBackend:
         kwargs = dict(kwargs)
         kwargs["stream"] = True
         kwargs["messages"] = messages
+        stops = list(kwargs.get("stop") or [])
         with self._lock:
             llama = self._require_llama()
             stream = llama.create_chat_completion(**kwargs)
-            for chunk in stream:
-                choices = chunk.get("choices") or [{}]
-                delta = choices[0].get("delta") or {}
-                text = delta.get("content")
-                if text:
-                    yield text
+
+            def _deltas() -> Iterator[str]:
+                for chunk in stream:
+                    choices = chunk.get("choices") or [{}]
+                    delta = choices[0].get("delta") or {}
+                    text = delta.get("content")
+                    if text:
+                        yield text
+
+            yield from holdback_stream(_deltas(), stops)
 
     def chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> str:
         """Non-streaming :meth:`chat_stream`; returns the full reply."""

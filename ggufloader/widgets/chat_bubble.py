@@ -8,8 +8,12 @@ column by their containing row (ui/chat_panel._BubbleRow).
 """
 
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
-from PySide6.QtGui import QFontMetrics, QTextOption
+from PySide6.QtGui import (
+    QColor, QFontMetrics, QTextCharFormat, QTextCursor, QTextDocumentFragment,
+    QTextOption,
+)
 from PySide6.QtCore import Qt
+import re
 from ggufloader.utils import detect_persian_text
 from ggufloader.config import CHAT_BUBBLE_FONT_SIZE
 
@@ -20,10 +24,30 @@ _TAIL_RADIUS_RTL = "20px 4px 20px 20px"    # bubble on the left  -> tail BL
 
 
 def _theme_pair():
-    # Imported lazily: ggufloader.ui.__init__ pulls in main_window, and an
+    # Imported lazily: ggufloader.ui.__init__ eagerly imports main_window, and an
     # eager import here makes widgets -> ui -> widgets a circular import.
     from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS
     return DARK_TOKENS, LIGHT_TOKENS
+
+
+_CODE_FENCE_RE = re.compile(r"```([A-Za-z0-9_+\-#]*)[ \t]*\n(.*?)(?:```|\Z)", re.DOTALL)
+
+
+def split_code_segments(text: str) -> list:
+    """Split a reply into ``('md', prose)`` / ``('code', (lang, code))`` parts.
+
+    Unclosed fences (stream cut mid-block) still yield their content.
+    """
+    segs: list = []
+    pos = 0
+    for m in _CODE_FENCE_RE.finditer(text):
+        if m.start() > pos:
+            segs.append(("md", text[pos:m.start()]))
+        segs.append(("code", (m.group(1).lower(), m.group(2))))
+        pos = m.end()
+    if pos < len(text):
+        segs.append(("md", text[pos:]))
+    return segs or [("md", text)]
 
 
 def _active_tokens(widget):
@@ -118,8 +142,30 @@ class _BubbleText(QTextEdit):
         """Standard Copy/Select-All menu, themed for light/dark mode."""
         menu = self.createStandardContextMenu()
         _styled_text_menu(menu, self)
-        menu.exec(event.globalPos())
+        extra = {}
+        bubble = getattr(self, "bubble", None)
+        if bubble is not None:
+            extra = bubble.extend_context_menu(menu)
+        chosen = menu.exec(event.globalPos())
+        if chosen is not None and chosen in extra:
+            extra[chosen]()
         event.accept()
+
+    def mouseReleaseEvent(self, event) -> None:
+        """Click a code-card header (⧉ lang) to copy its raw code."""
+        anchor = self.anchorAt(event.pos())
+        if anchor and anchor.startswith("__copy__"):
+            from PySide6.QtWidgets import QApplication
+            try:
+                idx = int(anchor[len("__copy__"):])
+                codes = getattr(self.bubble, "_code_segments", [])
+                if 0 <= idx < len(codes):
+                    QApplication.clipboard().setText(codes[idx])
+            except Exception:  # noqa: BLE001
+                pass
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def setAlignment(self, alignment) -> None:
         # QTextEdit only aligns blocks horizontally; strip vertical flags.
@@ -152,7 +198,102 @@ class ChatBubble(QFrame):
         self._is_dark_mode = False
         self._current_font_size = CHAT_BUBBLE_FONT_SIZE
         self._fit_max_width = None  # cap for fit_width(); None = no cap
+        # Rich (markdown) rendering for assistant replies; users write raw.
+        self.rich_enabled = not is_user
+        # Optional callback fired from the context menu ("Regenerate").
+        self.on_regenerate = None
+        # Optional callback fired from the context menu ("Edit message").
+        self.on_edit = None
+        # Raw code bodies for the click-to-copy headers (rich mode).
+        self._code_segments: list = []
         self.setup_ui(text)
+
+    def extend_context_menu(self, menu: QMenu) -> dict:
+        """Message-level actions appended to the text-edit popup."""
+        actions: dict = {}
+        menu.addSeparator()
+        copy_msg = menu.addAction("Copy message")
+        actions[copy_msg] = lambda: self._copy_message()
+        if not self.is_user:
+            rich_action = menu.addAction("Rich rendering")
+            rich_action.setCheckable(True)
+            rich_action.setChecked(self.rich_enabled)
+            actions[rich_action] = self._toggle_rich
+            if self.on_regenerate is not None:
+                regen = menu.addAction("↻ Regenerate response")
+                actions[regen] = self.on_regenerate
+        elif self.on_edit is not None:
+            edit_action = menu.addAction("✏ Edit message")
+            actions[edit_action] = lambda: self.on_edit(self.text)
+        return actions
+
+    def _copy_message(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(self.text)
+
+    def _toggle_rich(self) -> None:
+        self.rich_enabled = not self.rich_enabled
+        self.update_text(self.text)
+
+    def _render(self, text: str) -> None:
+        """Plain, or segmented markdown + framed code cards (assistant)."""
+        if not (self.rich_enabled and not self.is_user and text):
+            self.label.setTextFormat(Qt.PlainText)
+            self.label.setPlainText(text)
+            return
+        try:
+            self._render_segments(text)
+        except Exception:  # noqa: BLE001 - never lose a reply to a render bug
+            self.label.setTextFormat(Qt.PlainText)
+            self.label.setPlainText(text)
+
+    def _render_segments(self, text: str) -> None:
+        from PySide6.QtGui import QTextDocument
+
+        t = _active_tokens(self)
+        features = (QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+                    | QTextDocument.MarkdownFeature.MarkdownNoHTML)
+
+        doc = self.label.document()
+        doc.clear()
+        fs = max(self._current_font_size - 1, 10)
+        doc.setDefaultStyleSheet(
+            f"a {{ color: {t['accent']}; text-decoration: none; }}"
+        )
+
+        mono = QTextCharFormat()
+        mono.setFontFamilies(["Consolas", "'Courier New'", "monospace"])
+        mono.setFontPointSize(fs)
+        mono.setBackground(QColor(t["elevated"]))
+        mono.setForeground(QColor(t["text"]))
+
+        cursor = QTextCursor(doc)
+        segments = split_code_segments(text)
+        self._code_segments = [p[1].rstrip("\n") for k, p in segments if k == "code"]
+        idx = 0
+        first_block = True
+        for kind, payload in segments:
+            if not first_block:
+                cursor.insertBlock()
+            first_block = False
+            if kind == "md":
+                prose = payload.strip("\n")
+                if not prose.strip():
+                    continue
+                tmp = QTextDocument()
+                tmp.setDefaultFont(self.label.font())
+                tmp.setMarkdown(prose, features)  # NoHTML: never trust source
+                cursor.insertFragment(QTextDocumentFragment(tmp))
+            else:
+                lang, code = payload
+                header = (f'<a href="__copy__{idx}">⧉ {lang or "code"} '
+                          f"— click to copy</a><br>")
+                cursor.insertHtml(header)
+                cursor.insertText(code.rstrip("\n"), mono)
+                cursor.insertBlock()
+                first_block = True  # trailing block already added by code
+                idx += 1
+        self.label.setTextFormat(Qt.RichText)
 
     def setup_ui(self, text: str):
         layout = QVBoxLayout(self)
@@ -160,6 +301,7 @@ class ChatBubble(QFrame):
 
         # Create text area (wraps anywhere, see _BubbleText)
         self.label = _BubbleText(text)
+        self.label.bubble = self  # back-reference for the context menu
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.label.setContextMenuPolicy(Qt.DefaultContextMenu)
 
@@ -231,34 +373,7 @@ class ChatBubble(QFrame):
         # Re-detect RTL for the new text
         self.is_rtl = detect_persian_text(text)
 
-        if not self.is_user:
-            # Style reasoning sections differently
-            if "<استدلال>" in text or "<reasoning>" in text:
-                styled_text = text
-                t = _active_tokens(self)
-                # Persian reasoning
-                styled_text = styled_text.replace("<استدلال>", f'<span style="color:{t["textMuted"]}; font-style:italic">')
-                styled_text = styled_text.replace("</استدلال>", '</span>')
-                # English reasoning
-                styled_text = styled_text.replace("<reasoning>", f'<span style="color:{t["textMuted"]}; font-style:italic">')
-                styled_text = styled_text.replace("</reasoning>", '</span>')
-                # Answer styling
-                styled_text = styled_text.replace("<پاسخ>", f'<span style="color:{t["text"]}; font-weight:bold">')
-                styled_text = styled_text.replace("</پاسخ>", '</span>')
-                styled_text = styled_text.replace("<answer>", f'<span style="color:{t["text"]}; font-weight:bold">')
-                styled_text = styled_text.replace("</answer>", '</span>')
-
-                # Set the styled text with rich text support
-                self.label.setTextFormat(Qt.RichText)
-                self.label.setText(styled_text)
-            else:
-                # Default text display
-                self.label.setTextFormat(Qt.PlainText)
-                self.label.setText(text)
-        else:
-            # User messages are always plain text
-            self.label.setTextFormat(Qt.PlainText)
-            self.label.setText(text)
+        self._render(text)
 
         # Update alignment after text change
         self.update_alignment()

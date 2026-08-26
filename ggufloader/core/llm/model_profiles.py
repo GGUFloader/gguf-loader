@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import struct
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +80,15 @@ def _skip_or_read(f, vtype: int, want: bool) -> Any:
 
 def read_gguf_general_metadata(
     path: str | Path, max_bytes: int = 8 * 1024 * 1024
-) -> Dict[str, str]:
-    """Return ``general.*`` string metadata (arch/name/basename/finetune).
+) -> Dict[str, Any]:
+    """Return model metadata from the GGUF header (no tensor access).
 
-    Raises nothing; returns {} for non-GGUF or unreadable files. Only the
-    leading key/value section is walked (tensor data is never touched).
+    Collects every ``general.*`` string plus scalar ``<arch>.context_length``
+    and ``<arch>.block_count`` entries (the arch prefix is unknown before
+    parsing, hence suffix-matching). Raises nothing; returns {} for
+    non-GGUF or unreadable files.
     """
-    out: Dict[str, str] = {}
+    out: Dict[str, Any] = {}
     try:
         with open(path, "rb") as f:
             if f.read(4) != _GGUF_MAGIC:
@@ -101,14 +103,34 @@ def read_gguf_general_metadata(
                     break
                 key = _read_str(f)
                 (vtype,) = struct.unpack("<I", f.read(4))
-                if key.startswith("general.") and vtype == _T_STRING:
-                    val = _read_str(f)
-                    out[key[len("general."):]] = val
+                want_string = key.startswith("general.") and vtype == _T_STRING
+                want_limit = (
+                    vtype in (4, 10)  # uint32 / uint64
+                    and (key.endswith(".context_length") or key.endswith(".block_count"))
+                )
+                if want_string:
+                    out[key[len("general."):]] = _read_str(f)
+                elif want_limit:
+                    out[key] = _skip_or_read(f, vtype, False)
                 else:
                     _skip_or_read(f, vtype, False)
     except Exception as e:  # noqa: BLE001 - any malformed file => no metadata
         logger.debug("GGUF metadata read failed for %s: %s", path, e)
     return out
+
+
+def read_model_limits(path: str | Path) -> Dict[str, Optional[int]]:
+    """``{"max_context": int|None, "layers": int|None}`` from GGUF metadata."""
+    meta = read_gguf_general_metadata(path)
+    ctx = next(
+        (v for k, v in sorted(meta.items()) if k.endswith(".context_length")),
+        None,
+    )
+    layers = next(
+        (v for k, v in sorted(meta.items()) if k.endswith(".block_count")),
+        None,
+    )
+    return {"max_context": ctx, "layers": layers}
 
 
 # ---------------------------------------------------------------------------
@@ -220,10 +242,18 @@ def resolve_chat_config(model_path: str) -> Dict[str, Any]:
               if k in ("temperature", "top_k", "top_p", "repeat_penalty")}
     user = load_model_params(model_path)
     params.update(user)
+    arch = (meta.get("architecture") or "").lower()
+    name_blob = (meta.get("name", "") + " " + meta.get("basename", "")).lower()
+    is_embedding_model = (
+        arch in ("nomic-bert", "bert", "jina-bert", "jina-bert-v2")
+        or "embed" in name_blob
+    )
     return {
         "family": profile["family"],
         "label": profile.get("label", profile["family"]),
         "detected_via": how,
         "params": params,
         "system_prompt": None,
+        "is_embedding_model": is_embedding_model,
+        "meta": meta,
     }

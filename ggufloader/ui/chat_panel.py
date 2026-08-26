@@ -44,6 +44,9 @@ class ChatPanel(QWidget):
     message_submitted = Signal(str)
     agent_mode_toggled = Signal(bool)
     workspace_selected = Signal(str)
+    stop_requested = Signal()
+    regenerate_requested = Signal()
+    edit_last_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -54,6 +57,7 @@ class ChatPanel(QWidget):
         self._current_ai_bubble: ChatBubble | None = None
         self._current_ai_text = ""
         self._bubbles: list[tuple[QWidget, ChatBubble]] = []
+        self._generating = False
         self._parser: ReasoningStreamParser | None = None
         self._reasoning: ReasoningBlock | None = None
         self._reasoning_blocks: list[ReasoningBlock] = []
@@ -183,6 +187,21 @@ class ChatPanel(QWidget):
 
         input_layout.addLayout(controls)
         layout.addWidget(input_frame)
+
+    # ------------------------------------------------------------------
+    # Generation state (Send <-> Stop swap, GPT4All-style)
+    # ------------------------------------------------------------------
+    def set_generating(self, generating: bool) -> None:
+        """While a reply streams, Send turns into a Stop button."""
+        self._generating = bool(generating)
+        if self._generating:
+            self.send_btn.setText("⏹ Stop")
+            self.send_btn.setEnabled(True)
+            self.send_btn.setToolTip("Stop generating")
+        else:
+            self.send_btn.setText("Send")
+            self.send_btn.setEnabled(bool(self.input_text.toPlainText().strip()))
+            self.send_btn.setToolTip("")
 
     # ------------------------------------------------------------------
     # Message rendering
@@ -403,6 +422,9 @@ class ChatPanel(QWidget):
     # Internals
     # ------------------------------------------------------------------
     def _submit(self) -> None:
+        if getattr(self, "_generating", False):
+            self.stop_requested.emit()
+            return
         text = self.input_text.toPlainText().strip()
         if not text:
             return
@@ -410,8 +432,45 @@ class ChatPanel(QWidget):
         self.message_submitted.emit(text)
 
     def _on_input_changed(self) -> None:
+        if getattr(self, "_generating", False):
+            return  # Stop button stays enabled regardless of text
         has_text = bool(self.input_text.toPlainText().strip())
         self.send_btn.setEnabled(has_text)
+
+    def copy_conversation(self) -> str:
+        """Whole transcript as text (GPT4All's copy-conversation parity)."""
+        lines = []
+        for _container, bubble in self._bubbles:
+            who = "You" if bubble.is_user else "AI"
+            lines.append(f"{who}: {bubble.text}")
+        return "\n\n".join(lines)
+
+    def pop_last_exchange(self) -> str | None:
+        """Remove the newest user+assistant pair from the transcript.
+
+        Returns the popped user text (for edit/regenerate), or None when
+        there is no complete exchange to pop.
+        """
+        if not self._bubbles:
+            return None
+        # Expect [..., user, assistant]
+        if self._bubbles[-1][1].is_user:
+            return None
+        removed_user_text: str | None = None
+        while self._bubbles:
+            container, bubble = self._bubbles.pop()
+            container.setParent(None)
+            if bubble.is_user:
+                removed_user_text = bubble.text
+                break
+        self._maybe_hide_empty_state()
+        return removed_user_text
+
+    def refill_input(self, text: str) -> None:
+        """Put *text* back into the composer for editing."""
+        self.input_text.setPlainText(text)
+        self.input_text.setFocus()
+        self.send_btn.setEnabled(bool(text.strip()))
 
     def _on_agent_toggled(self, checked: bool) -> None:
         self.is_agent_mode = checked
@@ -429,6 +488,10 @@ class ChatPanel(QWidget):
     def _add_bubble(self, text: str, is_user: bool) -> None:
         bubble = ChatBubble(text, is_user)
         self._apply_bubble_theme(bubble)
+        if not is_user:
+            bubble.on_regenerate = self.regenerate_requested.emit
+        else:
+            bubble.on_edit = self.edit_last_requested.emit
 
         container = _BubbleRow(bubble, is_user, is_rtl=bubble.is_rtl)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, container)

@@ -20,14 +20,15 @@ import json
 import logging
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, QObject
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
-    QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow,
-    QMessageBox, QSplitter, QVBoxLayout, QWidget,
+    QApplication, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel,
+    QMainWindow, QMessageBox, QSplitter, QVBoxLayout, QWidget,
 )
 
 from ggufloader.addon_manager import AddonManager
@@ -36,7 +37,7 @@ from ggufloader.config import (
 )
 from ggufloader.core.llm.model_backend import ModelBackend
 from ggufloader.core.llm.model_params import load_model_params
-from ggufloader.core.llm.model_profiles import resolve_chat_config
+from ggufloader.core.llm.model_profiles import read_model_limits, resolve_chat_config
 from ggufloader.core.llm.prompt_builder import PromptBuilder
 from ggufloader.core.sessions import SessionStore
 from ggufloader.resource_manager import find_icon
@@ -49,6 +50,22 @@ from ggufloader.ui.sidebar_panel import SettingsSidebar
 from ggufloader.ui.theme import ThemeMixin
 
 logger = logging.getLogger(__name__)
+
+# Verbatim from GPT4All's ModelInfo defaults (modellist.h:276) - proven to
+# produce tight names across small models.
+CHAT_NAME_PROMPT = (
+    "Describe the above conversation. Your entire response must be "
+    "three words or less."
+)
+
+
+class _TitleBridge(QObject):
+    """Queued-connection bridge for title generation on a worker thread."""
+
+    title_ready = Signal(str, str)  # session_id, title
+
+    def emit_title(self, session_id: str, title: str) -> None:
+        self.title_ready.emit(session_id, title)
 
 
 class MainWindow(QMainWindow, ThemeMixin):
@@ -79,6 +96,9 @@ class MainWindow(QMainWindow, ThemeMixin):
         # Auto-configured per loaded model (see _apply_model_profile).
         self._chat_model_params: dict = {}
         self._chat_system_prompt: Optional[str] = None
+        self._naming_busy = False
+        self._title_bridge = _TitleBridge()
+        self._title_bridge.title_ready.connect(self._on_title_ready)
 
         self._init_window()
         self._build_ui()
@@ -146,6 +166,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         action.triggered.connect(self._choose_and_load_model)
         action = file_menu.addAction("Clear Chat")
         action.triggered.connect(self._clear_chat)
+        action = file_menu.addAction("Copy Conversation")
+        action.triggered.connect(self._copy_conversation)
         file_menu.addSeparator()
         action = file_menu.addAction("Exit")
         action.triggered.connect(self.close)
@@ -267,6 +289,9 @@ class MainWindow(QMainWindow, ThemeMixin):
         p.agent_mode_toggled.connect(self._on_agent_mode_toggled)
         p.workspace_selected.connect(lambda _path: self._maybe_init_agent())
         p.workspace_browse_btn.clicked.connect(self._browse_workspace)
+        p.stop_requested.connect(self._stop_generation)
+        p.regenerate_requested.connect(self._regenerate_last)
+        p.edit_last_requested.connect(self._edit_last_prompt)
         s.context_combo.currentIndexChanged.connect(self._on_context_changed)
 
         self.sidebar.new_chat_requested.connect(self._on_new_chat)
@@ -283,9 +308,16 @@ class MainWindow(QMainWindow, ThemeMixin):
         m.unloaded.connect(self.model_unloaded.emit)
 
         c = self._chat_service
+        c.started.connect(lambda: self.chat_panel.set_generating(True))
+        c.finished.connect(lambda: self.chat_panel.set_generating(False))
+        c.error.connect(lambda _m: self.chat_panel.set_generating(False))
         c.token_received.connect(self.chat_panel.stream_token)
         c.finished.connect(self._on_generation_finished)
         c.error.connect(self._on_generation_error)
+
+        a = self._agent_service
+        a.processing_started.connect(lambda: self.chat_panel.set_generating(True))
+        a.processing_finished.connect(lambda: self.chat_panel.set_generating(False))
 
         self.model_loaded.connect(lambda _backend: self._maybe_init_agent())
 
@@ -345,22 +377,42 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._chat_model_params = dict(config.get("params") or {})
         self._chat_model_params.setdefault("max_tokens", CHAT_MAX_TOKENS)
         self._chat_system_prompt = config.get("system_prompt")
+
+        # ---- M3: embedding models are not chat models ----
+        extra = ""
+        if config.get("is_embedding_model"):
+            extra += ("\nℹ️ This looks like an *embedding* model — it cannot "
+                      "converse. Load a chat/instruct GGUF instead.")
+
+        # ---- GPU honesty (B1) + GGUF limits (B3) ----
+        gpu = backend.gpu_status
+        if gpu["state"] == "gpu":
+            gpu_line = "\n🎮 GPU offload: on (all layers)"
+        elif gpu["state"] == "cpu_fallback":
+            gpu_line = f"\n⚠️ Running on CPU — {gpu['reason']}. " \
+                       "Install the GPU build for full speed."
+        else:
+            gpu_line = "\n⚙ Running on CPU (GPU Acceleration off)"
+        limits = read_model_limits(backend.model_path)
+        max_ctx = limits.get("max_context")
+        limit_line = ""
+        trained = backend.n_ctx_train or max_ctx
+        if trained and self.sidebar.get_context_size() > trained:
+            limit_line = (
+                f"\n⚠️ Context {self.sidebar.get_context_size()} exceeds what this "
+                f"model was trained for ({trained} tokens) — expect degraded output. "
+                "Pick a smaller context or a longer-context model."
+            )
         return (
             f"\n🧭 Auto-config: {config.get('label')} "
             f"({config.get('detected_via')}) · "
             f"temp {self._chat_model_params.get('temperature')}"
+            f"{gpu_line}{limit_line}{extra}"
         )
 
     def _on_model_loaded(self, backend: ModelBackend) -> None:
         self.sidebar.set_loading(False)
         info = f"✅ Loaded: {Path(backend.model_path).name}"
-        trained = backend.n_ctx_train
-        if trained and self.sidebar.get_context_size() > trained:
-            info += (
-                f"\n⚠️ Context {self.sidebar.get_context_size()} exceeds what this "
-                f"model was trained for ({trained} tokens) — expect degraded output. "
-                "Pick a smaller context or a longer-context model."
-            )
         info += self._apply_model_profile(backend)
         self.sidebar.set_model_info(info)
         self.sidebar.set_status("Model ready! Start chatting...")
@@ -403,20 +455,124 @@ class MainWindow(QMainWindow, ThemeMixin):
 
         self.chat_panel.add_user_message(text)
         self.conversation_history.append({"role": "user", "content": text})
+        self._generate_reply(text)
 
+    def _generate_reply(self, user_text: str) -> None:
+        """Stream an assistant reply for an already-recorded user turn."""
         # Automatic model routing: detect family from GGUF metadata /
         # filename, apply its recommended sampling + system prompt, then
         # let the user's model_params.json override anything.
         messages = self._prompt_builder.build_messages(
-            self.conversation_history[:-1], text,
+            self.conversation_history[:-1], user_text,
             system_prompt=self._chat_system_prompt,
         )
         params = {
             "max_tokens": CHAT_MAX_TOKENS,
             **self._chat_model_params,
         }
+        messages, trimmed, too_long = self._fit_messages_to_context(messages, params)
+        if too_long:
+            self.chat_panel.add_system_message(
+                "⚠️ This message is too long for the current context window. "
+                "Shorten it or raise the context size in the sidebar."
+            )
+            return
+        if trimmed:
+            self.chat_panel.add_system_message(
+                "ℹ️ Older messages were trimmed to fit the context window."
+            )
         self.chat_panel.begin_streaming()
         self._chat_service.generate(self._model_service.backend, messages=messages, **params)
+
+    def _stop_generation(self) -> None:
+        """Stop button: cancel whatever stream is active."""
+        self._chat_service.stop()
+        self._agent_service.stop()
+        self.chat_panel.set_generating(False)
+        self.chat_panel.agent_panel.finish_streaming()
+
+    def _pop_last_exchange_records(self) -> Optional[str]:
+        """Drop the newest user+assistant pair from history and session."""
+        hist = self.conversation_history
+        if len(hist) < 2 or hist[-1].get("role") != "assistant" \
+                or hist[-2].get("role") != "user":
+            return None
+        assistant_msg = hist.pop()
+        user_msg = hist.pop()
+        if self._session is not None:
+            msgs = self._session.get("messages") or []
+            if msgs and msgs[-1].get("role") == "assistant":
+                msgs.pop()
+            if msgs and msgs[-1].get("role") == "user":
+                msgs.pop()
+            self._save_session_quiet()
+        return user_msg.get("content", "")
+
+    def _regenerate_last(self) -> None:
+        """Re-run the newest exchange (GPT4All 'Redo' parity)."""
+        if getattr(self.chat_panel, "_generating", False):
+            return
+        if not self._model_service.is_loaded:
+            return
+        user_text = self._pop_last_exchange_records()
+        if user_text is None:
+            self.chat_panel.add_system_message("ℹ️ Nothing to regenerate yet.")
+            return
+        self.chat_panel.pop_last_exchange()
+        self._refresh_session_list()
+        self.conversation_history.append({"role": "user", "content": user_text})
+        if self._session is not None:
+            self._store.append_message(self._session, "user", user_text)
+            self._save_session_quiet()
+        self._generate_reply(user_text)
+
+    def _edit_last_prompt(self, text: str) -> None:
+        """Pop the newest exchange back into the composer for editing."""
+        if getattr(self.chat_panel, "_generating", False):
+            return
+        hist = self.conversation_history
+        is_last = (len(hist) >= 2 and hist[-1].get("role") == "assistant"
+                   and hist[-2].get("role") == "user"
+                   and hist[-2].get("content") == text)
+        if not is_last:
+            self.chat_panel.add_system_message(
+                "ℹ️ Only the most recent message can be edited."
+            )
+            return
+        popped = self._pop_last_exchange_records()
+        self.chat_panel.pop_last_exchange()
+        self._refresh_session_list()
+        self.chat_panel.refill_input(popped if popped is not None else text)
+
+    def _fit_messages_to_context(
+        self, messages: list[dict], params: dict
+    ) -> tuple[list[dict], bool, bool]:
+        """Trim oldest turns so prompt fits n_ctx minus the reply budget.
+
+        Returns ``(messages, trimmed, too_long)``. ``too_long`` means even
+        the newest exchange cannot fit - the caller refuses to send.
+        """
+        backend = self._model_service.backend
+        n_ctx = (backend.n_ctx if backend is not None else None) or 32768
+        budget = max(256, n_ctx - int(params.get("max_tokens", 2048)) - 64)
+        if backend is None:
+            return messages, False, False
+
+        def total(msgs: list[dict]) -> int:
+            return sum(backend.count_tokens(m.get("content", "")) for m in msgs) \
+                + len(msgs) * 4  # per-message template overhead
+
+        if total(messages) <= budget:
+            return messages, False, False
+
+        system = messages[:1]
+        rest = messages[1:]
+        # Newest message alone must fit; otherwise refuse.
+        if total([system[0], rest[-1]]) > budget:
+            return messages, False, True
+        while len(rest) > 1 and total(system + rest) > budget:
+            rest.pop(0)
+        return system + rest, True, False
 
     def _on_generation_finished(self) -> None:
         response = self.chat_panel.finish_streaming()
@@ -426,6 +582,7 @@ class MainWindow(QMainWindow, ThemeMixin):
                 self._store.append_message(self._session, "assistant", response)
                 self._save_session_quiet()
                 self._refresh_session_list()
+                self._maybe_generate_title(response)
         elif getattr(self.chat_panel, "stopped_in_reasoning", False):
             self.chat_panel.add_system_message(
                 "⚠️ The model hit the token limit while still reasoning and never "
@@ -433,10 +590,61 @@ class MainWindow(QMainWindow, ThemeMixin):
             )
         self.generation_finished.emit()
 
+    def _maybe_generate_title(self, assistant_reply: str) -> None:
+        """Async LLM title for unnamed sessions (GPT4All D2 parity)."""
+        if self._naming_busy or self._session is None or self._session.get("title"):
+            return
+        session_id = self._session["id"]
+        user_q = next((m.get("content", "") for m in
+                       reversed(self.conversation_history)
+                       if m.get("role") == "user"), "")[:500]
+        reply = (assistant_reply or "")[:800]
+        if not user_q.strip():
+            return
+        self._naming_busy = True
+
+        def work() -> None:
+            try:
+                backend = self._model_service.backend
+                out = backend.chat(
+                    [{"role": "user", "content":
+                        CHAT_NAME_PROMPT + f"\n\nUser: {user_q}\n\nAssistant: {reply}"}],
+                    max_tokens=24,
+                    temperature=0.2, top_k=80, top_p=0.9,
+                )
+                words = " ".join(out.split()).strip().strip('"').strip(".")
+                title = " ".join(words.split()[:3]) if words else ""
+                if title and not getattr(self, "_naming_cancelled", False):
+                    self._title_bridge.emit_title(session_id, title)
+            except Exception as e:  # noqa: BLE001 - naming must never break chat
+                logger.debug("Title generation failed: %s", e)
+            finally:
+                self._naming_busy = False
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_title_ready(self, session_id: str, title: str) -> None:
+        """Apply a generated title unless the session vanished/renamed."""
+        session = self._store.load(session_id)
+        if session is None or session.get("title"):
+            return  # renamed manually or deleted meanwhile
+        self._store.rename(session_id, title)
+        if self._current_session_id == session_id and self._session is not None \
+                and not self._session.get("title"):
+            self._session["title"] = title
+        self._refresh_session_list()
+
     def _on_generation_error(self, message: str) -> None:
         self.chat_panel.finish_streaming()
         self.chat_panel.add_system_message(f"❌ Error: {message}")
         self.generation_error.emit(message)
+
+    def _copy_conversation(self) -> None:
+        """Whole transcript to the clipboard (GPT4All parity)."""
+        text = self.chat_panel.copy_conversation()
+        if text:
+            QApplication.clipboard().setText(text)
+            self.chat_panel.add_system_message("📋 Conversation copied to clipboard.")
 
     def _clear_chat(self) -> None:
         self.conversation_history.clear()

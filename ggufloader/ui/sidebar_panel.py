@@ -216,7 +216,17 @@ class SettingsSidebar(QFrame):
         """Re-render the session list; *sessions* comes from SessionStore."""
         self.session_list.blockSignals(True)
         self.session_list.clear()
+        current_bucket: str | None = None
         for meta in sessions:
+            if not meta.get("corrupt"):
+                bucket = self._date_bucket(meta.get("updated", ""))
+                if bucket != current_bucket:
+                    current_bucket = bucket
+                    header = QListWidgetItem(f"▸ {bucket}")
+                    header.setFlags(Qt.NoItemFlags)
+                    header.setForeground(self.palette().color(
+                        self.foregroundRole()))
+                    self.session_list.addItem(header)
             if meta.get("corrupt"):
                 label = f"\u26a0 {meta['id']}"
                 item = QListWidgetItem(label)
@@ -236,6 +246,26 @@ class SettingsSidebar(QFrame):
             item.setToolTip(tooltip if meta.get("corrupt") else (meta.get("title") or "New Chat"))
             self.session_list.addItem(item)
         self.session_list.blockSignals(False)
+
+    @staticmethod
+    def _date_bucket(iso_stamp: str) -> str:
+        """Human grouping for the session list (GPT4All parity, simplified)."""
+        try:
+            then = datetime.fromisoformat(iso_stamp)
+        except (TypeError, ValueError):
+            return "Older"
+        days = (datetime.now() - then).days
+        if days <= 0:
+            return "Today"
+        if days == 1:
+            return "Yesterday"
+        if days < 7:
+            return "This week"
+        if days < 30:
+            return "This month"
+        if then.year == datetime.now().year:
+            return then.strftime("%B")
+        return str(then.year)
 
     def _on_session_clicked(self, item: QListWidgetItem) -> None:
         session_id = item.data(Qt.UserRole)
