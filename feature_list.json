@@ -1,0 +1,143 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Project Setup & Build",
+      "description": "Python project with PySide6 desktop app, llama-cpp-python backend, pip/package/exe builds",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "python -m pytest tests/unit passes; python main.py launches"
+    },
+    {
+      "id": "feat-002",
+      "name": "Chat Panel & Streaming",
+      "description": "Chat UI with streaming tokens, markdown rendering, thinking display, dark/light theme",
+      "dependencies": [
+        "feat-001"
+      ],
+      "status": "done",
+      "evidence": "commit 8703324, 2fc0095, 6b4b373"
+    },
+    {
+      "id": "feat-003",
+      "name": "Model Loading & Parameters",
+      "description": "GGUF model loading via llama-cpp-python, parameter controls (temp, top_p, top_k, etc.), GPU layers, context length",
+      "dependencies": [
+        "feat-001"
+      ],
+      "status": "done",
+      "evidence": "commit 3113a98, 8dc9c5a, 557638d"
+    },
+    {
+      "id": "feat-004",
+      "name": "Agent Mode (LangGraph)",
+      "description": "LangGraph StateGraph agent with JSON protocol, tool registry (9 tools), approval gating, SQLite checkpointing, cooperative cancellation",
+      "dependencies": [
+        "feat-002",
+        "feat-003"
+      ],
+      "status": "done",
+      "evidence": "commit b1e32b7; tests pass"
+    },
+    {
+      "id": "feat-005",
+      "name": "LocalDocs RAG",
+      "description": "SQLite+FTS5 store, paragraph-aware chunking, hybrid BM25+vector retrieval, context injection into prompts, sidebar UI",
+      "dependencies": [
+        "feat-004"
+      ],
+      "status": "done",
+      "evidence": "commit b1e32b7; tests pass"
+    },
+    {
+      "id": "feat-006",
+      "name": "HuggingFace Model Catalog",
+      "description": "Search/download GGUF models from HuggingFace with resume, SHA256 verification, search/download UI dialog",
+      "dependencies": [
+        "feat-003"
+      ],
+      "status": "done",
+      "evidence": "commit b1e32b7"
+    },
+    {
+      "id": "feat-007",
+      "name": "Model Family Auto-Detection",
+      "description": "JSON-based model family profiles (30+ families), auto-detect from GGUF metadata/filename, apply correct chat template and parameters",
+      "dependencies": [
+        "feat-003"
+      ],
+      "status": "done",
+      "evidence": "commit 557638d, b1e32b7"
+    },
+    {
+      "id": "feat-008",
+      "name": "Advanced Settings Dialog",
+      "description": "Consolidated settings dialog with GPU, sampling, RAG controls; sidebar shows only essentials",
+      "dependencies": [
+        "feat-003"
+      ],
+      "status": "done",
+      "evidence": "commit b1e32b7"
+    },
+    {
+      "id": "feat-009",
+      "name": "Agent Harness: Workspace Context",
+      "description": "Git branch/status detection, AGENTS.md/CLAUDE.md injection, project type detection, prompt prefix caching",
+      "dependencies": [
+        "feat-004"
+      ],
+      "status": "done",
+      "evidence": "workspace_context.py added; tests pass"
+    },
+    {
+      "id": "feat-010",
+      "name": "Agent Harness: Approval & Clipping",
+      "description": "Fix approval workflow (tools check requires_approval before exec), output clipping by age, working memory for task context",
+      "dependencies": [
+        "feat-004"
+      ],
+      "status": "done",
+      "evidence": "agent_engine.py updated; tests pass"
+    },
+    {
+      "id": "feat-011",
+      "name": "Agent Harness: Self-Verification",
+      "description": "Agent runs typecheck/tests before declaring success; hooks system for post-edit verification",
+      "dependencies": [
+        "feat-010"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-012",
+      "name": "Agent Harness: Subagent Delegation",
+      "description": "Read-only child agent for investigation; depth-limited nesting; later: role-based (explorer/worker)",
+      "dependencies": [
+        "feat-010"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-013",
+      "name": "Agent Harness: Context Compaction",
+      "description": "Summarize old turns when approaching context limit; history deduplication; max history cap",
+      "dependencies": [
+        "feat-010"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-014",
+      "name": "Agent Harness: Session Management UI",
+      "description": "Session list sidebar, resume/switch sessions, delete old sessions, session search",
+      "dependencies": [
+        "feat-004"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    }
+  ]
+}

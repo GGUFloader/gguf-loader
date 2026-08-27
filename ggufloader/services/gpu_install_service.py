@@ -1,11 +1,12 @@
 """
 GpuInstallService - Installs the GPU-enabled llama-cpp-python build.
 
-Replaces the CPU-only wheel with a GPU build in a worker thread so the UI
-never blocks, streaming pip output to the sidebar. Platform-aware:
+Downloads a prebuilt CUDA wheel from abetlen's GitHub releases using
+urllib (pip can't follow the GitHub redirect chain and gets 0 bytes),
+then installs from the local file.
 
-- Windows / Linux : prebuilt CUDA wheels from the abetlen index
-- macOS           : Metal build from source (no NVIDIA/CUDA on Apple silicon)
+- Windows / Linux : prebuilt CUDA wheel (abetlen, pinned 0.3.34)
+- macOS           : Metal build from source
 
 The new build only takes effect after the app restarts, so the UI offers
 to relaunch on success.
@@ -13,23 +14,28 @@ to relaunch on success.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import platform
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from shiboken6 import isValid
 
-from ggufloader.services.environment_service import _stream_command
-
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CUDA_INDEX_URL = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
+
+# Only this version is safe for consumer CPUs.  Newer builds may contain
+# AMX / AVX-512 instructions that crash with STATUS_ILLEGAL_INSTRUCTION
+# on hardware that lacks those extensions (e.g. i5-13400).
+PINNED_VERSION = "0.3.34"
 
 
 # ---------------------------------------------------------------------------
@@ -57,24 +63,149 @@ def is_gpu_support_installed() -> bool:
     return False
 
 
-def gpu_install_command() -> list[str]:
-    """Pip command that replaces the current build with a GPU-enabled one."""
-    pip = [
+def _get_wheel_url() -> str:
+    """Build the direct download URL for the CUDA wheel."""
+    suffix = "win_amd64" if platform.system() == "Windows" else "manylinux_2_35_x86_64"
+    return (
+        f"https://github.com/abetlen/llama-cpp-python/releases/download/"
+        f"v{PINNED_VERSION}-cu124/"
+        f"llama_cpp_python-{PINNED_VERSION}-py3-none-{suffix}.whl"
+    )
+
+
+def _wheel_cache_dir() -> Path:
+    """Persistent cache directory for downloaded CUDA wheels.
+
+    Lives in the user's home directory so wheels survive app restarts.
+    ``~/.ggufloader/cache/wheels/``
+    """
+    d = Path.home() / ".ggufloader" / "cache" / "wheels"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _cached_wheel_path() -> Path:
+    """Return the expected cache path for the current platform + version."""
+    filename = _get_wheel_url().rsplit("/", 1)[-1]
+    return _wheel_cache_dir() / filename
+
+
+def _validate_cached_wheel(path: Path) -> bool:
+    """True if the cached wheel exists and looks valid (>= 1 MB)."""
+    try:
+        return path.exists() and path.stat().st_size >= 1024 * 1024
+    except OSError:
+        return False
+
+
+def _download_wheel(progress_callback=None) -> str:
+    """Download the CUDA wheel, using the local cache when available.
+
+    Uses urllib instead of pip because pip gets 0 bytes from GitHub
+    release redirect chains.  Successful downloads are cached in
+    ``~/.ggufloader/cache/wheels/`` so subsequent installs are instant.
+
+    Supports resume via HTTP Range headers — interrupted 511 MB downloads
+    pick up where they left off instead of restarting from zero.
+
+    Args:
+        progress_callback: Optional callable(downloaded_bytes, total_bytes).
+
+    Returns:
+        Path to the downloaded .whl file.
+
+    Raises:
+        RuntimeError: If the download fails.
+    """
+    cached = _cached_wheel_path()
+    if _validate_cached_wheel(cached):
+        logger.info("Using cached wheel: %s", cached)
+        if progress_callback:
+            size = cached.stat().st_size
+            progress_callback(size, size)
+        return str(cached)
+
+    url = _get_wheel_url()
+    filename = url.rsplit("/", 1)[-1]
+    dest = str(_wheel_cache_dir() / filename)
+
+    # Resume from partial download if it exists
+    existing_size = 0
+    if os.path.exists(dest):
+        existing_size = os.path.getsize(dest)
+        if existing_size < 1024 * 1024:
+            # Partial file too small — start fresh
+            existing_size = 0
+            try:
+                os.remove(dest)
+            except OSError:
+                pass
+
+    try:
+        req = urllib.request.Request(url)
+        if existing_size > 0:
+            req.add_header("Range", f"bytes={existing_size}-")
+            logger.info("Resuming download from byte %d", existing_size)
+
+        resp = urllib.request.urlopen(req, timeout=30)  # noqa: S310
+        total = int(resp.headers.get("Content-Length", 0))
+
+        # If server supports range, total is remaining bytes
+        code = resp.getcode()
+        if code == 206 and existing_size > 0:
+            # Partial content — total is remaining, not full size
+            total = existing_size + total
+            downloaded = existing_size
+            mode = "ab"  # append to existing partial file
+        else:
+            # Server doesn't support range or fresh download
+            downloaded = 0
+            mode = "wb"
+            existing_size = 0
+
+        chunk_size = 1024 * 1024  # 1 MB chunks
+        with open(dest, mode) as f:
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if progress_callback:
+                    progress_callback(downloaded, total)
+    except Exception as e:
+        # Keep partial download for resume on next attempt
+        logger.warning("Download interrupted at %d bytes — will resume next time", existing_size)
+        raise RuntimeError(f"Failed to download CUDA wheel: {e}") from e
+
+    # Verify the file is not empty/corrupt
+    size = os.path.getsize(dest)
+    if size < 1024 * 1024:  # less than 1 MB — definitely corrupt
+        os.remove(dest)
+        raise RuntimeError(
+            f"Downloaded wheel is too small ({size} bytes) — "
+            "the download may have been interrupted."
+        )
+
+    logger.info("Cached wheel: %s (%d MB)", dest, size // (1024 * 1024))
+    return dest
+
+
+def _install_wheel(wheel_path: str) -> tuple[bool, str]:
+    """Install a local .whl file with pip. Returns (success, message)."""
+    cmd = [
         sys.executable, "-m", "pip", "install",
-        "--force-reinstall", "llama-cpp-python",
+        "--force-reinstall",
+        "--find-links", os.path.dirname(wheel_path),
+        f"llama-cpp-python=={PINNED_VERSION}",
     ]
-    if platform.system() == "Darwin":
-        return pip  # Metal build is selected via CMAKE_ARGS in the environment
-    return pip + ["--extra-index-url", CUDA_INDEX_URL]
-
-
-def gpu_install_env() -> dict[str, str]:
-    """Environment for the install; Metal flags on macOS, otherwise unchanged."""
-    env = dict(os.environ)
-    if platform.system() == "Darwin":
-        env["CMAKE_ARGS"] = "-DGGML_METAL=on"
-        env["FORCE_CMAKE"] = "1"
-    return env
+    logger.info("Installing local wheel: %s", cmd)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode == 0:
+        return True, result.stdout
+    return False, result.stdout + "\n" + result.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -89,12 +220,37 @@ class GpuInstallWorker(QObject):
     @Slot()
     def process(self) -> None:
         try:
-            ok, msg = _stream_command(
-                self,
-                gpu_install_command(),
-                "Installing GPU support",
-                env=gpu_install_env(),
+            # macOS: Metal build from source
+            if platform.system() == "Darwin":
+                self.output.emit("Installing Metal support (macOS)...\n")
+                cmd = [
+                    sys.executable, "-m", "pip", "install",
+                    "--force-reinstall", f"llama-cpp-python=={PINNED_VERSION}",
+                ]
+                env = dict(os.environ)
+                env["CMAKE_ARGS"] = "-DGGML_METAL=on"
+                env["FORCE_CMAKE"] = "1"
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=600, env=env,
+                )
+                if result.returncode == 0:
+                    self.done.emit(True, "Metal support installed. Restart the app to use it.")
+                else:
+                    self.done.emit(False, "Metal install failed: " + result.stderr)
+                return
+
+            # --- Windows / Linux: download prebuilt CUDA wheel ---
+            self.output.emit(f"Downloading GPU wheel (llama-cpp-python=={PINNED_VERSION})...\n")
+            wheel_path = _download_wheel(
+                progress_callback=lambda dl, total: self.output.emit(
+                    f"  Downloaded: {dl // (1024*1024)}MB / {total // (1024*1024)}MB\n"
+                )
             )
+            self.output.emit("Download complete. Installing...\n")
+
+            ok, msg = _install_wheel(wheel_path)
+            # Wheel stays cached in ~/.ggufloader/cache/wheels/
             if ok:
                 self.done.emit(True, "GPU support installed. Restart the app to use it.")
             else:

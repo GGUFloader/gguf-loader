@@ -566,6 +566,67 @@ class PythonInterpreterTool(Tool):
             return result
 
 
+class BatchExecuteTool(Tool):
+    """Execute multiple tool calls in sequence (CodeMode adaptation).
+
+    Collapses N tool calls into one LLM round-trip. The model writes a
+    list of {tool, parameters} pairs and this tool executes them in order.
+    """
+
+    name = "batch_execute"
+    description = "Execute multiple tool calls in sequence. Reduces LLM round-trips."
+    schema = {
+        "type": "object",
+        "properties": {
+            "calls": {
+                "type": "array",
+                "description": "List of tool calls to execute in order",
+            }
+        },
+        "required": ["calls"],
+    }
+
+    def __init__(self, workspace: Path) -> None:
+        super().__init__(workspace)
+        self._registry: Optional["ToolRegistry"] = None
+
+    def set_registry(self, registry: "ToolRegistry") -> None:
+        self._registry = registry
+
+    def requires_approval(self, params: Dict[str, Any]) -> bool:
+        """Batch requires approval if any call needs it."""
+        if not self._registry:
+            return True
+        for call in params.get("calls", []):
+            if not isinstance(call, dict):
+                continue
+            tool_name = call.get("tool", "")
+            tool_params = call.get("parameters", {})
+            if self._registry.requires_approval(tool_name, tool_params):
+                return True
+        return False
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not self._registry:
+            return {"status": "error", "error": "No registry set", "tool_name": self.name}
+        calls = params.get("calls", [])
+        if not calls:
+            return {"status": "error", "error": "No calls provided", "tool_name": self.name}
+        results = []
+        for call in calls:
+            if not isinstance(call, dict):
+                results.append({"status": "error", "error": "Invalid call format"})
+                continue
+            tool_name = call.get("tool", "")
+            tool_params = call.get("parameters", {})
+            result = self._registry.execute(tool_name, tool_params)
+            results.append(result)
+            # Stop on error
+            if result.get("status") == "error":
+                break
+        return {"status": "success", "results": results, "tool_name": self.name}
+
+
 def _decode_bytes(raw_data: bytes, encoding: str) -> tuple[str, str]:
     """Decode raw bytes with BOM detection and common fallbacks."""
     if encoding and encoding != "auto":
@@ -622,8 +683,52 @@ def tool_content_for_context(result: Dict[str, Any], max_chars: int = 4000) -> O
 ALL_TOOL_CLASSES = (
     ListDirectoryTool, ReadFileTool, WriteFileTool, EditFileTool,
     SearchFilesTool, RunCommandTool, RunPythonTool, GitTool,
-    PythonInterpreterTool,
+    PythonInterpreterTool, BatchExecuteTool,
 )
+
+
+def validate_tool_call(call: Dict[str, Any], registry: "ToolRegistry") -> Optional[str]:
+    """Validate a proposed tool call against its schema.
+
+    Returns None when valid, or an error message string when invalid.
+    This catches malformed calls before execution so the model can retry.
+    """
+    tool_name = call.get("tool", "")
+    if not tool_name:
+        return "No tool name specified"
+
+    tool = registry._tools.get(tool_name)
+    if tool is None:
+        return f"Unknown tool: {tool_name}"
+
+    schema = getattr(tool, "schema", None)
+    if schema is None:
+        return None  # no schema to validate against
+
+    params = call.get("parameters", {})
+    if not isinstance(params, dict):
+        return f"Parameters must be a JSON object, got {type(params).__name__}"
+
+    required = set(schema.get("required", []))
+    properties = schema.get("properties", {})
+
+    # Check required params
+    for key in required:
+        if key not in params:
+            return f"Missing required parameter '{key}' for tool '{tool_name}'"
+
+    # Check param types (basic validation)
+    for key, value in params.items():
+        if key in properties:
+            expected_type = properties[key].get("type")
+            if expected_type == "string" and not isinstance(value, str):
+                return f"Parameter '{key}' must be a string, got {type(value).__name__}"
+            if expected_type == "integer" and not isinstance(value, int):
+                return f"Parameter '{key}' must be an integer, got {type(value).__name__}"
+            if expected_type == "array" and not isinstance(value, list):
+                return f"Parameter '{key}' must be an array, got {type(value).__name__}"
+
+    return None  # valid
 
 
 class ToolRegistry:

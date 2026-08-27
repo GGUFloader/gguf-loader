@@ -1,6 +1,6 @@
 #!/bin/bash
 # GGUF Loader - Install GPU-enabled llama-cpp-python (Linux/macOS)
-# Mirrors scripts/install_gpu_llama.bat for Windows.
+# Downloads a prebuilt CUDA wheel from abetlen's index. No compiler needed.
 
 # Change to the project root so relative paths work from anywhere
 cd "$(dirname "$0")/.."
@@ -34,9 +34,9 @@ echo "Uninstalling existing CPU version..."
 pip uninstall -y llama-cpp-python || error_exit "Failed to uninstall llama-cpp-python"
 
 echo
-echo "Installing GPU version with CUDA support..."
-pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 \
-    || error_exit "Failed to install llama-cpp-python. See the errors above."
+echo "Installing GPU version with CUDA support (prebuilt wheel)..."
+pip install llama-cpp-python==0.3.34 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 \
+    || error_exit "GPU install failed. Check your internet connection and try again later."
 
 echo
 echo "Installation complete!"

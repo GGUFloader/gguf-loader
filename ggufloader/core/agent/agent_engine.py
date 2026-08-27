@@ -26,12 +26,19 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .text_extract import TEXT_EXTENSIONS
-from .tool_registry import ToolRegistry, tool_content_for_context
+from .tool_registry import ToolRegistry, tool_content_for_context, validate_tool_call
+from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemory
+from .history_processors import (
+    HistoryProcessorPipeline,
+    SummaryInserter,
+    create_default_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 
 StatusCallback = Callable[[str], None]
 ToolCallback = Callable[[Dict[str, Any]], None]
+ApprovalCallback = Callable[[Dict[str, Any]], bool]  # (payload) -> approved?
 
 _SYSTEM_PROMPT = """You are an AI assistant built to help developers. You're knowledgeable, decisive, and supportive.
 
@@ -53,6 +60,7 @@ You talk to the system through a strict JSON protocol. Whenever you need to use 
 Rules:
 - Jump straight into action when the task is clear; use tools proactively
 - "tool_calls" and "answer" are MUTUALLY EXCLUSIVE: either you still need tools (non-empty "tool_calls", NO "answer"), or you are finished ("tool_calls": [], with your final answer in "answer"). Never include both.
+- If you're unsure about your answer, set "reflect": true and "reflect_reason": "<what you want to verify>". This triggers a verification step before your answer is shown.
 - Every tool result is listed for you under "Tool results" right after the conversation. NEVER call a tool again with the same parameters when its result is already listed, unless the workspace may have changed since (for example you just wrote or edited a file and want to verify). Repeating a finished tool call wastes steps.
 - To answer questions about the workspace's files, READ them: list_directory to see what exists, then read_file each relevant file (read_file extracts text from Markdown, PDF, and DOCX). search_files finds text INSIDE files - it does not read files into your context, so never use it just to enumerate or find file names.
 - When a tool fails, read the error message and retry with corrected parameters
@@ -82,6 +90,11 @@ SUMMARIZE_KEYWORDS = (
     "all the files", "tell me about the files", "tell me about this",
     "what's in", "what is in", "contents of", "the workspace", "the folder",
 )
+
+# Output clipping limits (chars) -- like Mini-Coding-Agent
+CLIP_RECENT = 2000   # last 3 tool results
+CLIP_OLD = 400       # older tool results
+CLIP_STEP_LOG = 200  # compact summaries in step log
 
 # File types the agent can actually read (text/Markdown + extracted PDF/DOCX).
 READABLE_EXTS = TEXT_EXTENSIONS | frozenset({".pdf", ".docx"})
@@ -340,6 +353,115 @@ class AgentEngine:
         self.max_directive_rounds = 2
         self._pending_directive = ""
         self._directive_rounds = 0
+        # Workspace context and prompt prefix caching
+        self._workspace_ctx = WorkspaceContext(self.workspace)
+        self._prefix_cache = PromptPrefixCache()
+        self._memory = WorkingMemory()
+        self._on_approval: ApprovalCallback = lambda _payload: True
+        # History processor pipeline (composable context management)
+        self._history_pipeline = create_default_pipeline()
+        self._summary_inserter: SummaryInserter = next(
+            (p for p in self._history_pipeline.processors if isinstance(p, SummaryInserter)),
+            SummaryInserter(),
+        )
+        # Reflection loop control
+        self._reflection_enabled = True
+        self._max_reflections = 2
+        self._reflection_count = 0
+
+    # ------------------------------------------------------------------
+    # Reflection loop
+    # ------------------------------------------------------------------
+    def _should_reflect(self, action: Dict[str, Any]) -> bool:
+        """Check if the model requested a reflection before answering.
+
+        A reflection is triggered when the action contains "reflect": true
+        with a non-empty "reflect_reason". The model is saying: "I'm not
+        confident in my answer; let me check something first."
+        """
+        if not self._reflection_enabled:
+            return False
+        if self._reflection_count >= self._max_reflections:
+            return False
+        if not action.get("reflect"):
+            return False
+        reason = (action.get("reflect_reason") or "").strip()
+        return bool(reason)
+
+    def _execute_reflection(
+        self,
+        user_message: str,
+        reason: str,
+        on_status: StatusCallback,
+        on_tool: Optional[ToolCallback],
+    ) -> Optional[str]:
+        """Execute a reflection step: model checks its work before answering.
+
+        Returns the final answer after reflection, or None if the model
+        could not produce a valid response.
+        """
+        self._reflection_count += 1
+        on_status(f"🔍 Reflecting: {reason}")
+
+        # Ask the model to verify the claim using tools
+        reflect_prompt = (
+            f"User asked: {user_message}\n\n"
+            f"You wanted to verify: {reason}\n\n"
+            f"Use tools to verify this. When done, produce your final JSON\n"
+            f"response with the verified answer in 'answer'.\n\n"
+            f"Assistant:"
+        )
+
+        for _step in range(3):  # max 3 reflection tool steps
+            raw = self._ask(reflect_prompt)
+            data = extract_json(raw)
+            if data is None:
+                return None
+
+            calls = [
+                c for c in (data.get("tool_calls") or [])
+                if isinstance(c, dict) and c.get("tool")
+            ]
+            if not calls:
+                return (data.get("answer") or "").strip() or None
+
+            for call in calls:
+                result = self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
+                self._log_tool_result(call, result)
+                on_status(f"  ✓ {self._describe(call)}")
+                if on_tool:
+                    on_tool(result)
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Background summarization
+    # ------------------------------------------------------------------
+    def _maybe_summarize(self) -> None:
+        """Check if conversation is too long and trigger summarization.
+
+        This runs inline (not threaded) to keep things simple. For a
+        real implementation, this would run in a background thread.
+        """
+        total_chars = sum(len(str(m.get("content", ""))) for m in self.conversation_history)
+        if total_chars <= self._summary_inserter.threshold_chars:
+            return
+        # Build a summary of the conversation so far
+        summary_parts = []
+        for msg in self.conversation_history:
+            role = msg.get("role", "")
+            content = (msg.get("content") or "")[:300]
+            if content:
+                summary_parts.append(f"{role}: {content}")
+        summary = "\n".join(summary_parts[-8:])
+        self._summary_inserter.set_summary(summary)
+        logger.info("Background summarization triggered (%d chars)", total_chars)
+
+    def _inject_summary(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Run the conversation history through the processor pipeline."""
+        self._maybe_summarize()
+        processed = self._history_pipeline(history)
+        return processed
 
     # ------------------------------------------------------------------
     # Public API
@@ -349,6 +471,7 @@ class AgentEngine:
         user_message: str,
         on_status: Optional[StatusCallback] = None,
         on_tool: Optional[ToolCallback] = None,
+        on_approval: Optional[ApprovalCallback] = None,
     ) -> Dict[str, Any]:
         """Process *user_message* and return ``{"response": str, "tool_results": [...]}``."""
         self.conversation_history.append({"role": "user", "content": user_message})
@@ -398,6 +521,15 @@ class AgentEngine:
                     final_answer = self._finish(user_message, action, tool_results)
                     if self._issue_directive(user_message, status):
                         continue
+                    # Check for reflection request
+                    if self._should_reflect(action):
+                        reflect_answer = self._execute_reflection(
+                            user_message,
+                            (action.get("reflect_reason") or "").strip(),
+                            status, on_tool,
+                        )
+                        if reflect_answer:
+                            final_answer = reflect_answer
                     break
 
                 # Drop repeats of calls that already ran with a still-valid
@@ -423,6 +555,33 @@ class AgentEngine:
                     if self._failed_signatures.get(signature, 0) >= 2:
                         status(f"  ⏭ Skipping repeated failing call: {self._describe(call)}")
                         continue
+                    # Validate tool call before execution
+                    validation_error = validate_tool_call(call, self.tools)
+                    if validation_error:
+                        status(f"  ✗ Invalid call: {validation_error}")
+                        self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
+                        failures.append((call, {"status": "error", "error": validation_error, "tool_name": call.get("tool", "")}))
+                        continue
+                    # Check approval before executing
+                    if self.tools.requires_approval(call.get("tool", ""), call.get("parameters", {})):
+                        approval_payload = {
+                            "type": "approval",
+                            "call": call,
+                            "description": self._describe(call),
+                            "workspace": str(self.workspace),
+                        }
+                        status(f"  🔐 Approval needed: {self._describe(call)}")
+                        if not self._on_approval(approval_payload):
+                            result = {"status": "error", "error": "Approval denied by the user",
+                                      "tool_name": call.get("tool", "")}
+                            self._executed_calls.append(
+                                {"signature": signature, "tool": call.get("tool", "")}
+                            )
+                            tool_results.append(result)
+                            if on_tool:
+                                on_tool(result)
+                            status(f"  ✗ Approval denied")
+                            continue
                     result = self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
                     self._executed_calls.append(
                         {"signature": signature, "tool": call.get("tool", "")}
@@ -470,20 +629,30 @@ class AgentEngine:
     # Prompt construction
     # ------------------------------------------------------------------
     def _system_prompt(self) -> str:
-        return (
-            _SYSTEM_PROMPT
-            .replace("__WORKSPACE__", str(self.workspace))
-            .replace("__TOOLS__", self.tools.describe())
+        """Build system prompt with workspace context and AGENTS.md injection."""
+        base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
+        workspace_ctx = self._workspace_ctx.build_context()
+        if workspace_ctx:
+            base += "\n\n" + workspace_ctx
+        return base
+
+    def _get_prefix(self) -> str:
+        """Get the cached prompt prefix (system prompt + tools + workspace context)."""
+        return self._prefix_cache.get_prefix(
+            system_prompt=self._system_prompt(),
+            workspace_context="",  # already embedded in system_prompt
+            tool_descriptions=self.tools.describe(),
         )
 
     def _build_action_prompt(self, repair: str = "") -> str:
         """Prompt asking the model for the next JSON action.
 
-        Includes the conversation tail, tool activity from this session,
-        and - when *repair* is set - feedback that the last response was
-        not valid JSON.
+        Uses cached prefix for the stable part (system prompt + tools),
+        only rebuilds the variable suffix (transcript + repair + directive).
         """
-        parts = [self._system_prompt(), ""]
+        # Use cached prefix for the stable portion
+        prefix = self._get_prefix()
+        parts = [prefix, ""]
         for msg in self.conversation_history[-4:]:
             parts.append(f"{msg['role'].capitalize()}: {msg['content']}")
             parts.append("")
@@ -499,6 +668,11 @@ class AgentEngine:
             parts.append("")
             parts.append("Your previous (invalid) response was:")
             parts.append(repair[:1500])
+            parts.append("")
+        # Include working memory for task context
+        memory_text = self._memory.text()
+        if self._memory.task:
+            parts.append(memory_text)
             parts.append("")
         if self._pending_directive:
             parts.append("IMPORTANT - follow this instruction before replying:")
@@ -605,18 +779,32 @@ class AgentEngine:
         """Append a compact tool outcome to the session log fed back to the model.
 
         The line format mirrors the few-shot example ("Tool result for <tool>:")
-        so the model recognizes results it has already seen.
+        so the model recognizes results it has already seen. Older entries are
+        clipped more aggressively to prevent context flooding.
         """
         tool = call.get("tool", "unknown")
         outcome = "success" if result.get("status") == "success" else "error"
         content = tool_content_for_context(result)
         if content is not None:
-            summary = content
+            # Clip by age: recent results get more space
+            recent_count = sum(1 for e in self._step_log[-3:] if e.startswith("Tool result"))
+            limit = CLIP_RECENT if recent_count < 3 else CLIP_OLD
+            summary = content[:limit] + ("..." if len(content) > limit else "")
         else:
             summary = self._summarize_result(result)
-        self._step_log.append(f"Tool result for {tool}: {outcome} - {summary}")
+        line = f"Tool result for {tool}: {outcome} - {summary}"
+        # Clip the summary line itself
+        if len(line) > CLIP_STEP_LOG + 50:
+            line = line[:CLIP_STEP_LOG] + "..."
+        self._step_log.append(line)
         if len(self._step_log) > 30:
             self._step_log.pop(0)
+        # Update working memory
+        path = (result.get("path") or call.get("parameters", {}).get("path", ""))
+        if path and tool in ("read_file", "write_file", "edit_file"):
+            self._memory.remember_file(str(path))
+        if reasoning := (call.get("reasoning") or "").strip():
+            self._memory.add_note(reasoning)
 
     def _is_complex(self, message: str) -> bool:
         keywords = ["complex", "multiple", "several", "build", "create system"]

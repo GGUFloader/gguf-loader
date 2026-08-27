@@ -24,7 +24,7 @@ echo Building from source with CUDA support (this may take 5-10 minutes)...
 set CMAKE_ARGS=-DGGML_CUDA=on
 set FORCE_CMAKE=1
 
-pip install llama-cpp-python --no-cache-dir --force-reinstall
+pip install llama-cpp-python==0.3.34 --no-cache-dir --force-reinstall
 
 echo.
 echo Build complete!

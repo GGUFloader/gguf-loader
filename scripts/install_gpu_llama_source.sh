@@ -37,7 +37,7 @@ else
 fi
 export FORCE_CMAKE=1
 
-pip install llama-cpp-python --no-cache-dir --force-reinstall \
+pip install llama-cpp-python==0.3.34 --no-cache-dir --force-reinstall \
     || error_exit "Build failed. Check the compiler/CMake/CUDA errors above."
 
 echo

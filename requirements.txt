@@ -5,7 +5,7 @@
 PySide6>=6.8,<6.12
 
 # AI/ML Dependencies
-llama-cpp-python==0.3.35
+llama-cpp-python==0.3.34
 
 # Agent framework (LangGraph over llama.cpp)
 langgraph>=0.6.11,<0.7

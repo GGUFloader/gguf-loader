@@ -38,7 +38,8 @@ from langgraph.types import Command, StreamWriter, interrupt
 from typing import TypedDict
 
 from .agent_engine import _SYSTEM_PROMPT, extract_json, stale_repeat_signatures, summarize_directive
-from .tool_registry import ToolRegistry, tool_content_for_context
+from .tool_registry import ToolRegistry, tool_content_for_context, validate_tool_call
+from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemory
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,11 @@ class GraphAgent:
         self._on_status: StatusCallback = lambda _msg: None
         self._on_tool: ToolCallback = lambda _result: None
         self._on_token: Callable[[str], None] = lambda _tok: None
+
+        # Workspace context and prompt prefix caching
+        self._workspace_ctx = WorkspaceContext(self.workspace)
+        self._prefix_cache = PromptPrefixCache()
+        self._memory = WorkingMemory()
 
         self._saver_conn, self._saver = self._open_checkpointer()
         self._app = self._build_graph()
@@ -342,6 +348,13 @@ class GraphAgent:
             if self._failed_signatures.get(signature, 0) >= 2:
                 writer({"event": "status", "text": f"  ⏭ Skipping repeated failing call: {self._describe(call)}"})
                 continue
+            # Validate tool call before execution
+            validation_error = validate_tool_call(call, self.tools)
+            if validation_error:
+                writer({"event": "status", "text": f"  ✗ Invalid call: {validation_error}"})
+                self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
+                failures.append((call, {"status": "error", "error": validation_error, "tool_name": call.get("tool", "")}))
+                continue
             if index - 1 in approvals and not approvals[index - 1]:
                 result = {"status": "error", "error": "Approval denied by the user",
                           "tool_name": call.get("tool", "")}
@@ -396,14 +409,25 @@ class GraphAgent:
     # Prompt construction
     # ------------------------------------------------------------------
     def _system_prompt(self) -> str:
-        return (
-            _SYSTEM_PROMPT
-            .replace("__WORKSPACE__", str(self.workspace))
-            .replace("__TOOLS__", self.tools.describe())
+        """Build system prompt with workspace context and AGENTS.md injection."""
+        base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
+        workspace_ctx = self._workspace_ctx.build_context()
+        if workspace_ctx:
+            base += "\n\n" + workspace_ctx
+        return base
+
+    def _get_prefix(self) -> str:
+        """Get the cached prompt prefix (system prompt + tools + workspace context)."""
+        return self._prefix_cache.get_prefix(
+            system_prompt=self._system_prompt(),
+            workspace_context="",  # already embedded in system_prompt
+            tool_descriptions=self.tools.describe(),
         )
 
     def _build_action_prompt(self, messages, tool_results, repair: str = "", directive: str = "") -> str:
-        parts = [self._system_prompt(), ""]
+        """Build prompt using cached prefix for the stable portion."""
+        prefix = self._get_prefix()
+        parts = [prefix, ""]
         for msg in messages[-4:]:
             parts.append(f"{msg['role'].capitalize()}: {msg['content']}")
             parts.append("")

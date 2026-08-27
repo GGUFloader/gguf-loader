@@ -343,6 +343,8 @@ class ChatBubble(QFrame):
 
         # Apply initial styling
         self.update_style(is_dark_mode=False)
+        # Render markdown for assistant bubbles on first display
+        self._render(text)
         self.fit_width()
 
     def fit_width(self, max_width=None):

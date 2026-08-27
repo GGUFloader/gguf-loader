@@ -19,11 +19,18 @@ echo Uninstalling existing CPU version...
 pip uninstall -y llama-cpp-python
 
 echo.
-echo Installing GPU version with CUDA support...
-pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+echo Installing GPU version with CUDA support (prebuilt wheel)...
+pip install llama-cpp-python==0.3.34 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ERROR: GPU install failed.
+    echo.
+    echo Possible causes:
+    echo   - No internet connection (cannot reach the download server)
+    echo   - The CUDA wheel server may be temporarily down, try again later
+    echo.
+)
 
-echo.
-echo Installation complete!
 echo.
 echo To verify GPU support, run: python scripts/verify_gpu_support.py
 pause

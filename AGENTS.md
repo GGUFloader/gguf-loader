@@ -125,6 +125,74 @@ tests/unit/                # pytest suite (headless)
    and publishes a GitHub Release. The GPU exe is built locally only (CI is
    CPU-only) — attach `dist/GGUFLoader_v<ver>_GPU.exe` manually.
 
+
+
+## Agent Harness (for coding agents)
+
+### Startup workflow
+
+Every new session, before editing any code:
+
+1. Read `feature_list.json` to see what features exist and their status.
+2. Read `progress.md` to see what was last worked on and what's next.
+3. Read `session-handoff.md` if it exists (previous session's state).
+4. Run `./init.sh` or `python -m pytest tests/unit -x -q` to verify the project builds.
+5. Pick ONE unfinished feature from `feature_list.json` (status: "not-started" or "in-progress").
+
+### One-feature-at-a-time rule
+
+Work on exactly ONE feature per session. Do not start a second feature until the
+current one is done and verified. This prevents half-finished work and scope drift.
+
+### Definition of done
+
+A feature is DONE only when ALL of these are true:
+
+1. **Code works**: The feature functions as described in `feature_list.json`.
+2. **Tests pass**: `python -m pytest tests/unit -x -q` exits 0.
+3. **No regressions**: Existing tests still pass (run the full suite).
+4. **Evidence recorded**: Update `feature_list.json` status to "done" and add evidence.
+5. **Progress updated**: Update `progress.md` with what was done, what's next, and any decisions.
+
+### Completion gate
+
+Before claiming "done" or ending a session:
+
+1. Run `python -m pytest tests/unit -x -q` — must pass.
+2. Update `feature_list.json` — set your feature's status and evidence.
+3. Update `progress.md` — mark completed items, note next steps.
+4. Write `session-handoff.md` — capture context for the next session.
+
+### State artifacts
+
+| File | Purpose | When to update |
+|------|---------|---------------|
+| `feature_list.json` | Tracks all features, dependencies, status, evidence | When starting or completing a feature |
+| `progress.md` | Session-by-session progress log | Every session, before ending |
+| `session-handoff.md` | Handoff context for next session | End of every session |
+| `AGENTS.md` | This file — startup rules and conventions | Rarely (project-level changes only) |
+
+### Scope boundaries
+
+- Do not modify `llama-cpp-python` or `PySide6` internals.
+- Do not add new top-level packages outside `ggufloader/`.
+- Do not change the public API surface without updating docs.
+- Do not skip tests to save time — the harness exists because agents are unreliable.
+
+### Verification commands
+
+```bash
+# Quick verification (run before every commit)
+python -m pytest tests/unit -x -q
+
+# Full verification (run at end of session)
+python -m pytest tests/ -x -q
+python -m compileall -q -x '(^|/)(\.?venv|env|node_modules|build|dist|__pycache__)(/|$)' ggufloader/
+
+# Harness validation
+node "C:/Users/MY-PC/.agents/skills/harness-creator/scripts/validate-harness.mjs" --target .
+```
+
 ## Docs index
 
 - `README.md` — user install guide · `QUICK_REFERENCE.md` — user quick start
