@@ -23,6 +23,21 @@ export interface ToolApprovalRequest {
   args: Record<string, any>
 }
 
+export interface PlanStep {
+  step: number
+  description: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  result?: string
+}
+
+export interface PlanState {
+  phase: 'idle' | 'goal' | 'plan' | 'execute' | 'verify' | 'continue' | 'finish'
+  goal: string
+  plan: PlanStep[]
+  planStep: { current: number; total: number; description: string } | null
+  phaseLog: string[]
+}
+
 interface ChatState {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -30,6 +45,8 @@ interface ChatState {
   streamingText: string
   reasoningBlocks: string[]
   pendingApprovals: ToolApprovalRequest[]
+  plan: PlanState
+  isAgentMode: boolean
   addMessage: (msg: ChatMessage) => void
   appendToMessage: (id: string, content: string) => void
   setThinking: (id: string, thinking: string) => void
@@ -40,6 +57,9 @@ interface ChatState {
   addReasoningBlock: (content: string) => void
   addPendingApproval: (req: ToolApprovalRequest) => void
   removePendingApproval: (id: string) => void
+  updatePlan: (phase: string, plan?: PlanStep[], planStep?: PlanState['planStep'], goal?: string) => void
+  resetPlan: () => void
+  setAgentMode: (v: boolean) => void
   clearMessages: () => void
   sendMessage: (text: string) => Promise<void>
 }
@@ -53,6 +73,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingText: '',
   reasoningBlocks: [],
   pendingApprovals: [],
+  plan: { phase: 'idle', goal: '', plan: [], planStep: null, phaseLog: [] },
+  isAgentMode: false,
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
 
@@ -97,7 +119,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     pendingApprovals: s.pendingApprovals.filter((p) => p.id !== id),
   })),
 
-  clearMessages: () => set({ messages: [], isStreaming: false, currentStreamingId: null, streamingText: '', reasoningBlocks: [] }),
+  updatePlan: (phase, plan, planStep, goal) => set((s) => ({
+    plan: {
+      ...s.plan,
+      phase: (phase as PlanState['phase']) || s.plan.phase,
+      ...(plan !== undefined && { plan }),
+      ...(planStep !== undefined && { planStep }),
+      ...(goal && { goal }),
+    },
+  })),
+
+  resetPlan: () => set({ plan: { phase: 'idle', goal: '', plan: [], planStep: null, phaseLog: [] } }),
+
+  setAgentMode: (v) => set({ isAgentMode: v }),
+
+  clearMessages: () => set({ messages: [], isStreaming: false, currentStreamingId: null, streamingText: '', reasoningBlocks: [], plan: { phase: 'idle', goal: '', plan: [], planStep: null, phaseLog: [] } }),
 
   sendMessage: async (text: string) => {
     const store = get()
@@ -119,8 +155,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (ws && ws.readyState === WebSocket.OPEN) {
       const msgId = store.startStreaming()
       store.addMessage({ id: msgId, role: 'assistant', content: '', timestamp: Date.now() })
+      const isAgent = get().isAgentMode
       ws.send(JSON.stringify({
-        type: 'chat_message',
+        type: isAgent ? 'agent_start' : 'chat_message',
         message: text,
         temperature: sampling.temperature,
         max_tokens: sampling.max_tokens,
@@ -192,6 +229,52 @@ export function connectWebSocket() {
               }
             }
           }
+          break
+        case 'agent_phase':
+          // Handle structured phase events from agent engine
+          useChatStore.getState().updatePlan(
+            data.phase || 'idle',
+            undefined,
+            data.plan_step || undefined,
+          )
+          // Append phase status as reasoning block
+          if (data.status) {
+            useChatStore.getState().addReasoningBlock(data.status)
+          }
+          break
+        case 'agent_plan_update':
+          // Real-time plan step status updates (running -> done/failed)
+          useChatStore.getState().updatePlan(
+            data.phase || 'idle',
+            data.plan || undefined,
+            data.step ? { current: data.step, total: (data.plan || []).length, description: '' } : undefined,
+          )
+          break
+        case 'agent_complete':
+          // Final plan + phase log from agent run
+          useChatStore.getState().updatePlan(
+            'idle',
+            data.plan || [],
+            null,
+          )
+          useChatStore.setState((s) => ({
+            plan: { ...s.plan, phaseLog: data.phase_log || [] },
+          }))
+          break
+        case 'message_complete':
+          // Update streaming message with final content + plan
+          if (store.currentStreamingId) {
+            const msgs = useChatStore.getState().messages
+            const current = msgs.find(m => m.id === store.currentStreamingId)
+            if (current) {
+              current.content = data.content || current.content
+              useChatStore.setState({ messages: [...msgs] })
+            }
+          }
+          if (data.plan) {
+            useChatStore.getState().updatePlan('idle', data.plan)
+          }
+          store.stopStreaming()
           break
         case 'tool_approval':
           store.addPendingApproval({ id: data.id, tool: data.tool, args: data.args })
