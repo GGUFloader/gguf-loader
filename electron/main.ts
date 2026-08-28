@@ -5,8 +5,11 @@ import * as net from 'net'
 
 let mainWindow: BrowserWindow | null = null
 let backendProcess: ChildProcess | null = null
+let viteProcess: ChildProcess | null = null
 const BACKEND_PORT = 8000
+const VITE_PORT = 5173
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`
+const VITE_URL = `http://localhost:${VITE_PORT}`
 
 // Resolve paths for development vs packaged
 function getBackendPath(): string {
@@ -30,7 +33,7 @@ function getFrontendURL(): string {
     return BACKEND_URL
   }
   // Development: Vite dev server
-  return 'http://localhost:5173'
+  return VITE_URL
 }
 
 // Wait for backend to be ready
@@ -55,13 +58,61 @@ function waitForBackend(timeoutMs = 30000): Promise<void> {
   })
 }
 
+function startVite(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const frontendDir = app.isPackaged
+      ? null
+      : path.join(__dirname, '..', '..', 'frontend')
+
+    if (!frontendDir) {
+      resolve()
+      return
+    }
+
+    console.log('Starting Vite dev server...')
+    viteProcess = spawn('npm.cmd', ['run', 'dev'], {
+      cwd: frontendDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, FORCE_COLOR: '0' },
+    })
+
+    viteProcess.stdout?.on('data', (data) => {
+      const line = data.toString().trim()
+      console.log(`[vite] ${line}`)
+      // Vite prints 'Local: http://localhost:5173' when ready
+      if (line.includes('localhost:') && line.includes(String(VITE_PORT))) {
+        resolve()
+      }
+    })
+
+    viteProcess.stderr?.on('data', (data) => {
+      console.error(`[vite] ${data.toString().trim()}`)
+    })
+
+    viteProcess.on('error', (err) => {
+      console.error('Vite process error:', err)
+      reject(err)
+    })
+
+    viteProcess.on('exit', (code) => {
+      console.log(`Vite exited with code ${code}`)
+      viteProcess = null
+    })
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      reject(new Error('Vite dev server startup timeout'))
+    }, 30000)
+  })
+}
+
 function startBackend(): Promise<void> {
   return new Promise((resolve, reject) => {
     const cmd = getBackendPath()
     const args = getBackendArgs()
     const cwd = app.isPackaged
       ? path.join(process.resourcesPath, 'backend')
-      : path.join(__dirname, '..')
+      : path.join(__dirname, '..', '..')
 
     console.log(`Starting backend: ${cmd} ${args.join(' ')}`)
     console.log(`CWD: ${cwd}`)
@@ -103,6 +154,19 @@ function startBackend(): Promise<void> {
   })
 }
 
+function stopVite() {
+  if (viteProcess) {
+    console.log('Stopping Vite dev server...')
+    viteProcess.kill('SIGTERM')
+    setTimeout(() => {
+      if (viteProcess) {
+        viteProcess.kill('SIGKILL')
+      }
+    }, 3000)
+    viteProcess = null
+  }
+}
+
 function stopBackend() {
   if (backendProcess) {
     console.log('Stopping backend...')
@@ -118,21 +182,23 @@ function stopBackend() {
 }
 
 function createWindow() {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.ico')
+    : path.join(__dirname, '..', '..', 'icon.ico')
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     title: 'GGUF Loader',
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
-    // Frameless for custom titlebar (optional, set to false for native)
-    // frame: false,
     backgroundColor: '#0a0a0a',
     show: false, // Show after ready
   })
@@ -164,6 +230,43 @@ function createWindow() {
 }
 
 // App lifecycle
+async function waitForURL(url: string, timeoutMs = 30000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now()
+    const check = async () => {
+      try {
+        const http = await import('http')
+        const req = http.get(url, (res) => {
+          res.resume()
+          resolve()
+        })
+        req.on('error', () => {
+          if (Date.now() - startTime > timeoutMs) {
+            reject(new Error(`Timeout waiting for ${url}`))
+          } else {
+            setTimeout(check, 500)
+          }
+        })
+        req.setTimeout(2000, () => {
+          req.destroy()
+          if (Date.now() - startTime > timeoutMs) {
+            reject(new Error(`Timeout waiting for ${url}`))
+          } else {
+            setTimeout(check, 500)
+          }
+        })
+      } catch {
+        if (Date.now() - startTime > timeoutMs) {
+          reject(new Error(`Timeout waiting for ${url}`))
+        } else {
+          setTimeout(check, 500)
+        }
+      }
+    }
+    check()
+  })
+}
+
 app.whenReady().then(async () => {
   try {
     // Start Python backend
@@ -171,8 +274,24 @@ app.whenReady().then(async () => {
     await startBackend()
     console.log('Backend ready')
 
+    // In dev mode, also start Vite
+    if (!app.isPackaged) {
+      try {
+        console.log('Starting Vite dev server...')
+        await startVite()
+        console.log('Vite ready')
+      } catch (err) {
+        console.warn('Vite failed to start, falling back to backend:', err)
+      }
+    }
+
     // Create the window
     createWindow()
+
+    // Wait for frontend to be ready, then load it
+    const url = getFrontendURL()
+    await waitForURL(url)
+    mainWindow?.loadURL(url)
   } catch (err) {
     console.error('Failed to start:', err)
     dialog.showErrorBox(
@@ -184,11 +303,13 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  stopVite()
   stopBackend()
   app.quit()
 })
 
 app.on('before-quit', () => {
+  stopVite()
   stopBackend()
 })
 
