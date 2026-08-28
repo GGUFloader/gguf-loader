@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   X, Bot, Palette, Keyboard, Cpu, Sliders, Monitor, Moon, Sun,
-  FolderOpen, RefreshCw, Zap, Trash2,
+  FolderOpen, RefreshCw, Zap, Trash2, Eye, EyeOff, Globe, Cloud,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import { gpuApi } from '../../api/client'
@@ -12,6 +12,7 @@ interface Props {
 
 const TABS = [
   { id: 'model', label: 'Model', icon: Cpu },
+  { id: 'providers', label: 'Providers', icon: Cloud },
   { id: 'agent', label: 'Agent', icon: Bot },
   { id: 'hardware', label: 'Hardware', icon: Zap },
   { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -85,6 +86,15 @@ export function SettingsDialog({ onClose }: Props) {
   const [compactMode, setCompactMode] = useState(false)
   const [accentColor, setAccentColor] = useState('#f59e0b')
 
+  // Provider catalog
+  const [providers, setProviders] = useState<Record<string, { apiKey: string; endpoint: string; enabled: boolean }>>({
+    anthropic: { apiKey: '', endpoint: 'https://api.anthropic.com', enabled: false },
+    openai: { apiKey: '', endpoint: 'https://api.openai.com/v1', enabled: false },
+    openrouter: { apiKey: '', endpoint: 'https://openrouter.ai/api/v1', enabled: false },
+    custom: { apiKey: '', endpoint: '', enabled: false },
+  })
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
+
   // Load GPU status on mount
   useEffect(() => {
     gpuApi.status().then(setGpuStatus).catch(() => {}).finally(() => setGpuLoading(false))
@@ -109,6 +119,7 @@ export function SettingsDialog({ onClose }: Props) {
         if (s.fontSize) setFontSize(s.fontSize)
         if (s.compactMode !== undefined) setCompactMode(s.compactMode)
         if (s.accentColor) setAccentColor(s.accentColor)
+        if (s.providers) setProviders(s.providers)
       }
     } catch {}
   }, [])
@@ -118,6 +129,7 @@ export function SettingsDialog({ onClose }: Props) {
       sampling, gpuLayers, ctxLength, systemPrompt, workspace,
       preset, maxToolCalls, requireApproval, autoCommit,
       ragEnabled, ragFolder, fontSize, compactMode, accentColor,
+      providers,
     }
     localStorage.setItem('ggufloader_settings', JSON.stringify(settings))
   }
@@ -247,6 +259,82 @@ export function SettingsDialog({ onClose }: Props) {
                       <Trash2 size={11} /> Reset Defaults
                     </button>
                   </div>
+                </Section>
+              </div>
+            )}
+
+            {/* === PROVIDERS TAB === */}
+            {activeTab === 'providers' && (
+              <div className="space-y-6">
+                <Section title="API Providers">
+                  <p className="text-xs text-text-muted mb-3">
+                    Configure external API providers for cloud models. API keys are stored locally and never sent to our servers.
+                  </p>
+                  {Object.entries(providers).map(([name, provider]) => (
+                    <div key={name} className="bg-elevated/50 rounded-lg p-4 border border-border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Globe size={14} className="text-text-muted" />
+                          <span className="text-sm font-medium text-text capitalize">{name}</span>
+                          {provider.enabled && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-400 border border-green-500/30 rounded-full">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <Toggle checked={provider.enabled} onChange={(v) => {
+                          setProviders(prev => ({ ...prev, [name]: { ...prev[name], enabled: v } }))
+                          setTimeout(saveSettings, 100)
+                        }} />
+                      </div>
+
+                      {/* API Key */}
+                      <div>
+                        <label className="text-xs text-text-muted mb-1 block">API Key</label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showKeys[name] ? 'text' : 'password'}
+                              value={provider.apiKey}
+                              placeholder={`Enter ${name} API key...`}
+                              onChange={(e) => {
+                                setProviders(prev => ({ ...prev, [name]: { ...prev[name], apiKey: e.target.value } }))
+                                setTimeout(saveSettings, 100)
+                              }}
+                              className="w-full bg-bg border border-border rounded-lg px-3 py-1.5 pr-8 text-sm text-text placeholder-text-muted outline-none focus:border-accent font-mono"
+                            />
+                            <button
+                              onClick={() => setShowKeys(prev => ({ ...prev, [name]: !prev[name] }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
+                            >
+                              {showKeys[name] ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Endpoint */}
+                      <div>
+                        <label className="text-xs text-text-muted mb-1 block">Endpoint</label>
+                        <input
+                          value={provider.endpoint}
+                          placeholder="https://api.example.com/v1"
+                          onChange={(e) => {
+                            setProviders(prev => ({ ...prev, [name]: { ...prev[name], endpoint: e.target.value } }))
+                            setTimeout(saveSettings, 100)
+                          }}
+                          className="w-full bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-text placeholder-text-muted outline-none focus:border-accent font-mono"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </Section>
+
+                <Section title="Local Models">
+                  <p className="text-xs text-text-muted">
+                    GGUF models loaded from the sidebar run entirely on your hardware.
+                    No API key needed. GPU support can be enabled in the Hardware tab.
+                  </p>
                 </Section>
               </div>
             )}
