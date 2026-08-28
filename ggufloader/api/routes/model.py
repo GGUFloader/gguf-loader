@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from ggufloader.api.deps import get_model_backend, set_model_backend
 from ggufloader.core.llm.model_backend import ModelBackend
-from ggufloader.core.llm.model_profiles import detect_family
+from ggufloader.core.llm.model_profiles import resolve_chat_config, read_gguf_general_metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,11 +30,14 @@ class ModelInfo(BaseModel):
     path: Optional[str] = None
     filename: Optional[str] = None
     family: Optional[str] = None
+    family_label: Optional[str] = None
+    detected_via: Optional[str] = None
     architecture: Optional[str] = None
     quantization: Optional[str] = None
     parameters: Optional[str] = None
     context_length: Optional[int] = None
     gpu: bool = False
+    chat_config: Optional[dict] = None
 
 
 @router.get("/info")
@@ -46,18 +49,34 @@ async def model_info() -> ModelInfo:
 
     path = getattr(backend, "model_path", None)
     filename = os.path.basename(path) if path else None
-    family = detect_family(path) if path else None
+
+    # Resolve full chat config from model profiles
+    chat_config = None
+    family = None
+    family_label = None
+    detected_via = None
+    if path:
+        try:
+            chat_config = resolve_chat_config(path)
+            family = chat_config.get("family")
+            family_label = chat_config.get("label")
+            detected_via = chat_config.get("detected_via")
+        except Exception as e:
+            logger.warning("Failed to resolve chat config: %s", e)
 
     return ModelInfo(
         loaded=True,
         path=path,
         filename=filename,
         family=family,
+        family_label=family_label,
+        detected_via=detected_via,
         architecture=getattr(backend, "architecture", None),
         quantization=getattr(backend, "quantization", None),
         parameters=getattr(backend, "parameters", None),
         context_length=getattr(backend, "n_ctx", None),
         gpu=getattr(backend, "use_gpu", False),
+        chat_config=chat_config,
     )
 
 
@@ -87,6 +106,18 @@ async def unload_model() -> dict:
     """Unload the current model."""
     set_model_backend(None)
     return {"status": "unloaded"}
+
+
+@router.get("/profile")
+async def model_profile(path: str) -> dict:
+    """Get auto-detected chat config for a model file (without loading it)."""
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    try:
+        return resolve_chat_config(path)
+    except Exception as e:
+        logger.warning("Profile detection failed: %s", e)
+        return {"family": "unknown", "label": "Unknown", "params": {}, "supports_system_prompt": True}
 
 
 @router.get("/estimate")
