@@ -1,11 +1,32 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   X, FolderOpen, Cpu, HardDrive, Loader2, CheckCircle2,
-  AlertTriangle, Zap, Clock,
+  AlertTriangle, Zap, Clock, Sparkles, Brain, Settings2,
 } from 'lucide-react'
 import { modelApi } from '../../api/client'
 import { toast } from '../../stores/toastStore'
 import type { ModelInfo, MemoryEstimate } from '../../api/types'
+
+interface ModelProfile {
+  family: string
+  label: string
+  detected_via: string
+  params: {
+    temperature?: number
+    top_k?: number
+    top_p?: number
+    repeat_penalty?: number
+    min_p?: number
+    [key: string]: unknown
+  }
+  supports_system_prompt: boolean
+  is_embedding_model: boolean
+  meta?: {
+    architecture?: string
+    name?: string
+    [key: string]: unknown
+  }
+}
 
 interface Props {
   onClose: () => void
@@ -25,6 +46,8 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null)
   const [recentModels, setRecentModels] = useState<string[]>([])
+  const [profile, setProfile] = useState<ModelProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
 
   // Load current model info + recent models
   useEffect(() => {
@@ -33,6 +56,17 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
       const saved = localStorage.getItem(RECENT_MODELS_KEY)
       if (saved) setRecentModels(JSON.parse(saved))
     } catch {}
+  }, [])
+
+  // Fetch model profile (family detection, auto-configured params)
+  const fetchProfile = useCallback(async (path: string) => {
+    if (!path || !path.endsWith('.gguf')) { setProfile(null); return }
+    setProfileLoading(true)
+    try {
+      const p = await modelApi.profile(path)
+      setProfile(p as ModelProfile)
+    } catch { setProfile(null) }
+    setProfileLoading(false)
   }, [])
 
   // Estimate memory when path changes
@@ -47,9 +81,12 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
   }, [])
 
   useEffect(() => {
-    const timer = setTimeout(() => debounceEstimate(modelPath), 500)
+    const timer = setTimeout(() => {
+      debounceEstimate(modelPath)
+      fetchProfile(modelPath)
+    }, 500)
     return () => clearTimeout(timer)
-  }, [modelPath, debounceEstimate])
+  }, [modelPath, debounceEstimate, fetchProfile])
 
   function addToRecent(path: string) {
     const updated = [path, ...recentModels.filter(p => p !== path)].slice(0, 5)
@@ -83,6 +120,10 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
       const path = prompt('Enter the full path to a .gguf model file:')
       if (path) setModelPath(path)
     }
+  }
+
+  function formatParamName(key: string): string {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   }
 
   return (
@@ -169,6 +210,69 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
             </div>
           )}
 
+          {/* Model Profile — detected family & auto-configured params */}
+          {(profileLoading || profile) && modelPath.endsWith('.gguf') && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-accent" />
+                <span className="text-sm font-medium text-text">Detected Profile</span>
+                {profileLoading && <Loader2 size={12} className="animate-spin text-text-muted" />}
+              </div>
+
+              {profile && (
+                <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 space-y-2.5">
+                  {/* Family badge */}
+                  <div className="flex items-center gap-2">
+                    <Brain size={13} className="text-accent" />
+                    <span className="text-xs text-text-muted">Family:</span>
+                    <span className="text-xs font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+                      {profile.label || profile.family}
+                    </span>
+                    <span className="text-[10px] text-text-muted">({profile.detected_via})</span>
+                  </div>
+
+                  {/* Model name from meta */}
+                  {profile.meta?.name && (
+                    <div className="text-xs text-text-sec">
+                      {profile.meta.name}
+                      {profile.meta.architecture && (
+                        <span className="text-text-muted"> · {profile.meta.architecture}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Auto-configured parameters */}
+                  {profile.params && Object.keys(profile.params).length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Settings2 size={11} className="text-text-muted" />
+                        <span className="text-[10px] text-text-muted uppercase tracking-wider">Auto-configured</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(profile.params).filter(([, v]) => v != null && v !== 0).map(([key, value]) => (
+                          <span key={key} className="text-[11px] bg-elevated border border-border rounded px-2 py-0.5 font-mono">
+                            <span className="text-text-muted">{formatParamName(key)}</span>
+                            <span className="text-text ml-1">{String(value)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* System prompt support */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-text-muted">System prompt:</span>
+                    {profile.supports_system_prompt ? (
+                      <span className="text-green-400">✓ Supported</span>
+                    ) : (
+                      <span className="text-yellow-400">✗ Not supported</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* GPU toggle + layers */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -228,7 +332,7 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
           </button>
           <button onClick={handleLoad} disabled={!modelPath.trim() || loading}
             className="flex items-center gap-2 px-4 py-2 bg-accent text-onAccent rounded-lg text-sm font-medium hover:bg-accent-hover disabled:opacity-40 transition-colors">
-            {loading ? <><Loader2 size={14} className="animate-spin" /> Loading...</> : <><Zap size={14} /> Load Model</>}
+            {loading ? <><Loader2 size={14} className="animate-spin" /> Loading...</> : <><Zap size={14} /> Load Model{profile ? ` (${profile.label || profile.family})` : ''}</>}
           </button>
         </div>
       </div>
