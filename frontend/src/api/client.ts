@@ -48,7 +48,7 @@ export const sessionApi = {
   delete: (id: string) => request<any>(`/sessions/${id}`, { method: 'DELETE' }),
   fork: (id: string) => request<any>(`/sessions/${id}/fork`, { method: 'POST' }),
   search: (query: string) => request<any[]>(`/sessions/search/${encodeURIComponent(query)}`),
-  export: (id: string, format: 'json' | 'markdown' = 'json') =>
+  export: (id: string, format: 'json' | 'markdown' | 'html' = 'json') =>
     request<any>(`/sessions/${id}/export?format=${format}`),
 }
 
