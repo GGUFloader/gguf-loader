@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { User, Bot, Copy, Check, ChevronDown, ChevronUp, Loader2, AlertCircle, RotateCcw } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { User, Bot, Copy, Check, ChevronDown, ChevronUp, Loader2, AlertCircle, RotateCcw, FileText } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ReasoningBlock } from './ReasoningBlock'
 import type { ChatMessage } from '../../stores/chatStore'
@@ -10,12 +10,35 @@ interface Props {
   onRetry?: () => void
 }
 
-const TRUNCATE_THRESHOLD = 800 // chars before truncation
+const TRUNCATE_THRESHOLD = 800
+
+// Extract file references from message content
+function extractFileRefs(content: string): string[] {
+  const files = new Set<string>()
+  // Match common file patterns mentioned in agent output
+  const patterns = [
+    /(?:wrote?|created?|edited?|modified?|read|listed?)\s+(?:file\s+)?[`"']?([\w/.\-]+\.(?:py|js|ts|tsx|jsx|json|md|yaml|yml|toml|cfg|txt|html|css))[`"']?/gi,
+    /([\w/.\-]+\.(?:py|js|ts|tsx|jsx|json|md|yaml|yml|toml|cfg|txt|html|css))(?:\s|$|,|\))/g,
+  ]
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(content)) !== null) {
+      const f = match[1]
+      if (f && !f.startsWith('http') && f.length < 100) files.add(f)
+    }
+  }
+  return Array.from(files).slice(0, 5) // max 5 file chips
+}
 
 export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry }: Props) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
   const [expanded, setExpanded] = useState(false)
+
+  const fileRefs = useMemo(
+    () => isUser ? [] : extractFileRefs(message.content),
+    [message.content, isUser]
+  )
 
   const shouldTruncate = !isUser && message.content.length > TRUNCATE_THRESHOLD
   const displayContent = shouldTruncate && !expanded
@@ -49,27 +72,26 @@ export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry
             <ReasoningBlock content={message.thinking} />
           )}
 
-          {/* Tool calls */}
+          {/* Tool calls as compact chips */}
           {message.toolCalls && message.toolCalls.length > 0 && (
-            <div className="mb-2 space-y-1">
+            <div className="mb-2 flex flex-wrap gap-1.5">
               {message.toolCalls.map((tc, i) => (
                 <div
                   key={i}
-                  className={`text-xs px-2 py-1 rounded flex items-center gap-1.5 ${
+                  className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${
                     tc.status === 'completed'
-                      ? 'bg-green-500/10 text-green-400'
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
                       : tc.status === 'failed'
-                      ? 'bg-red-500/10 text-red-400'
-                      : tc.status === 'pending_approval'
-                      ? 'bg-yellow-500/10 text-yellow-400'
-                      : 'bg-accent/10 text-accent'
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        : tc.status === 'pending_approval'
+                          ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                          : 'bg-accent/10 text-accent border border-accent/20'
                   }`}
                 >
-                  {tc.status === 'running' && <Loader2 size={10} className="animate-spin" />}
-                  {tc.status === 'completed' && <Check size={10} />}
-                  {tc.status === 'failed' && <AlertCircle size={10} />}
-                  🔧 {tc.name}
-                  {tc.status === 'pending_approval' && ' (awaiting approval)'}
+                  {tc.status === 'running' && <Loader2 size={9} className="animate-spin" />}
+                  {tc.status === 'completed' && <Check size={9} />}
+                  {tc.status === 'failed' && <AlertCircle size={9} />}
+                  <span className="font-mono">{tc.name}</span>
                 </div>
               ))}
             </div>
@@ -77,25 +99,38 @@ export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry
 
           {/* Message content */}
           {isUser ? (
-            <div className="whitespace-pre-wrap">{message.content}</div>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
           ) : (
             <div className="prose prose-invert prose-sm max-w-none">
               <MarkdownRenderer content={displayContent} />
             </div>
           )}
 
-          {/* Truncation indicator */}
+          {/* File reference chips */}
+          {fileRefs.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/30">
+              {fileRefs.map((file) => (
+                <span
+                  key={file}
+                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent/5 border border-accent/20 text-accent/80 font-mono"
+                >
+                  <FileText size={9} />
+                  {file.split('/').pop()}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Truncation */}
           {shouldTruncate && !expanded && (
             <button
               onClick={() => setExpanded(true)}
               className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover mt-2 transition-colors"
             >
               <ChevronDown size={12} />
-              Show {message.content.length - TRUNCATE_THRESHOLD} more characters
+              Show more ({message.content.length - TRUNCATE_THRESHOLD} chars)
             </button>
           )}
-
-          {/* Collapse button when expanded */}
           {shouldTruncate && expanded && (
             <button
               onClick={() => setExpanded(false)}
@@ -107,7 +142,7 @@ export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry
           )}
         </div>
 
-        {/* Action buttons — visible on hover */}
+        {/* Action buttons */}
         {!isUser && message.content && (
           <div className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
             <button
