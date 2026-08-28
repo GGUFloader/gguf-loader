@@ -24,6 +24,7 @@ export const modelApi = {
     }),
   unload: () => request<any>('/model/unload', { method: 'DELETE' }),
   estimate: (path: string) => request<any>(`/model/estimate?path=${encodeURIComponent(path)}`),
+  profile: (path: string) => request<any>(`/model/profile?path=${encodeURIComponent(path)}`),
 }
 
 // Chat API
