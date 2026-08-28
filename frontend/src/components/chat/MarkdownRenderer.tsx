@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown'
-import { Copy, Check } from 'lucide-react'
+import rehypeHighlight from 'rehype-highlight'
+import { Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 
 interface Props {
@@ -8,9 +9,11 @@ interface Props {
 
 function CodeBlock({ className, children, ...props }: any) {
   const [copied, setCopied] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const match = /language-(\w+)/.exec(className || '')
   const language = match?.[1] || ''
   const code = String(children).replace(/\n$/, '')
+  const lineCount = code.split('\n').length
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code)
@@ -21,30 +24,54 @@ function CodeBlock({ className, children, ...props }: any) {
   // Inline code
   if (!language && !code.includes('\n')) {
     return (
-      <code className="bg-bg/50 px-1.5 py-0.5 rounded text-sm text-accent" {...props}>
+      <code className="bg-bg/50 px-1.5 py-0.5 rounded text-sm text-accent font-mono" {...props}>
         {children}
       </code>
     )
   }
 
-  // Code block
+  // Code block with syntax highlighting
   return (
-    <div className="relative my-3 group">
-      <div className="flex items-center justify-between px-4 py-1.5 bg-elevated border border-border rounded-t-lg">
-        <span className="text-xs text-text-muted font-mono">{language || 'code'}</span>
+    <div className="relative my-3 group rounded-lg border border-border overflow-hidden">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-elevated/80">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="text-text-muted hover:text-text-sec transition-colors"
+          >
+            {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          </button>
+          <span className="text-xs text-text-muted font-mono">{language || 'code'}</span>
+          <span className="text-[10px] text-text-muted/50">{lineCount} lines</span>
+        </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-sec transition-colors"
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-sec transition-colors opacity-0 group-hover:opacity-100"
         >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
           {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
-      <pre className="bg-bg border border-t-0 border-border rounded-b-lg p-4 overflow-x-auto">
-        <code className="text-sm font-mono text-text leading-relaxed" {...props}>
-          {children}
-        </code>
-      </pre>
+
+      {/* Code content */}
+      {!collapsed && (
+        <pre className="bg-bg p-4 overflow-x-auto text-sm leading-relaxed">
+          <code
+            className={`language-${language} text-text font-mono`}
+            {...props}
+          >
+            {children}
+          </code>
+        </pre>
+      )}
+
+      {/* Collapsed indicator */}
+      {collapsed && (
+        <div className="px-3 py-1.5 bg-bg/50 text-xs text-text-muted">
+          {lineCount} lines hidden — click to expand
+        </div>
+      )}
     </div>
   )
 }
@@ -52,6 +79,7 @@ function CodeBlock({ className, children, ...props }: any) {
 export function MarkdownRenderer({ content }: Props) {
   return (
     <ReactMarkdown
+      rehypePlugins={[rehypeHighlight]}
       components={{
         code: CodeBlock,
         a: ({ children, href, ...props }) => (
@@ -66,19 +94,19 @@ export function MarkdownRenderer({ content }: Props) {
           </a>
         ),
         table: ({ children, ...props }) => (
-          <div className="overflow-x-auto my-3">
+          <div className="overflow-x-auto my-3 rounded-lg border border-border">
             <table className="w-full text-sm border-collapse" {...props}>
               {children}
             </table>
           </div>
         ),
         th: ({ children, ...props }) => (
-          <th className="px-3 py-2 text-left bg-elevated border border-border font-medium text-text-sec" {...props}>
+          <th className="px-3 py-2 text-left bg-elevated border-b border-border font-medium text-text-sec" {...props}>
             {children}
           </th>
         ),
         td: ({ children, ...props }) => (
-          <td className="px-3 py-2 border border-border text-text" {...props}>
+          <td className="px-3 py-2 border-b border-border/50 text-text" {...props}>
             {children}
           </td>
         ),
@@ -108,6 +136,15 @@ export function MarkdownRenderer({ content }: Props) {
           <blockquote className="border-l-4 border-accent pl-4 my-2 text-text-sec italic" {...props}>
             {children}
           </blockquote>
+        ),
+        hr: (props) => (
+          <hr className="my-4 border-border" {...props} />
+        ),
+        strong: ({ children, ...props }) => (
+          <strong className="font-semibold text-text" {...props}>{children}</strong>
+        ),
+        em: ({ children, ...props }) => (
+          <em className="italic text-text-sec" {...props}>{children}</em>
         ),
       }}
     >
