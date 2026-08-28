@@ -7,13 +7,21 @@ import { FileViewer } from '../workbench/FileViewer'
 import { Terminal } from '../workbench/Terminal'
 import { GitPanel } from '../workbench/GitPanel'
 import { SettingsDialog } from '../settings/SettingsDialog'
-import { FileCode, Terminal as TerminalIcon, GitBranch, Settings, Shield } from 'lucide-react'
+import { FileCode, Terminal as TerminalIcon, GitBranch, Settings, Shield, Server, Wrench, GitBranch as WorkflowIcon, Puzzle } from 'lucide-react'
+import { MCPPanel } from '../agent/MCPPanel'
+import { ToolBrowserPanel } from '../agent/ToolBrowserPanel'
+import { WorkflowPanel } from '../agent/WorkflowPanel'
+import { PluginPanel } from '../agent/PluginPanel'
 
 const tabs = [
   { id: 'files', label: 'Files', icon: FileCode },
   { id: 'terminal', label: 'Terminal', icon: TerminalIcon },
   { id: 'git', label: 'Git', icon: GitBranch },
   { id: 'approvals', label: 'Approvals', icon: Shield },
+  { id: 'tools', label: 'Tools', icon: Wrench },
+  { id: 'mcp', label: 'MCP', icon: Server },
+  { id: 'workflows', label: 'Flow', icon: WorkflowIcon },
+  { id: 'plugins', label: 'Plugins', icon: Puzzle },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -80,6 +88,10 @@ export function RightPanel() {
         {rightPanelTab === 'approvals' && (
           <ToolApprovalPanel onApprove={handleApprove} />
         )}
+        {rightPanelTab === 'tools' && <ToolBrowserPanel />}
+        {rightPanelTab === 'mcp' && <MCPPanel />}
+        {rightPanelTab === 'workflows' && <WorkflowPanel />}
+        {rightPanelTab === 'plugins' && <PluginPanel />}
         {rightPanelTab === 'settings' && (
           <SettingsDialog onClose={() => setRightPanelTab('files')} />
         )}
