@@ -29,6 +29,7 @@ export function LeftPanel() {
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
   const { clearMessages } = useChatStore()
   const [showLoadDialog, setShowLoadDialog] = useState(false)
+  const [workspace, setWorkspace] = useState('')
 
   const loadSessions = useCallback(async () => {
     try {
@@ -48,6 +49,14 @@ export function LeftPanel() {
   useEffect(() => {
     loadSessions()
     loadModelInfo()
+    // Load saved workspace
+    try {
+      const saved = localStorage.getItem('ggufloader_settings')
+      if (saved) {
+        const s = JSON.parse(saved)
+        if (s.workspace) setWorkspace(s.workspace)
+      }
+    } catch {}
   }, [loadSessions, loadModelInfo])
 
   async function handleNewChat() {
@@ -128,6 +137,16 @@ export function LeftPanel() {
             <FolderOpen size={12} />
             Load Model
           </button>
+        </div>
+      </div>
+
+      {/* Workspace */}
+      <div className="px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-1.5">
+          <FolderOpen size={11} className="text-text-muted flex-shrink-0" />
+          <span className="text-[10px] text-text-muted truncate flex-1">
+            {workspace ? workspace.split(/[/\\]/).pop() : 'No workspace set'}
+          </span>
         </div>
       </div>
 
