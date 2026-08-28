@@ -7,7 +7,7 @@ echo ===============================================
 echo.
 
 REM ============================================
-REM  Check Python
+REM  Check system Python (needed to create venv)
 REM ============================================
 python --version >nul 2>&1
 if errorlevel 1 (
@@ -19,16 +19,36 @@ if errorlevel 1 (
 )
 
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYVER=%%i
-echo [OK] Python %PYVER%
+echo [OK] System Python %PYVER%
 
 REM ============================================
-REM  Check/Install Python dependencies
+REM  Create .venv if it doesn't exist
+REM ============================================
+if not exist ".venv\Scripts\python.exe" (
+    echo [SETUP] Creating virtual environment...
+    python -m venv .venv
+    if errorlevel 1 (
+        echo [ERROR] Failed to create virtual environment.
+        pause
+        exit /b 1
+    )
+    echo [OK] Virtual environment created.
+) else (
+    echo [OK] Virtual environment found.
+)
+
+REM Use venv Python from now on
+set "PY=.venv\Scripts\python.exe"
+set "PIP=.venv\Scripts\pip.exe"
+
+REM ============================================
+REM  Install/Update Python dependencies in venv
 REM ============================================
 if not exist "requirements.txt" goto :skip_requirements
-python -c "import uvicorn" >nul 2>&1
+%PY% -c "import uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo [SETUP] Installing Python dependencies...
-    pip install -r requirements.txt -q
+    %PIP% install -r requirements.txt -q
     if errorlevel 1 (
         echo [ERROR] Failed to install Python dependencies.
         pause
@@ -93,6 +113,9 @@ echo.
 echo [ELECTRON] Starting desktop app...
 echo.
 
+REM Kill any existing backend on port 8000
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
+
 REM Check if Electron is compiled
 if not exist "electron\dist\main.js" (
     echo [BUILD] Compiling Electron...
@@ -110,12 +133,14 @@ if not exist "electron\dist\main.js" (
 
 REM Start backend first
 echo [1/2] Starting backend (FastAPI on :8000)...
-start "GGUFLoader-Backend" cmd /c "cd /d "%~dp0" && python -m uvicorn ggufloader.api.app:create_app --factory --port 8000"
+start "GGUFLoader-Backend" cmd /c "cd /d "%~dp0" && .venv\Scripts\python.exe -m uvicorn ggufloader.api.app:create_app --factory --port 8000"
 timeout /t 3 /nobreak >nul
 
-REM Launch Electron
+REM Launch Electron (directly, no nested cmd)
 echo [2/2] Launching Electron window...
-start "GGUFLoader-Electron" cmd /c "cd /d "%~dp0electron" && npx electron ."
+cd /d "%~dp0electron"
+start "" node_modules\.bin\electron.cmd .
+cd /d "%~dp0"
 
 echo.
 echo ===============================================
@@ -128,10 +153,16 @@ echo.
 echo   Close this window or press Ctrl+C to stop.
 echo.
 pause >nul
+echo Stopping all processes...
+REM Kill backend (python/uvicorn on port 8000)
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
+REM Kill Vite dev server (node on port 5173)
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
+REM Kill any remaining GGUFLoader processes
 taskkill /FI "WINDOWTITLE eq GGUFLoader-Backend*" /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq GGUFLoader-Frontend*" /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq GGUFLoader-Electron*" /F >nul 2>&1
-echo Servers stopped.
+echo All processes stopped.
 goto :end
 
 REM ============================================
@@ -142,8 +173,11 @@ echo.
 echo [DEV] Starting in development mode...
 echo.
 
+REM Kill any existing backend on port 8000
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
+
 echo [1/3] Starting backend (FastAPI on :8000)...
-start "GGUFLoader-Backend" cmd /c "cd /d "%~dp0" && python -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --reload"
+start "GGUFLoader-Backend" cmd /c "cd /d "%~dp0" && .venv\Scripts\python.exe -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --reload"
 
 REM Wait for backend
 echo [2/3] Waiting for backend to be ready...
@@ -172,10 +206,13 @@ echo   Or press any key to stop both servers.
 echo.
 pause >nul
 
-REM Kill both servers on exit
+REM Kill all processes on exit
+echo Stopping all processes...
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq GGUFLoader-Backend*" /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq GGUFLoader-Frontend*" /F >nul 2>&1
-echo Servers stopped.
+echo All processes stopped.
 goto :end
 
 REM ============================================
@@ -185,6 +222,9 @@ REM ============================================
 echo.
 echo [PROD] Starting in production mode...
 echo.
+
+REM Kill any existing backend on port 8000
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
 
 REM Build frontend if needed
 if not exist "frontend\dist\index.html" (
@@ -214,7 +254,7 @@ echo   App:  http://localhost:8000
 echo   API:  http://localhost:8000/docs
 echo ===============================================
 echo.
-python -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --host 0.0.0.0
+.venv\Scripts\python.exe -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --host 0.0.0.0
 echo.
 echo Server stopped.
 pause
