@@ -48,6 +48,8 @@ export const sessionApi = {
   delete: (id: string) => request<any>(`/sessions/${id}`, { method: 'DELETE' }),
   fork: (id: string) => request<any>(`/sessions/${id}/fork`, { method: 'POST' }),
   search: (query: string) => request<any[]>(`/sessions/search/${encodeURIComponent(query)}`),
+  export: (id: string, format: 'json' | 'markdown' = 'json') =>
+    request<any>(`/sessions/${id}/export?format=${format}`),
 }
 
 // Agent API
@@ -64,6 +66,8 @@ export const agentApi = {
       method: 'POST',
       body: JSON.stringify({ call_id: callId, approved }),
     }),
+  setPreset: (preset: string) =>
+    request<any>(`/agent/preset/${preset}`, { method: 'POST' }),
 }
 
 // Files API
