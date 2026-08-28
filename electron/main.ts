@@ -1,11 +1,12 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import * as path from 'path'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, execSync, ChildProcess } from 'child_process'
 import * as net from 'net'
 
 let mainWindow: BrowserWindow | null = null
 let backendProcess: ChildProcess | null = null
 let viteProcess: ChildProcess | null = null
+let viteReady = false
 const BACKEND_PORT = 8000
 const VITE_PORT = 5173
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`
@@ -29,7 +30,7 @@ function getBackendArgs(): string[] {
 }
 
 function getFrontendURL(): string {
-  if (app.isPackaged) {
+  if (app.isPackaged || !viteReady) {
     return BACKEND_URL
   }
   // Development: Vite dev server
@@ -70,8 +71,9 @@ function startVite(): Promise<void> {
     }
 
     console.log('Starting Vite dev server...')
-    viteProcess = spawn('npm.cmd', ['run', 'dev'], {
+    viteProcess = spawn('npm', ['run', 'dev'], {
       cwd: frontendDir,
+      shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, FORCE_COLOR: '0' },
     })
@@ -154,15 +156,25 @@ function startBackend(): Promise<void> {
   })
 }
 
+function killByPort(port: number) {
+  try {
+    const result = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8' })
+    const pids = new Set<string>()
+    for (const line of result.split('\n')) {
+      const match = line.trim().split(/\s+/).pop()
+      if (match && match !== '0') pids.add(match)
+    }
+    for (const pid of pids) {
+      try { execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' }) } catch {}
+    }
+  } catch {}
+}
+
 function stopVite() {
   if (viteProcess) {
     console.log('Stopping Vite dev server...')
-    viteProcess.kill('SIGTERM')
-    setTimeout(() => {
-      if (viteProcess) {
-        viteProcess.kill('SIGKILL')
-      }
-    }, 3000)
+    try { viteProcess.kill() } catch {}
+    killByPort(VITE_PORT)
     viteProcess = null
   }
 }
@@ -170,13 +182,8 @@ function stopVite() {
 function stopBackend() {
   if (backendProcess) {
     console.log('Stopping backend...')
-    backendProcess.kill('SIGTERM')
-    // Force kill after 5 seconds
-    setTimeout(() => {
-      if (backendProcess) {
-        backendProcess.kill('SIGKILL')
-      }
-    }, 5000)
+    try { backendProcess.kill() } catch {}
+    killByPort(BACKEND_PORT)
     backendProcess = null
   }
 }
@@ -269,16 +276,28 @@ async function waitForURL(url: string, timeoutMs = 30000): Promise<void> {
 
 app.whenReady().then(async () => {
   try {
-    // Start Python backend
-    console.log('Starting Python backend...')
-    await startBackend()
-    console.log('Backend ready')
+    // Check if backend is already running
+    const portInUse = await new Promise<boolean>((resolve) => {
+      const socket = net.createConnection(BACKEND_PORT, 'localhost')
+      socket.on('connect', () => { socket.destroy(); resolve(true) })
+      socket.on('error', () => { socket.destroy(); resolve(false) })
+      setTimeout(() => { socket.destroy(); resolve(false) }, 1000)
+    })
+
+    if (portInUse) {
+      console.log(`Backend already running on port ${BACKEND_PORT}`)
+    } else {
+      console.log('Starting Python backend...')
+      await startBackend()
+      console.log('Backend ready')
+    }
 
     // In dev mode, also start Vite
     if (!app.isPackaged) {
       try {
         console.log('Starting Vite dev server...')
         await startVite()
+        viteReady = true
         console.log('Vite ready')
       } catch (err) {
         console.warn('Vite failed to start, falling back to backend:', err)
@@ -311,6 +330,12 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   stopVite()
   stopBackend()
+  // Safety: force-kill anything left on our ports after 2s
+  setTimeout(() => {
+    killByPort(BACKEND_PORT)
+    killByPort(VITE_PORT)
+    process.exit(0)
+  }, 2000)
 })
 
 app.on('activate', () => {
