@@ -149,3 +149,63 @@ async def search_sessions(query: str) -> List[dict]:
     except Exception as e:
         logger.error("Session search failed: %s", e)
         return []
+
+
+@router.get("/{session_id}/export")
+async def export_session(session_id: str, format: str = "json") -> dict:
+    """Export a session as JSON, Markdown, or HTML."""
+    try:
+        from ggufloader.core.sessions.store import SessionStore
+        import html as html_mod
+        store = SessionStore(get_paths()["chats"])
+        session = store.load(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        title = session.get("title", "Untitled")
+        messages = session.get("messages", [])
+
+        if format == "markdown":
+            lines = [f"# {title}", ""]
+            for msg in messages:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                lines.append(f"## {role.title()}")
+                lines.append("")
+                lines.append(content)
+                lines.append("")
+            return {"format": "markdown", "content": "\n".join(lines)}
+
+        if format == "html":
+            msg_html = []
+            for msg in messages:
+                role = msg.get("role", "unknown")
+                content = html_mod.escape(msg.get("content", ""))
+                bg = "#1a202c" if role == "assistant" else "#e8a33d"
+                color = "#e7ebf2" if role == "assistant" else "#0b0e14"
+                align = "left" if role == "assistant" else "right"
+                msg_html.append(
+                    f'<div style="display:flex;justify-content:{align};margin:12px 0">'
+                    f'<div style="max-width:70%;padding:12px 16px;border-radius:16px;'
+                    f'background:{bg};color:{color};font-family:system-ui;'
+                    f'white-space:pre-wrap;line-height:1.5">{content}</div>'
+                    f'</div>'
+                )
+            full_html = (
+                '<!DOCTYPE html>\n<html><head>'
+                f'<title>{html_mod.escape(title)}</title>'
+                '<style>body{background:#0b0e14;margin:0;padding:20px 40px;}'
+                'h1{color:#e7ebf2;font-family:system-ui;}</style>'
+                '</head><body>'
+                f'<h1>{html_mod.escape(title)}</h1>'
+                + "\n".join(msg_html)
+                + '</body></html>'
+            )
+            return {"format": "html", "content": full_html}
+
+        # Default: JSON
+        return {"format": "json", "content": session}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
