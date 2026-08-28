@@ -1,9 +1,9 @@
-"""Agent routes - control agent execution."""
+"""Agent routes - control agent execution and expose structured plan/phase state."""
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 _agent_running = False
 _agent_preset = "standard"
 
+# Current plan/phase state (updated by WebSocket handler during agent runs)
+_current_plan: List[Dict[str, Any]] = []
+_current_phase: str = "idle"
+_phase_log: List[str] = []
+_current_goal: str = ""
+_plan_step: Optional[Dict[str, Any]] = None
+
 
 class AgentStartRequest(BaseModel):
     preset: str = "standard"
@@ -29,6 +36,27 @@ class ApprovalRequest(BaseModel):
     approved: bool
 
 
+def update_plan_state(
+    phase: str = "idle",
+    plan: Optional[List[Dict[str, Any]]] = None,
+    phase_log: Optional[List[str]] = None,
+    goal: str = "",
+    plan_step: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Update the current plan/phase state. Called by WebSocket handler."""
+    global _current_plan, _current_phase, _phase_log, _current_goal, _plan_step
+    if phase:
+        _current_phase = phase
+    if plan is not None:
+        _current_plan = plan
+    if phase_log is not None:
+        _phase_log = phase_log
+    if goal:
+        _current_goal = goal
+    if plan_step is not None:
+        _plan_step = plan_step
+
+
 @router.get("/status")
 async def agent_status() -> dict:
     """Get agent status."""
@@ -37,6 +65,18 @@ async def agent_status() -> dict:
         "preset": _agent_preset,
         "model_loaded": get_model_backend() is not None,
         "workspace": get_workspace(),
+    }
+
+
+@router.get("/plan")
+async def get_plan() -> dict:
+    """Get the current structured plan, phase, and phase log."""
+    return {
+        "phase": _current_phase,
+        "goal": _current_goal,
+        "plan": _current_plan,
+        "plan_step": _plan_step,
+        "phase_log": _phase_log,
     }
 
 
