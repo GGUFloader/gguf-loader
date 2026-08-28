@@ -11,6 +11,31 @@ export interface ModelInfo {
   gpu: boolean
 }
 
+export interface MemoryEstimate {
+  ram_gb: number
+  vram_gb: number
+  quantization: string
+  fits_in_vram: boolean
+}
+
+// Sampling parameters
+export interface SamplingParams {
+  temperature: number
+  top_p: number
+  min_p: number
+  top_k: number
+  repeat_penalty: number
+  max_tokens: number
+}
+
+// GPU types
+export interface GpuStatus {
+  gpu_available: boolean
+  status: string
+  cuda_version?: string
+  vram_mb?: number
+}
+
 export interface LoadRequest {
   path: string
   use_gpu: boolean
