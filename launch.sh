@@ -13,13 +13,27 @@ if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
     exit 1
 fi
 
-PYTHON="python3"
-command -v python3 &> /dev/null || PYTHON="python"
-PYVER=$($PYTHON --version 2>&1 | awk '{print $2}')
-echo "[OK] Python $PYVER"
+SYS_PYTHON="python3"
+command -v python3 &> /dev/null || SYS_PYTHON="python"
+PYVER=$($SYS_PYTHON --version 2>&1 | awk '{print $2}')
+echo "[OK] System Python $PYVER"
 
 # ============================================
-#  Check/Install Python dependencies
+#  Create .venv if it doesn't exist
+# ============================================
+if [ ! -f ".venv/bin/python" ]; then
+    echo "[SETUP] Creating virtual environment..."
+    $SYS_PYTHON -m venv .venv
+    echo "[OK] Virtual environment created."
+else
+    echo "[OK] Virtual environment found."
+fi
+
+# Use venv Python from now on
+PYTHON=".venv/bin/python"
+
+# ============================================
+#  Install/Update Python dependencies in venv
 # ============================================
 if [ -f "requirements.txt" ]; then
     $PYTHON -c "import uvicorn" 2>/dev/null
@@ -89,7 +103,18 @@ if [ "$MODE" = "dev" ]; then
     echo ""
 
     # Cleanup on exit
-    trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; echo 'Servers stopped.'; exit" INT TERM
+    cleanup() {
+        echo "Stopping all processes..."
+        kill $BACKEND_PID 2>/dev/null
+        kill $FRONTEND_PID 2>/dev/null
+        # Kill anything still on our ports
+        for port in 8000 5173; do
+            lsof -ti:$port 2>/dev/null | xargs kill -9 2>/dev/null
+        done
+        echo "All processes stopped."
+        exit
+    }
+    trap cleanup INT TERM EXIT
     wait
 else
     echo ""
