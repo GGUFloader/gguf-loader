@@ -51,13 +51,11 @@ async def send_message(req: ChatRequest) -> ChatResponse:
         messages.append({"role": "user", "content": req.message})
 
         # Generate (non-streaming)
-        response = ""
-        for token in backend.generate_stream(
+        response = backend.chat(
             messages=messages,
             temperature=req.temperature,
             max_tokens=req.max_tokens,
-        ):
-            response += token
+        )
 
         return ChatResponse(
             response=response,
