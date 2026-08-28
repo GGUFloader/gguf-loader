@@ -92,3 +92,42 @@ export const gpuApi = {
 export const healthApi = {
   check: () => request<any>('/health'),
 }
+
+// MCP API
+export const mcpApi = {
+  listServers: () => request<any[]>('/mcp/servers'),
+  addServer: (name: string, command: string, args: string[] = []) =>
+    request<any>('/mcp/servers', { method: 'POST', body: JSON.stringify({ name, command, args }) }),
+  removeServer: (name: string) => request<any>(`/mcp/servers/${name}`, { method: 'DELETE' }),
+  connect: (name: string) => request<any>(`/mcp/servers/${name}/connect`, { method: 'POST' }),
+  disconnect: (name: string) => request<any>(`/mcp/servers/${name}/disconnect`, { method: 'POST' }),
+  listTools: () => request<any[]>('/mcp/tools'),
+}
+
+// Tools API
+export const toolsApi = {
+  list: () => request<any[]>('/tools'),
+  stats: () => request<any>('/tools/stats'),
+}
+
+// Workflows API
+export const workflowsApi = {
+  list: () => request<any[]>('/workflows'),
+  create: (name: string, description: string = '') =>
+    request<any>('/workflows', { method: 'POST', body: JSON.stringify({ name, description }) }),
+  templates: () => request<any[]>('/workflows/templates'),
+  run: (id: string) => request<any>(`/workflows/${id}/run`, { method: 'POST' }),
+}
+
+// Plugins API
+export const pluginsApi = {
+  list: () => request<any[]>('/plugins'),
+  stats: () => request<any>('/plugins/stats'),
+  enable: (name: string) => request<any>(`/plugins/${name}/enable`, { method: 'POST' }),
+  disable: (name: string) => request<any>(`/plugins/${name}/disable`, { method: 'POST' }),
+}
+// File Render API
+export const fileRenderApi = {
+  render: (path: string, search: string = '') =>
+    request<any>(`/files/render?path=${encodeURIComponent(path)}&search=${encodeURIComponent(search)}`),
+}
