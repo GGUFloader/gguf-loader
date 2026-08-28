@@ -445,6 +445,13 @@ class AgentEngine:
         self._reflection_enabled = True
         self._max_reflections = 2
         self._reflection_count = 0
+        # --- Structured workflow phases ---
+        self._current_phase = "idle"
+        self._plan = []
+        self._plan_index = 0
+        self._verify_failures = []
+        self._phase_log = []
+        self._on_plan_update = lambda _data: None
         # --- Stuck detection state (from OpenHands) ---
         self._consecutive_failures = 0
         self._last_tool_name = ""
@@ -737,6 +744,176 @@ class AgentEngine:
 
         return None
 
+    def _emit_plan_update(self, step_num: int) -> None:
+        try:
+            self._on_plan_update({
+                "phase": self._current_phase,
+                "plan": [dict(s) for s in self._plan],
+                "step": step_num,
+                "status": self._plan[step_num - 1]["status"] if step_num <= len(self._plan) else "unknown",
+            })
+        except Exception:
+            pass
+
+    def _phase_goal(self, user_message: str, status: StatusCallback) -> str:
+        self._current_phase = "goal"
+        status("Understanding your request...")
+        is_simple = len(user_message.split()) <= 30 and not any(
+            w in user_message.lower()
+            for w in ("complex", "multiple", "several", "build", "create system", "refactor")
+        )
+        if is_simple:
+            goal = user_message.strip()
+        else:
+            goal = self._ask(f"User request: {user_message}\n\nState the goal as a single sentence.").strip()
+            if not goal:
+                goal = user_message[:200]
+        status(f"Goal: {goal}")
+        self._phase_log.append(f"GOAL: {goal}")
+        return goal
+
+    def _phase_plan(self, goal: str, user_message: str, status: StatusCallback) -> list:
+        self._current_phase = "plan"
+        status("Creating plan...")
+        is_simple = len(user_message.split()) <= 30
+        if is_simple:
+            plan = [{"step": 1, "description": goal[:200], "tool": None, "verify": "Check", "status": "pending", "result": None}]
+        else:
+            plan_prompt = f"Goal: {goal}\nOriginal request: {user_message}\nAvailable tools: {self.tools.names()}\n\nCreate a step-by-step plan. Reply with ONLY a JSON array:\n"
+            raw = self._ask(plan_prompt)
+            plan = self._parse_plan(raw, goal)
+        self._plan = plan
+        self._plan_index = 0
+        if plan:
+            status(f"Plan ({len(plan)} steps):")
+            for item in plan:
+                status(f"  {item['step']}. {item['description']}")
+            self._phase_log.append(f"PLAN: {len(plan)} steps")
+        return plan
+
+    def _phase_execute(self, user_message: str, goal: str, status: StatusCallback, on_tool) -> list:
+        self._current_phase = "execute"
+        tool_results = []
+        if self._plan:
+            for plan_step in self._plan:
+                if self._abort and self._abort.is_aborted:
+                    status("Aborted")
+                    break
+                step_num = plan_step["step"]
+                desc = plan_step["description"]
+                status(f">>> Step {step_num}/{len(self._plan)}: {desc}")
+                plan_step["status"] = "running"
+                self._emit_plan_update(step_num)
+                step_prompt = f"Goal: {goal}\nCurrent step: {step_num}. {desc}\nTool results so far:\n"
+                for tr in tool_results[-5:]:
+                    outcome = "success" if tr.get("status") == "success" else "error"
+                    step_prompt += f"  - {tr.get('tool_name', '?')}: {outcome}\n"
+                step_prompt += "\nExecute this step. Reply with ONLY JSON with tool_calls.\n"
+                action = self._get_action_for_step(step_prompt, status)
+                if action is None:
+                    plan_step["status"] = "failed"
+                    plan_step["result"] = "Could not generate action"
+                    self._emit_plan_update(step_num)
+                    continue
+                calls = [x for x in (action.get("tool_calls") or []) if isinstance(x, dict) and x.get("tool")]
+                if not calls:
+                    plan_step["status"] = "done"
+                    plan_step["result"] = action.get("answer", "Completed")
+                    self._emit_plan_update(step_num)
+                    continue
+                step_ok = True
+                for call in calls:
+                    if self._abort and self._abort.is_aborted:
+                        break
+                    risk = self._assess_risk(call.get("tool", ""), call.get("parameters", {}))
+                    if risk == RISK_HIGH:
+                        status(f"  High-risk: {self._describe(call)}")
+                    if self.tools.requires_approval(call.get("tool", ""), call.get("parameters", {})):
+                        if not self._on_approval({"type": "approval", "call": call, "risk": risk}):
+                            status("  Approval denied")
+                            step_ok = False
+                            continue
+                    self._checkpoint_mgr.backup(call.get("tool", ""), call.get("parameters", {}))
+                    result = self.tools.execute(call.get("tool", ""), call.get("parameters", ""))
+                    self._executed_calls.append({"signature": self._signature(call), "tool": call.get("tool", "")})
+                    tool_results.append(result)
+                    if on_tool:
+                        on_tool(result)
+                    self._log_tool_result(call, result)
+                    if result.get("status") == "success":
+                        status(f"  OK: {self._summarize_result(result)}")
+                        self._record_success()
+                    else:
+                        status(f"  Failed: {result.get('error', 'Unknown error')}")
+                        self._record_failure()
+                        step_ok = False
+                plan_step["status"] = "done" if step_ok else "failed"
+                self._emit_plan_update(step_num)
+        else:
+            tool_results = self._execute_reactive_loop(user_message, status, on_tool)
+        return tool_results
+
+    def _get_action_for_step(self, prompt: str, status: StatusCallback):
+        full_prompt = self._get_prefix() + "\n\n" + prompt + "\n\nAssistant:"
+        for _attempt in range(self.json_retries + 1):
+            raw = self._ask(full_prompt)
+            self._last_raw_response = raw
+            data = extract_json(raw)
+            if data is not None:
+                return data
+            full_prompt += "\nYour response was not valid JSON. Reply with ONLY a JSON object:\n"
+        return None
+
+    def _phase_verify(self, tool_results: list, status: StatusCallback) -> bool:
+        self._current_phase = "verify"
+        status("Verifying results...")
+        all_ok = True
+        for result in tool_results:
+            if result.get("status") != "success":
+                all_ok = False
+                self._verify_failures.append(result)
+        if self._plan:
+            done = sum(1 for s in self._plan if s["status"] == "done")
+            failed = sum(1 for s in self._plan if s["status"] == "failed")
+            status(f"Plan: {done} done, {failed} failed")
+        self._phase_log.append(f"VERIFY: {'OK' if all_ok else 'failures'}")
+        return all_ok
+
+    def _phase_continue(self, all_ok: bool, user_message: str, goal: str, tool_results: list, status: StatusCallback) -> bool:
+        self._current_phase = "continue"
+        if all_ok and self._plan:
+            pending = [s for s in self._plan if s["status"] == "pending"]
+            if not pending:
+                status("All plan steps completed")
+                return False
+        return False
+
+    def _phase_finish(self, user_message: str, goal: str, tool_results: list, status: StatusCallback) -> str:
+        self._current_phase = "finish"
+        status("Preparing final answer...")
+        context = [f"Goal: {goal}", f"User asked: {user_message}", "", "Operations completed:"]
+        for result in tool_results:
+            tool = result.get("tool_name", "unknown")
+            content = tool_content_for_context(result, max_chars=500) if result.get("status") == "success" else result.get("error", "Failed")
+            marker = "OK" if result.get("status") == "success" else "FAIL"
+            context.append(f"  [{marker}] {tool}: {content or 'Done'}")
+        if self._plan:
+            context.append("\nPlan progress:")
+            for s in self._plan:
+                context.append(f"  [{s['status']}] {s['step']}. {s['description']}")
+        context.append("\nProvide a clear response summarizing what was done.")
+        answer = self._ask("\n".join(context)).strip()
+        if answer:
+            parsed = extract_json(answer)
+            if parsed and isinstance(parsed, dict) and parsed.get("answer"):
+                answer = parsed["answer"].strip()
+        if not answer:
+            success = sum(1 for r in tool_results if r.get("status") == "success")
+            answer = f"Completed {success}/{len(tool_results)} operations."
+        self._phase_log.append(f"FINISH: {len(tool_results)} operations")
+        self._current_phase = "idle"
+        return answer
+
     # ------------------------------------------------------------------
     # Background summarization
     # ------------------------------------------------------------------
@@ -775,12 +952,19 @@ class AgentEngine:
         on_status: Optional[StatusCallback] = None,
         on_tool: Optional[ToolCallback] = None,
         on_approval: Optional[ApprovalCallback] = None,
+        on_plan_update: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
         """Process *user_message* and return ``{"response": str, "tool_results": [...]}``."""
         self.conversation_history.append({"role": "user", "content": user_message})
         status = on_status or (lambda _msg: None)
+        self._on_plan_update = on_plan_update or (lambda _data: None)
         self._step_log = []
         self._failed_signatures = {}
+        self._plan = []
+        self._plan_index = 0
+        self._verify_failures = []
+        self._phase_log = []
+        self._current_phase = "idle"
         self._executed_calls: List[Dict[str, Any]] = []
         self._pending_directive = ""
         self._directive_rounds = 0
@@ -998,7 +1182,7 @@ class AgentEngine:
             if tool_results:
                 self._store_session_memories(user_message, final_answer, tool_results)
 
-            return {"response": final_answer, "tool_results": tool_results}
+            return {"response": final_answer, "tool_results": tool_results, "plan": self._plan, "phase_log": self._phase_log}
 
         except Exception as e:
             logger.error("Agent error: %s", e)
