@@ -1,226 +1,166 @@
 # Contributing to GGUF Loader
 
-First off, **thank you so much** for considering contributing to GGUF Loader! Your help makes this project better for everyone, and we’re excited to have you on board. 💙
+Thank you for your interest in contributing! This guide covers both the Python backend and React frontend.
 
----
+## Development Setup
 
-## How Can You Contribute?
+### Prerequisites
 
-There are many ways to contribute, no matter your skill level:
+- Python 3.10+
+- Node.js 18+
+- Git
 
-- 🐞 **Report bugs or issues** you find  
-- 💡 **Suggest new features or improvements**  
-- 🛠️ **Fix bugs or add new features** through pull requests  
-- 📚 **Improve documentation** or write tutorials  
-- 🗣️ **Help answer questions** in discussions or issues  
-
----
-
-## 🧭 Developer Quick Start
-
-New to the codebase? Read this before your first change.
-
-### 1. Read the Architecture Guide
-
-**[ARCHITECTURE.md](ARCHITECTURE.md)** is required reading. It documents the
-layered design, the threading model, and how to extend the app (new tools,
-services, panels, and addons).
-
-### 2. Set Up the Dev Environment
+### Clone & Install
 
 ```bash
+git clone https://github.com/GGUFloader/gguf-loader.git
+cd gguf-loader
+
+# Python backend
 python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-# Linux/macOS
-source .venv/bin/activate
-
+.venv/Scripts/activate  # Windows
+# source .venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
-python main.py          # run the app
+
+# React frontend
+cd frontend
+npm install
+cd ..
 ```
 
-Always use the `.venv` interpreter for running and testing.
-
-### 3. Where Things Live
-
-| Layer | Folder | Rule of thumb |
-|---|---|---|
-| Pure domain logic (no Qt) | `core/` | `ModelBackend`, `PromptBuilder`, `ToolRegistry`, `AgentEngine` — unit-testable without a display |
-| Qt bridge + threading | `services/` | One `QObject` service per background pipeline; the only layer that manages threads |
-| Views | `ui/`, `widgets/` | Panels render and emit signals; they never import `core/` or `services/` |
-| Addons | `addons/` | Each package exposes `register(parent)`; finds the main window via duck typing |
-| Configuration | `config.py` | Constants + path bootstrap (`get_paths` / `ensure_directories`) |
-| Build/launch/GPU scripts | `scripts/` | Developer utilities; never imported by the app |
-
-### 4. Conventions That Matter
-
-- **No Qt in `core/`** — the domain layer must stay importable from any thread
-  and testable headless.
-- **Only `services/` runs background pipelines** — don't add new `QThread`
-  subclasses; copy the worker pattern in `services/chat_service.py` (arguments
-  as worker attributes, a zero-arg `@Slot() process()`, results via signals,
-  `_clear_refs()` on finish).
-- **Only `ModelBackend` calls into llama.cpp** — everything else goes through it.
-- **Panels talk in signals** — emit, don't reach into `MainWindow`.
-- **Addons use duck typing** — locate the window via `hasattr(parent, "model")`,
-  never by importing `MainWindow`.
-
-### 5. More Docs
-
-- [Addon Development](https://ggufloader.github.io/docs/addon-development/) — build an addon
-- [Build & Package](https://ggufloader.github.io/docs/installation/) — PyInstaller packaging
-- [Config Files](https://ggufloader.github.io/docs/configuration/) — configuration reference
-- [Documentation Index](https://ggufloader.github.io/docs/) — everything else
-
----
-
-## Getting Started
-
-1. **Fork the repository**  
-2. **Clone your fork locally**  
-3. Create a new branch for your work:  
-   ```bash
-   git checkout -b my-feature
-
-```
-
-### 4. Make Your Changes
-
-- Write clean, readable code
-- Follow existing code style
-- Add comments where needed
-- Test your changes thoroughly
-
-### 5. Commit Your Changes
+### Run in Development
 
 ```bash
-git add .
-git commit -m "Add: brief description of your changes"
+# Option 1: Launch script (starts both)
+launch.bat  # or ./launch.sh
+
+# Option 2: Manual
+# Terminal 1: Backend
+python -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --reload
+
+# Terminal 2: Frontend (hot reload)
+cd frontend && npm run dev
 ```
 
-Use clear commit messages:
-- `Add: new feature description`
-- `Fix: bug description`
-- `Update: what was updated`
-- `Docs: documentation changes`
+Open http://localhost:5173 (Vite dev server with API proxy).
 
-### 6. Push and Create Pull Request
+## Project Structure
+
+```
+ggufloader/
+├── api/              # FastAPI backend (Python)
+├── core/             # Business logic (Python)
+├── services/         # Application services (Python)
+├── ui/               # PySide6 UI (legacy, kept for --qt)
+├── widgets/          # PySide6 widgets (legacy)
+frontend/
+├── src/
+│   ├── api/          # REST client (TypeScript)
+│   ├── stores/       # Zustand state (TypeScript)
+│   ├── hooks/        # Custom hooks (TypeScript)
+│   └── components/   # React components (TSX)
+electron/             # Electron packaging (TypeScript)
+tests/                # Python tests (pytest)
+```
+
+See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for full details.
+
+## Code Style
+
+### Python
+
+- Follow PEP 8
+- Use type hints
+- Run `pytest` before committing
+
+### TypeScript/React
+
+- Use functional components with hooks
+- Prefer Zustand stores over prop drilling
+- Use Tailwind CSS for styling (no CSS modules)
+- Run `npm run lint` and `npm run typecheck` before committing
 
 ```bash
-git push origin feature/your-feature-name
+cd frontend
+npm run lint          # Check for issues
+npm run lint:fix      # Auto-fix
+npm run typecheck     # TypeScript check
+npm run format        # Format with Prettier
 ```
 
-Then create a Pull Request on GitHub with:
-- Clear title describing the change
-- Description of what and why
-- Any relevant issue numbers
+## Making Changes
 
-## Code Guidelines
+### Python Backend
 
-### Python Style
+1. Edit files in `ggufloader/api/`, `ggufloader/core/`, or `ggufloader/services/`
+2. Add tests in `tests/`
+3. Run `python -m pytest tests/ -x`
 
-- Follow PEP 8 style guide
-- Use meaningful variable names
-- Add docstrings to functions
-- Keep functions focused and small
+### React Frontend
 
-### Example:
+1. Edit files in `frontend/src/`
+2. Components go in `frontend/src/components/<category>/`
+3. State stores go in `frontend/src/stores/`
+4. API client functions go in `frontend/src/api/client.ts`
+5. Run `npm run build` to verify
 
-```python
-def process_text(text: str, max_length: int = 100) -> str:
-    """
-    Process and truncate text to specified length.
-    
-    Args:
-        text: Input text to process
-        max_length: Maximum length of output
-        
-    Returns:
-        Processed text string
-    """
-    return text[:max_length]
-```
+### Adding a New API Endpoint
 
-## Reporting Bugs
+1. Create route in `ggufloader/api/routes/<name>.py`
+2. Register in `ggufloader/api/app.py`
+3. Add client function in `frontend/src/api/client.ts`
+4. Add integration test in `tests/test_api_integration.py`
 
-### Before Reporting
+### Adding a New React Component
 
-- Check if the bug is already reported
-- Try the latest version
-- Gather relevant information
-
-### Bug Report Should Include
-
-- Clear description of the issue
-- Steps to reproduce
-- Expected vs actual behavior
-- System information (OS, Python version)
-- Error messages and logs
-- Screenshots if applicable
-
-## Suggesting Features
-
-### Good Feature Requests Include
-
-- Clear description of the feature
-- Use case and benefits
-- Possible implementation approach
-- Examples or mockups if applicable
-
-## Documentation
-
-Help improve our docs:
-
-- Fix typos and grammar
-- Add examples and tutorials
-- Clarify confusing sections
-- Translate to other languages
-
-Documentation lives on the [GGUF Loader website](https://ggufloader.github.io/docs/).
+1. Create in `frontend/src/components/<category>/<Name>.tsx`
+2. Use existing patterns (see `ChatBubble.tsx` or `ToolCallCard.tsx`)
+3. Import icons from `lucide-react`
+4. Use Tailwind classes for styling
 
 ## Testing
 
-Before submitting:
+### Python Tests
 
-- Test your changes thoroughly
-- Ensure existing features still work
-- Test on different platforms if possible
-- Add tests for new features
+```bash
+python -m pytest tests/ -x              # All tests
+python -m pytest tests/test_api_integration.py -v  # Integration tests
+```
 
-## Pull Request Process
+### Frontend Build
 
-1. **Update documentation** if needed
-2. **Add tests** for new features
-3. **Ensure all tests pass**
-4. **Update CHANGELOG** if applicable
-5. **Request review** from maintainers
+```bash
+cd frontend
+npm run build          # TypeScript + Vite build
+npm run typecheck      # TypeScript only
+npm run lint           # Lint check
+```
 
-### PR Review Process
+## Commit Guidelines
 
-- Maintainers will review your PR
-- Address any requested changes
-- Once approved, it will be merged
-- Your contribution will be credited!
+- Use descriptive commit messages
+- Reference issue numbers when applicable
+- Keep commits focused (one feature/fix per commit)
+- Run tests before committing
 
-## Community Guidelines
+## Pull Requests
 
-- Be respectful and inclusive
-- Help others learn and grow
-- Give constructive feedback
-- Follow our [Code of Conduct](CODE_OF_CONDUCT.MD)
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Make your changes
+4. Run tests (`python -m pytest tests/ -x && cd frontend && npm run build`)
+5. Commit your changes
+6. Push to your fork
+7. Open a Pull Request
+
+## Architecture Decisions
+
+- **React over PySide6**: React gives us a modern, web-standard UI that can be packaged as Electron for desktop
+- **FastAPI over Flask**: Async support, automatic API docs, WebSocket support
+- **Zustand over Redux**: Lightweight, no boilerplate, TypeScript-first
+- **Tailwind over CSS modules**: Utility-first, consistent design, faster development
+- **Vite over Webpack**: Faster builds, better DX, native ESM
 
 ## Questions?
 
-- 💬 [GitHub Discussions](https://github.com/GGUFloader/gguf-loader/discussions)
-- 🐛 [GitHub Issues](https://github.com/GGUFloader/gguf-loader/issues)
-- 📧 Email: hossainnazary475@gmail.com
-
-## Recognition
-
-Contributors are recognized in:
-- README.md contributors section
-- Release notes
-- Project documentation
-
-Thank you for contributing to GGUF Loader! 🎉
+Open a [Discussion](https://github.com/GGUFloader/gguf-loader/discussions) or email hussainnazary475@gmail.com.

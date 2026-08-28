@@ -2,20 +2,17 @@
 """
 GGUF Loader - Application entry point.
 
-Bootstrap only: configure logging, set up the llama.cpp library path,
-create the QApplication and show the MainWindow. All application logic
-lives in core/, services/ and ui/.
+Supports two modes:
+  1. React/FastAPI mode (default): Launches the Python backend + serves React UI
+  2. PySide6 mode (--qt flag): Launches the original Qt desktop UI
+
+Set GGUFLOADER_UI=react or GGUFLOADER_UI=qt to override auto-detection.
 """
 
 import logging
 import os
 import platform
 import sys
-
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
-
-from ggufloader.resource_manager import find_config_dir, find_icon, get_dll_path, find_logs_dir
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +21,7 @@ logger = logging.getLogger(__name__)
 def setup_library_path() -> None:
     """Add the llama.cpp DLL/library directory to the process search path."""
     try:
+        from ggufloader.resource_manager import get_dll_path
         dll_path = get_dll_path()
         if not dll_path or not os.path.exists(dll_path):
             return
@@ -59,26 +57,91 @@ def _print_help() -> None:
     print("\nOptions:")
     print("  --version, -v    Show version information")
     print("  --help, -h       Show this help message")
+    print("  --qt             Launch with PySide6 desktop UI (legacy)")
+    print("  --react          Launch with React web UI (default)")
+    print("  --port PORT      Backend port (default: 8000)")
+    print("  --no-browser     Don't open browser automatically")
 
 
-def main() -> int:
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ("--version", "-v"):
-            _print_version()
-            return 0
-        if sys.argv[1] in ("--help", "-h"):
-            _print_help()
-            return 0
+def _detect_ui_mode() -> str:
+    """Detect which UI mode to use."""
+    env_mode = os.environ.get("GGUFLOADER_UI", "").lower()
+    if env_mode in ("react", "web"):
+        return "react"
+    if env_mode in ("qt", "pyside6"):
+        return "qt"
 
-    setup_library_path()
-
-    # O2: file logging with previous-run retention (log.txt / log-prev.txt)
+    # Check if PySide6 is available
     try:
-        from ggufloader.logging_setup import setup_file_logging
-        log_file = setup_file_logging(find_logs_dir())
-        logger.info("Logging to %s", log_file)
-    except Exception as e:  # noqa: BLE001
-        print(f"File logging unavailable: {e}")
+        import PySide6  # noqa: F401
+        return "qt"
+    except ImportError:
+        pass
+
+    # Default to React mode
+    return "react"
+
+
+def _launch_react(port: int = 8000, open_browser: bool = True) -> int:
+    """Launch the React/FastAPI backend."""
+    import threading
+    import time
+
+    logger.info("Starting GGUF Loader in React mode on port %d", port)
+
+    # Start FastAPI in background thread
+    def run_server():
+        import uvicorn
+        uvicorn.run(
+            "ggufloader.api.app:create_app",
+            factory=True,
+            host="127.0.0.1",
+            port=port,
+            log_level="info",
+        )
+
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+
+    # Wait for server to be ready
+    import socket
+    for _ in range(30):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                break
+        except (ConnectionRefusedError, OSError):
+            time.sleep(0.5)
+    else:
+        logger.error("Backend server failed to start")
+        return 1
+
+    url = f"http://localhost:{port}"
+    logger.info("Backend ready at %s", url)
+
+    if open_browser:
+        import webbrowser
+        webbrowser.open(url)
+        logger.info("Opened browser at %s", url)
+
+    # Keep running
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        return 0
+
+
+def _launch_qt() -> int:
+    """Launch the PySide6 desktop UI."""
+    try:
+        from PySide6.QtGui import QIcon
+        from PySide6.QtWidgets import QApplication
+    except ImportError:
+        logger.error("PySide6 is not installed. Install it with: pip install PySide6")
+        return 1
+
+    from ggufloader.resource_manager import find_config_dir, find_icon, find_logs_dir
 
     app = QApplication(sys.argv)
     app.setApplicationName("GGUF Loader")
@@ -91,11 +154,61 @@ def main() -> int:
         if not icon.isNull():
             app.setWindowIcon(icon)
 
+    # File logging
+    try:
+        from ggufloader.logging_setup import setup_file_logging
+        log_file = setup_file_logging(find_logs_dir())
+        logger.info("Logging to %s", log_file)
+    except Exception as e:  # noqa: BLE001
+        print(f"File logging unavailable: {e}")
+
     from ggufloader.ui.main_window import MainWindow
     window = MainWindow()
     window.show()
 
     return app.exec()
+
+
+def main() -> int:
+    # Parse arguments
+    port = 8000
+    open_browser = True
+    ui_override = None
+
+    args = sys.argv[1:]
+    filtered_args = []
+    i = 0
+    while i < len(args):
+        if args[i] in ("--version", "-v"):
+            _print_version()
+            return 0
+        elif args[i] in ("--help", "-h"):
+            _print_help()
+            return 0
+        elif args[i] == "--qt":
+            ui_override = "qt"
+        elif args[i] == "--react":
+            ui_override = "react"
+        elif args[i] == "--port" and i + 1 < len(args):
+            port = int(args[i + 1])
+            i += 1
+        elif args[i] == "--no-browser":
+            open_browser = False
+        else:
+            filtered_args.append(args[i])
+        i += 1
+
+    sys.argv = [sys.argv[0]] + filtered_args
+
+    setup_library_path()
+
+    mode = ui_override or _detect_ui_mode()
+    logger.info("UI mode: %s", mode)
+
+    if mode == "react":
+        return _launch_react(port=port, open_browser=open_browser)
+    else:
+        return _launch_qt()
 
 
 if __name__ == "__main__":

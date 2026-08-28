@@ -132,6 +132,16 @@ _bubble_*.png
 # NOTE: float.png (floating chat button icon) and screen.png (README screenshot)
 # are intentionally tracked - they are runtime assets referenced by the app.
 
+# React frontend build output
+frontend/dist/
+frontend/node_modules/
+frontend/.vite/
+
+# Electron
+electron/dist/
+electron/node_modules/
+release/
+
 # Model files (usually large)
 *.gguf
 *.bin

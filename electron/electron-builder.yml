@@ -1,0 +1,95 @@
+appId: com.ggufloader.app
+productName: GGUF Loader
+copyright: Copyright © 2026 GGUF Loader
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - electron/**/*
+  - frontend/dist/**/*
+  - "!node_modules"
+  - "!**/*.ts"
+
+extraResources:
+  # Python backend (sidecar)
+  - from: backend/
+    to: backend/
+    filter:
+      - "**/*"
+      - "!__pycache__"
+      - "!*.pyc"
+  # Model families config
+  - from: ggufloader/config/
+    to: backend/ggufloader/config/
+    filter:
+      - "**/*"
+
+asar: true
+
+# Windows
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: GGUF Loader
+
+# macOS
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.icns
+  category: public.app-category.developer-tools
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Linux
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: assets/
+  category: Development
+  artifactName: "${productName}-${version}.${ext}"
+
+appImage:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+deb:
+  artifactName: "${productName}-${version}.${arch}.${ext}"
+
+# Publish (GitHub Releases)
+publish:
+  provider: github
+  owner: your-org
+  repo: gguf-loader
+  releaseType: release

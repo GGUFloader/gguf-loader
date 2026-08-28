@@ -1,62 +1,77 @@
 @echo off
-REM GGUF Loader Launcher Script
-REM This script will create a virtual environment if it doesn't exist,
-REM verify that every dependency from requirements.txt is installed,
-REM install anything that's missing, and then launch the application.
+title GGUF Loader
+echo ================================
+echo    GGUF Loader - Starting...
+echo ================================
+echo.
 
-REM Change to the project root so relative paths work from anywhere
-cd /d "%~dp0"
-
-REM Set the name of the virtual environment
-set VENV_NAME=.venv
-
-REM Check if virtual environment exists
-if not exist "%VENV_NAME%\Scripts\activate.bat" (
-    echo Creating virtual environment...
-    python -m venv %VENV_NAME%
-
-    if errorlevel 1 (
-        echo Failed to create virtual environment. Please ensure Python is installed.
-        pause
-        exit /b 1
-    )
-)
-
-REM Activate virtual environment
-echo Activating virtual environment...
-call %VENV_NAME%\Scripts\activate.bat
-
+REM Check Python
+python --version >nul 2>&1
 if errorlevel 1 (
-    echo Failed to activate virtual environment.
+    echo [ERROR] Python not found. Please install Python 3.10+ and add to PATH.
     pause
     exit /b 1
 )
 
-REM Verify that every requirement in requirements.txt is installed
-python -c "import importlib.metadata,re,sys; norm=lambda n: re.sub(r'[-_.]+','_',n).lower(); installed={norm(d.metadata.get('Name','')) for d in importlib.metadata.distributions()}; missing=[re.split(r'[<>=!~;\[ ]',l.split('#',1)[0].strip(),maxsplit=1)[0].strip() for l in open('requirements.txt',encoding='utf-8') if l.split('#',1)[0].strip()]; missing=[n for n in missing if n and norm(n) not in installed]; print(('Missing: '+', '.join(missing)) if missing else 'All dependencies are installed.'); sys.exit(1 if missing else 0)"
-
+REM Check if Node.js is available (for development mode)
+node --version >nul 2>&1
 if errorlevel 1 (
-    echo Installing dependencies...
-    pip install --disable-pip-version-check -r requirements.txt
+    goto :production_mode
+)
 
-    if errorlevel 1 (
-        echo Failed to install dependencies.
-        pause
-        exit /b 1
-    )
+REM Development mode: check if frontend is built
+if exist "frontend\dist\index.html" (
+    goto :dev_mode
 ) else (
-    echo Dependencies already installed.
+    goto :production_mode
 )
 
-REM Launch the application
-echo Starting GGUF Loader...
-python main.py
+:dev_mode
+echo [DEV] Starting in development mode...
+echo.
 
-if errorlevel 1 (
-    echo Failed to start the application.
-    pause
-    exit /b 1
+REM Start FastAPI backend
+echo [1/3] Starting backend server...
+start "GGUFLoader-Backend" cmd /c "cd /d %~dp0 && python -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --reload"
+
+REM Wait for backend to be ready
+echo [2/3] Waiting for backend...
+timeout /t 3 /nobreak >nul
+
+REM Start Vite dev server
+echo [3/3] Starting frontend dev server...
+start "GGUFLoader-Frontend" cmd /c "cd /d %~dp0frontend && npm run dev"
+
+echo.
+echo ================================
+echo  Backend:  http://localhost:8000
+echo  Frontend: http://localhost:5173
+echo ================================
+echo.
+echo Close this window or press Ctrl+C to stop.
+pause
+goto :end
+
+:production_mode
+echo [PROD] Starting in production mode...
+echo.
+
+REM Build frontend if needed
+if not exist "frontend\dist\index.html" (
+    echo Building frontend...
+    cd /d %~dp0frontend
+    call npm install
+    call npm run build
+    cd /d %~dp0
 )
 
-REM Deactivate virtual environment when done
-call deactivate
+REM Start FastAPI backend (serves built frontend)
+echo Starting server...
+python -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --host 0.0.0.0
+
+echo.
+echo Server stopped.
+pause
+goto :end
+
+:end

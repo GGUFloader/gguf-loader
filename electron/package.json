@@ -1,0 +1,26 @@
+{
+  "name": "gguf-loader-desktop",
+  "version": "1.0.0",
+  "description": "GGUF Loader - Local LLM Runtime Desktop App",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "concurrently \"npm run build:watch\" \"wait-on dist/main.js && electron .\"",
+    "build:watch": "tsc --watch",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "concurrently": "^9.0.0",
+    "wait-on": "^8.0.0",
+    "typescript": "^5.5.0"
+  }
+}

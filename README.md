@@ -20,6 +20,22 @@ leaves your computer.
 
 ---
 
+## 🆕 What's New in 3.0.0 — React Frontend
+
+- **React UI** — complete rewrite from PySide6 to React + TypeScript + Tailwind
+  CSS, matching the UI patterns of DeepSeek Harness, OpenHands, and Claude Code
+- **3-panel layout** — Sessions (left), Chat (center), Workbench (right)
+- **Streaming** — token-by-token delivery via WebSocket
+- **Agent UI** — tool cards, approval dialogs, mode selector, context lens
+- **Workbench** — file explorer, terminal, git panel in right sidebar
+- **Electron packaging** — standalone desktop app (no browser needed)
+- **240 tests** — 222 original + 18 new API integration tests
+- **Dual-mode** — `python main.py --react` (default) or `--qt` (legacy)
+
+See [REACT_MIGRATION_GUIDE.md](docs/REACT_MIGRATION_GUIDE.md) for details.
+
+---
+
 ## 🆕 What's New in 2.2.0
 
 - **Collision-proof pip package** — the entire app now ships inside a single
@@ -45,6 +61,23 @@ leaves your computer.
 
 ## ✨ Features
 
+### React UI (v3.0)
+
+- 🖥️ **3-panel layout** — Sessions (left), Chat (center), Workbench (right)
+- 💬 **Streaming chat** — token-by-token delivery via WebSocket
+- 🤖 **Agent mode** — tool cards, approval dialogs, mode selector
+- 📁 **File explorer** — tree view with 30+ file type icons, search
+- 💻 **Integrated terminal** — command history, Ctrl+L clear
+- 🔀 **Git panel** — status, changed files, inline diff, commit
+- ⚙️ **Settings dialog** — Model, Agent, Appearance, Keyboard tabs
+- 🔍 **Context lens** — live token breakdown bar
+- 📊 **Metrics bar** — duration, tokens, tool calls, cost estimate
+- 🎨 **Theme** — dark/light mode, 8 accent colors, font size slider
+- ⌨️ **Keyboard shortcuts** — Ctrl+M, Ctrl+N, Ctrl+B, Ctrl+\, Esc
+- 📱 **Electron** — standalone desktop app (no browser needed)
+
+### Core Features
+
 - 🤖 **Agentic Mode (LangGraph)** — an autonomous LangGraph-driven assistant
   that reads, writes, edits, searches, runs commands, and uses git inside a
   workspace folder you grant it access to — with human approval for anything
@@ -62,8 +95,7 @@ leaves your computer.
   apps, with proper word wrapping and right-to-left support.
 - 🔒 **Privacy first** — 100% local inference. Your prompts and files never
   leave your machine.
-- 🎨 **Modern PySide6 UI** — clean, dark/light themed interface (light by
-  default, Dark Mode toggle in the View menu).
+- 🎨 **Modern UI** — React (default) or PySide6 (legacy) with dark/light themes.
 - 💻 **Cross-platform** — Windows 10/11, Linux, and macOS (including Apple
   Silicon).
 
