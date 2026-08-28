@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useModelStore } from '../../stores/modelStore'
 import { useUIStore } from '../../stores/uiStore'
-import { ModeSelector } from '../agent/ModeSelector'
 import { modelApi, gpuApi } from '../../api/client'
 import { PanelLeftClose, PanelRightClose, Cpu, X } from 'lucide-react'
 
@@ -24,7 +23,7 @@ export function Header() {
           <span className="text-xl">🦜</span>
           <div>
             <div className="text-sm font-semibold text-text">GGUF Loader</div>
-            <div className="text-xs text-text-muted">Local LLM Runtime</div>
+            <div className="text-xs text-text-muted">Local AI Assistant</div>
           </div>
         </div>
       </div>
@@ -52,9 +51,6 @@ export function Header() {
             </button>
           )}
         </div>
-
-        {/* Mode selector */}
-        <ModeSelector />
 
         <button onClick={toggleRightPanel} className="p-1.5 hover:bg-elevated rounded-lg transition-colors">
           <PanelRightClose size={18} className="text-text-sec" />
