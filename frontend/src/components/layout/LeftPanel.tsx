@@ -248,15 +248,23 @@ export function LeftPanel() {
                     <span className="text-sm text-text truncate flex-1">
                       {session.title || 'Untitled session'}
                     </span>
-                    <button
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation()
                         setContextMenu(contextMenu === session.id ? null : session.id)
                       }}
-                      className="p-0.5 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text transition-all"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation()
+                          setContextMenu(contextMenu === session.id ? null : session.id)
+                        }
+                      }}
+                      className="p-0.5 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text transition-all cursor-pointer"
                     >
                       <MoreVertical size={12} />
-                    </button>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 pl-5">
                     <span className="text-[10px] text-text-muted">
