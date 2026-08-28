@@ -10,12 +10,14 @@ import logging
 from typing import Optional
 
 from ggufloader.core.llm.model_backend import ModelBackend
+from ggufloader.core.router import ModelRouter
 
 logger = logging.getLogger(__name__)
 
 # Global state (lazy initialized)
 _model_backend: Optional[ModelBackend] = None
 _workspace: Optional[str] = None
+_router: Optional[ModelRouter] = None
 
 
 def get_model_backend() -> Optional[ModelBackend]:
@@ -43,6 +45,14 @@ def set_workspace(path: Optional[str]) -> None:
     global _workspace
     _workspace = path
     logger.info("Workspace set to: %s", path)
+
+
+def get_router() -> ModelRouter:
+    """Get or create the global ModelRouter instance."""
+    global _router
+    if _router is None:
+        _router = ModelRouter()
+    return _router
 
 
 def is_model_loaded() -> bool:
