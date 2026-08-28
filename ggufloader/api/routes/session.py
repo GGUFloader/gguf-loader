@@ -92,7 +92,7 @@ async def rename_session(session_id: str, req: RenameRequest) -> dict:
     try:
         from ggufloader.core.sessions.store import SessionStore
         store = SessionStore(get_paths()["chats"])
-        session = store.load_session(session_id)
+        session = store.load(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
         session["title"] = req.title
