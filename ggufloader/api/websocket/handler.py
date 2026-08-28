@@ -23,6 +23,7 @@ from typing import Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 
 from ggufloader.api.deps import get_model_backend
+from ggufloader.api.routes.agent import update_plan_state
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ async def _stream_response(websocket, backend, messages, message_id, start_time,
 
     def token_generator():
         """Generator that yields tokens from the backend."""
-        for token in backend.generate_stream(
+        for token in backend.chat_stream(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -224,7 +225,7 @@ async def _generate_response(websocket, backend, messages, message_id, start_tim
     loop = asyncio.get_event_loop()
 
     def generate():
-        return backend.generate(
+        return backend.chat(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -243,15 +244,197 @@ async def _generate_response(websocket, backend, messages, message_id, start_tim
 
 
 async def handle_agent_start(websocket: WebSocket, data: dict):
-    """Start agent execution."""
+    """Start agent execution with structured phase streaming."""
     preset = data.get("preset", "standard")
+    message = data.get("message", "")
+    system_prompt = data.get("system_prompt")
+    temperature = data.get("temperature", 0.2)
+    max_tokens = data.get("max_tokens", 4096)
+
     await manager.send_event(websocket, {
         "type": "agent_started",
         "preset": preset,
     })
 
-    # In a real implementation, this would start the agent loop
-    # and stream tool calls, approvals, etc.
+    if not message.strip():
+        await manager.send_event(websocket, {
+            "type": "error",
+            "message": "Empty message",
+        })
+        return
+
+    backend = get_model_backend()
+    if backend is None:
+        await manager.send_event(websocket, {
+            "type": "error",
+            "message": "No model loaded. Please load a model first.",
+        })
+        return
+
+    message_id = f"agent_{int(time.time() * 1000)}"
+    start_time = time.time()
+
+    try:
+        # Import agent engine
+        from ggufloader.core.agent.agent_engine import AgentEngine, extract_json
+
+        # Build LLM callable from backend
+        def llm_call(prompt, max_tokens=2048, temperature=0.2):
+            """Synchronous LLM call for the agent engine."""
+            messages = [{"role": "user", "content": prompt}]
+            if system_prompt:
+                messages.insert(0, {"role": "system", "content": system_prompt})
+            # Use non-streaming generate
+            if hasattr(backend, "chat"):
+                return backend.chat(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            # Fallback: collect streaming tokens
+            result = []
+            for token in backend.chat_stream(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                result.append(token)
+            return "".join(result)
+
+        # Create agent engine
+        workspace = data.get("workspace", ".")
+        agent = AgentEngine(
+            llm=llm_call,
+            workspace=workspace,
+            max_tokens=max_tokens,
+            max_steps=8,
+        )
+
+        # Callbacks that stream phase/plan events via WebSocket
+        loop = asyncio.get_event_loop()
+
+        def on_status(msg: str):
+            """Send phase status events to the frontend."""
+            # Detect phase from status prefix
+            phase = None
+            if msg.startswith("🎯"):
+                phase = "goal"
+            elif msg.startswith("📋"):
+                phase = "plan"
+            elif msg.startswith("▶"):
+                phase = "execute"
+            elif msg.startswith("🔍"):
+                phase = "verify"
+            elif msg.startswith("✅"):
+                phase = "continue"
+            elif msg.startswith("📝"):
+                phase = "finish"
+
+            # Determine current plan step if in execute phase
+            plan_step = None
+            if msg.startswith("▶ Step "):
+                import re as _re
+                m = _re.match(r"▶ Step (\d+)/(\d+): (.+)", msg)
+                if m:
+                    plan_step = {
+                        "current": int(m.group(1)),
+                        "total": int(m.group(2)),
+                        "description": m.group(3),
+                    }
+
+            event = {
+                "type": "agent_phase",
+                "message_id": message_id,
+                "status": msg,
+            }
+            if phase:
+                event["phase"] = phase
+            if plan_step:
+                event["plan_step"] = plan_step
+
+            # Update the REST-accessible plan state
+            update_plan_state(
+                phase=phase or _current_phase,
+                plan_step=plan_step,
+            )
+
+            asyncio.run_coroutine_threadsafe(
+                manager.send_event(websocket, event),
+                loop,
+            )
+
+        def on_tool(result: dict):
+            """Send tool result events to the frontend."""
+            asyncio.run_coroutine_threadsafe(
+                manager.send_event(websocket, {
+                    "type": "tool_result",
+                    "message_id": message_id,
+                    "tool": result.get("tool_name", "unknown"),
+                    "success": result.get("status") == "success",
+                    "result": result.get("content", result.get("error", ""))[:500],
+                }),
+                loop,
+            )
+
+        def on_plan_update(data: dict):
+            """Send plan step updates to the frontend in real time."""
+            asyncio.run_coroutine_threadsafe(
+                manager.send_event(websocket, {
+                    "type": "agent_plan_update",
+                    "message_id": message_id,
+                    "phase": data.get("phase", "idle"),
+                    "plan": data.get("plan", []),
+                    "step": data.get("step"),
+                    "step_status": data.get("status"),
+                }),
+                loop,
+            )
+
+        # Run the agent engine in a thread (it's synchronous)
+        result = await loop.run_in_executor(
+            None,
+            lambda: agent.process(
+                user_message=message,
+                on_status=on_status,
+                on_tool=on_tool,
+                on_plan_update=on_plan_update,
+            ),
+        )
+
+        # Send the final response with plan + phase_log
+        plan_data = result.get("plan", [])
+        phase_log_data = result.get("phase_log", [])
+
+        await manager.send_event(websocket, {
+            "type": "message_complete",
+            "message_id": message_id,
+            "content": result.get("response", ""),
+            "tokens_used": len(result.get("response", "").split()),
+            "duration_ms": int((time.time() - start_time) * 1000),
+            "plan": plan_data,
+            "phase_log": phase_log_data,
+        })
+
+        await manager.send_event(websocket, {
+            "type": "agent_complete",
+            "message_id": message_id,
+            "plan": plan_data,
+            "phase_log": phase_log_data,
+        })
+
+        # Update REST-accessible state with final plan
+        update_plan_state(
+            phase="idle",
+            plan=plan_data,
+            phase_log=phase_log_data,
+        )
+
+    except Exception as e:
+        logger.error("Agent execution failed: %s", e, exc_info=True)
+        await manager.send_event(websocket, {
+            "type": "error",
+            "message": f"Agent error: {e}",
+        })
 
 
 async def handle_agent_stop(websocket: WebSocket):
