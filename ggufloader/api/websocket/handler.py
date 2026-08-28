@@ -301,13 +301,15 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 result.append(token)
             return "".join(result)
 
-        # Create agent engine
+        # Create agent engine with model-specific routing
         workspace = data.get("workspace", ".")
+        model_path = getattr(backend, "model_path", None)
         agent = AgentEngine(
             llm=llm_call,
             workspace=workspace,
             max_tokens=max_tokens,
             max_steps=8,
+            model_path=model_path,
         )
 
         # Callbacks that stream phase/plan events via WebSocket
