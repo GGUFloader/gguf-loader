@@ -1,16 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
-  X,
-  Bot,
-  Palette,
-  Keyboard,
-  Cpu,
-  Sliders,
-  Monitor,
-  Moon,
-  Sun,
+  X, Bot, Palette, Keyboard, Cpu, Sliders, Monitor, Moon, Sun,
+  FolderOpen, RefreshCw, Zap, Trash2,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
+import { gpuApi } from '../../api/client'
 
 interface Props {
   onClose: () => void
@@ -19,6 +13,7 @@ interface Props {
 const TABS = [
   { id: 'model', label: 'Model', icon: Cpu },
   { id: 'agent', label: 'Agent', icon: Bot },
+  { id: 'hardware', label: 'Hardware', icon: Zap },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'keyboard', label: 'Keyboard', icon: Keyboard },
 ]
@@ -38,7 +33,6 @@ const SHORTCUTS = [
   { keys: 'Enter', action: 'Send message' },
   { keys: 'Shift+Enter', action: 'New line' },
   { keys: '@', action: 'Mention file' },
-  { keys: '/', action: 'Slash commands' },
   { keys: 'Ctrl+M', action: 'Toggle agent mode' },
   { keys: 'Esc', action: 'Stop generation' },
   { keys: 'Ctrl+/', action: 'Keyboard shortcuts' },
@@ -49,30 +43,126 @@ const SHORTCUTS = [
   { keys: 'Ctrl+L', action: 'Clear terminal' },
 ]
 
+const DEFAULT_SAMPLING = {
+  temperature: 0.7,
+  top_p: 0.9,
+  min_p: 0.05,
+  top_k: 40,
+  repeat_penalty: 1.1,
+  max_tokens: 4096,
+}
+
 export function SettingsDialog({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState('model')
   const { theme, toggleTheme } = useUIStore()
 
-  // Model settings state
+  // Model settings
   const [gpuLayers, setGpuLayers] = useState(-1)
   const [ctxLength, setCtxLength] = useState(32768)
   const [autoLoad, setAutoLoad] = useState(false)
 
-  // Agent settings state
+  // Sampling params
+  const [sampling, setSampling] = useState(DEFAULT_SAMPLING)
+  const isGreedy = sampling.temperature === 0
+
+  // Agent settings
   const [preset, setPreset] = useState('standard')
   const [maxToolCalls, setMaxToolCalls] = useState(20)
   const [requireApproval, setRequireApproval] = useState(true)
   const [autoCommit, setAutoCommit] = useState(false)
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [ragEnabled, setRagEnabled] = useState(false)
+  const [ragFolder, setRagFolder] = useState('')
+  const [workspace, setWorkspace] = useState('')
 
-  // Appearance state
+  // Hardware
+  const [gpuStatus, setGpuStatus] = useState<any>(null)
+  const [gpuInstalling, setGpuInstalling] = useState(false)
+  const [gpuLoading, setGpuLoading] = useState(true)
+
+  // Appearance
   const [fontSize, setFontSize] = useState(14)
   const [compactMode, setCompactMode] = useState(false)
   const [accentColor, setAccentColor] = useState('#f59e0b')
 
+  // Load GPU status on mount
+  useEffect(() => {
+    gpuApi.status().then(setGpuStatus).catch(() => {}).finally(() => setGpuLoading(false))
+  }, [])
+
+  // Load saved settings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ggufloader_settings')
+      if (saved) {
+        const s = JSON.parse(saved)
+        if (s.sampling) setSampling({ ...DEFAULT_SAMPLING, ...s.sampling })
+        if (s.gpuLayers !== undefined) setGpuLayers(s.gpuLayers)
+        if (s.ctxLength) setCtxLength(s.ctxLength)
+        if (s.systemPrompt) setSystemPrompt(s.systemPrompt)
+        if (s.workspace) setWorkspace(s.workspace)
+        if (s.preset) setPreset(s.preset)
+        if (s.maxToolCalls) setMaxToolCalls(s.maxToolCalls)
+        if (s.requireApproval !== undefined) setRequireApproval(s.requireApproval)
+        if (s.ragEnabled !== undefined) setRagEnabled(s.ragEnabled)
+        if (s.ragFolder) setRagFolder(s.ragFolder)
+        if (s.fontSize) setFontSize(s.fontSize)
+        if (s.compactMode !== undefined) setCompactMode(s.compactMode)
+        if (s.accentColor) setAccentColor(s.accentColor)
+      }
+    } catch {}
+  }, [])
+
+  function saveSettings() {
+    const settings = {
+      sampling, gpuLayers, ctxLength, systemPrompt, workspace,
+      preset, maxToolCalls, requireApproval, autoCommit,
+      ragEnabled, ragFolder, fontSize, compactMode, accentColor,
+    }
+    localStorage.setItem('ggufloader_settings', JSON.stringify(settings))
+  }
+
+  function updateSampling(key: string, value: number) {
+    setSampling(prev => ({ ...prev, [key]: value }))
+    setTimeout(saveSettings, 100)
+  }
+
+  async function handleGpuInstall() {
+    setGpuInstalling(true)
+    try {
+      await gpuApi.install()
+      const status = await gpuApi.status()
+      setGpuStatus(status)
+    } catch {}
+    setGpuInstalling(false)
+  }
+
+  function handleBrowseWorkspace() {
+    if ((window as any).electronAPI?.openFolderDialog) {
+      (window as any).electronAPI.openFolderDialog().then((path: string | null) => {
+        if (path) { setWorkspace(path); setTimeout(saveSettings, 100) }
+      })
+    } else {
+      const path = prompt('Enter workspace folder path:')
+      if (path) { setWorkspace(path); setTimeout(saveSettings, 100) }
+    }
+  }
+
+  function handleBrowseRag() {
+    if ((window as any).electronAPI?.openFolderDialog) {
+      (window as any).electronAPI.openFolderDialog().then((path: string | null) => {
+        if (path) { setRagFolder(path); setTimeout(saveSettings, 100) }
+      })
+    } else {
+      const path = prompt('Enter RAG documents folder path:')
+      if (path) { setRagFolder(path); setTimeout(saveSettings, 100) }
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-surface border border-border rounded-xl shadow-2xl w-[680px] max-h-[80vh] flex flex-col overflow-hidden"
+        className="bg-surface border border-border rounded-xl shadow-2xl w-[720px] max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -81,10 +171,7 @@ export function SettingsDialog({ onClose }: Props) {
             <Sliders size={18} className="text-accent" />
             <h2 className="text-base font-semibold text-text">Settings</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text rounded-lg hover:bg-elevated transition-colors"
-          >
+          <button onClick={onClose} className="p-1.5 text-text-muted hover:text-text rounded-lg hover:bg-elevated transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -95,15 +182,8 @@ export function SettingsDialog({ onClose }: Props) {
             {TABS.map((tab) => {
               const Icon = tab.icon
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-accent/10 text-accent font-medium'
-                      : 'text-text-sec hover:bg-elevated'
-                  }`}
-                >
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${activeTab === tab.id ? 'bg-accent/10 text-accent font-medium' : 'text-text-sec hover:bg-elevated'}`}>
                   <Icon size={15} />
                   {tab.label}
                 </button>
@@ -113,98 +193,188 @@ export function SettingsDialog({ onClose }: Props) {
 
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto px-6 py-5">
+            {/* === MODEL TAB === */}
             {activeTab === 'model' && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <Section title="Model Loading">
-                  <Field label="GPU Layers (-1 = auto)">
-                    <input
-                      type="number"
-                      value={gpuLayers}
-                      onChange={(e) => setGpuLayers(Number(e.target.value))}
-                      className="w-24 bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent"
-                    />
+                  <Field label="GPU Layers">
+                    <div className="flex items-center gap-2">
+                      <input type="number" value={gpuLayers} onChange={(e) => { setGpuLayers(Number(e.target.value)); setTimeout(saveSettings, 100) }}
+                        className="w-24 bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent" />
+                      <span className="text-xs text-text-muted">-1 = auto, 0 = CPU</span>
+                    </div>
                   </Field>
                   <Field label="Context Length">
-                    <select
-                      value={ctxLength}
-                      onChange={(e) => setCtxLength(Number(e.target.value))}
-                      className="bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent"
-                    >
-                      <option value={2048}>2,048</option>
-                      <option value={4096}>4,096</option>
-                      <option value={8192}>8,192</option>
-                      <option value={16384}>16,384</option>
-                      <option value={32768}>32,768</option>
-                      <option value={65536}>65,536</option>
-                      <option value={131072}>131,072</option>
+                    <select value={ctxLength} onChange={(e) => { setCtxLength(Number(e.target.value)); setTimeout(saveSettings, 100) }}
+                      className="bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent">
+                      {[2048,4096,8192,16384,32768,65536,131072].map(v => (
+                        <option key={v} value={v}>{v.toLocaleString()}</option>
+                      ))}
                     </select>
                   </Field>
                   <Field label="Auto-load last model">
                     <Toggle checked={autoLoad} onChange={setAutoLoad} />
                   </Field>
                 </Section>
+
+                <Section title="Sampling Parameters">
+                  {isGreedy && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent/20 rounded-lg text-xs text-accent mb-2">
+                      <Zap size={12} /> Greedy mode (temp=0): sampling params ignored
+                    </div>
+                  )}
+                  <SliderField label="Temperature" value={sampling.temperature} min={0} max={2} step={0.05}
+                    onChange={(v) => updateSampling('temperature', v)} hint="Higher = more creative" />
+                  <SliderField label="Top-P" value={sampling.top_p} min={0.05} max={1} step={0.01}
+                    onChange={(v) => updateSampling('top_p', v)} hint="Nucleus sampling" />
+                  <SliderField label="Min-P" value={sampling.min_p} min={0} max={1} step={0.01}
+                    onChange={(v) => updateSampling('min_p', v)} hint="Min probability threshold" />
+                  <Field label="Top-K">
+                    <input type="number" value={sampling.top_k} min={0} max={200}
+                      onChange={(e) => updateSampling('top_k', Number(e.target.value))}
+                      className="w-20 bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent" />
+                  </Field>
+                  <SliderField label="Repeat Penalty" value={sampling.repeat_penalty} min={0.5} max={2} step={0.01}
+                    onChange={(v) => updateSampling('repeat_penalty', v)} hint=">1.0 = penalize repeats" />
+                  <Field label="Max Tokens">
+                    <input type="number" value={sampling.max_tokens} min={64} max={65536} step={256}
+                      onChange={(e) => updateSampling('max_tokens', Number(e.target.value))}
+                      className="w-24 bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent" />
+                  </Field>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setSampling(DEFAULT_SAMPLING); setTimeout(saveSettings, 100) }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-elevated border border-border rounded-lg text-xs text-text-sec hover:border-accent transition-colors">
+                      <Trash2 size={11} /> Reset Defaults
+                    </button>
+                  </div>
+                </Section>
               </div>
             )}
 
+            {/* === AGENT TAB === */}
             {activeTab === 'agent' && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <Section title="Agent Preset">
                   <div className="grid grid-cols-2 gap-2">
                     {['standard', 'agent', 'minimal', 'creator'].map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setPreset(p)}
-                        className={`px-3 py-2 rounded-lg text-sm capitalize transition-colors ${
-                          preset === p
-                            ? 'bg-accent/15 text-accent border border-accent/30'
-                            : 'bg-elevated text-text-sec border border-border hover:border-accent/30'
-                        }`}
-                      >
+                      <button key={p} onClick={() => { setPreset(p); setTimeout(saveSettings, 100) }}
+                        className={`px-3 py-2 rounded-lg text-sm capitalize transition-colors ${preset === p ? 'bg-accent/15 text-accent border border-accent/30' : 'bg-elevated text-text-sec border border-border hover:border-accent/30'}`}>
                         {p}
                       </button>
                     ))}
                   </div>
                 </Section>
+
+                <Section title="System Prompt">
+                  <textarea value={systemPrompt} onChange={(e) => { setSystemPrompt(e.target.value); setTimeout(saveSettings, 100) }}
+                    placeholder="You are a helpful assistant..."
+                    rows={4}
+                    className="w-full bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-muted outline-none focus:border-accent resize-none" />
+                  <p className="text-xs text-text-muted mt-1">Injected as system message at the start of every conversation</p>
+                </Section>
+
+                <Section title="Workspace">
+                  <div className="flex gap-2">
+                    <input value={workspace} onChange={(e) => { setWorkspace(e.target.value); setTimeout(saveSettings, 100) }}
+                      placeholder="Select project folder..." readOnly
+                      className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-muted outline-none focus:border-accent font-mono" />
+                    <button onClick={handleBrowseWorkspace}
+                      className="px-3 py-2 bg-elevated border border-border rounded-lg text-sm text-text-sec hover:border-accent transition-colors">
+                      <FolderOpen size={16} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-text-muted mt-1">Agent tools are sandboxed to this folder</p>
+                </Section>
+
                 <Section title="Safety">
                   <Field label="Max tool calls per turn">
-                    <input
-                      type="number"
-                      value={maxToolCalls}
-                      onChange={(e) => setMaxToolCalls(Number(e.target.value))}
-                      className="w-24 bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent"
-                    />
+                    <input type="number" value={maxToolCalls} min={1} max={100}
+                      onChange={(e) => { setMaxToolCalls(Number(e.target.value)); setTimeout(saveSettings, 100) }}
+                      className="w-20 bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent" />
                   </Field>
                   <Field label="Require approval for dangerous tools">
-                    <Toggle checked={requireApproval} onChange={setRequireApproval} />
+                    <Toggle checked={requireApproval} onChange={(v) => { setRequireApproval(v); setTimeout(saveSettings, 100) }} />
                   </Field>
                   <Field label="Auto-commit on file changes">
-                    <Toggle checked={autoCommit} onChange={setAutoCommit} />
+                    <Toggle checked={autoCommit} onChange={(v) => { setAutoCommit(v); setTimeout(saveSettings, 100) }} />
                   </Field>
+                </Section>
+
+                <Section title="LocalDocs (RAG)">
+                  <Field label="Enable RAG">
+                    <Toggle checked={ragEnabled} onChange={(v) => { setRagEnabled(v); setTimeout(saveSettings, 100) }} />
+                  </Field>
+                  {ragEnabled && (
+                    <div className="flex gap-2">
+                      <input value={ragFolder} onChange={(e) => { setRagFolder(e.target.value); setTimeout(saveSettings, 100) }}
+                        placeholder="Document folder path..."
+                        className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-muted outline-none focus:border-accent font-mono" />
+                      <button onClick={handleBrowseRag}
+                        className="px-3 py-2 bg-elevated border border-border rounded-lg text-sm text-text-sec hover:border-accent transition-colors">
+                        <FolderOpen size={16} />
+                      </button>
+                    </div>
+                  )}
                 </Section>
               </div>
             )}
 
+            {/* === HARDWARE TAB === */}
+            {activeTab === 'hardware' && (
+              <div className="space-y-6">
+                <Section title="GPU Status">
+                  {gpuLoading ? (
+                    <div className="flex items-center gap-2 text-text-muted text-sm">
+                      <RefreshCw size={14} className="animate-spin" /> Checking GPU...
+                    </div>
+                  ) : gpuStatus ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${gpuStatus.gpu_available ? 'bg-green-400' : 'bg-text-muted'}`} />
+                        <span className="text-sm text-text">
+                          {gpuStatus.gpu_available ? 'GPU Available' : 'No GPU Detected'}
+                        </span>
+                        <span className="text-xs text-text-muted">
+                          Status: {gpuStatus.status || 'unknown'}
+                        </span>
+                      </div>
+                      <button onClick={handleGpuInstall} disabled={gpuInstalling}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          gpuInstalling ? 'bg-accent/20 text-accent' : 'bg-accent text-onAccent hover:bg-accent-hover'
+                        }`}>
+                        {gpuInstalling ? <><RefreshCw size={14} className="animate-spin" /> Installing...</> : <><Cpu size={14} /> Install GPU Support</>}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-muted">Could not detect GPU status</p>
+                  )}
+                </Section>
+
+                <Section title="System Info">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-elevated/50 rounded-lg p-3">
+                      <div className="text-text-muted text-xs mb-1">Platform</div>
+                      <div className="text-text">{navigator.platform}</div>
+                    </div>
+                    <div className="bg-elevated/50 rounded-lg p-3">
+                      <div className="text-text-muted text-xs mb-1">Cores</div>
+                      <div className="text-text">{navigator.hardwareConcurrency || '?'}</div>
+                    </div>
+                  </div>
+                </Section>
+              </div>
+            )}
+
+            {/* === APPEARANCE TAB === */}
             {activeTab === 'appearance' && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <Section title="Theme">
                   <Field label="Mode">
                     <div className="flex gap-2">
-                      {[
-                        { id: 'dark', icon: Moon, label: 'Dark' },
-                        { id: 'light', icon: Sun, label: 'Light' },
-                        { id: 'system', icon: Monitor, label: 'System' },
-                      ].map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => theme !== t.id && toggleTheme()}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                            theme === t.id
-                              ? 'bg-accent/15 text-accent border border-accent/30'
-                              : 'bg-elevated text-text-sec border border-border hover:border-accent/30'
-                          }`}
-                        >
-                          <t.icon size={13} />
-                          {t.label}
+                      {[{ id: 'dark', icon: Moon, label: 'Dark' }, { id: 'light', icon: Sun, label: 'Light' }, { id: 'system', icon: Monitor, label: 'System' }].map((t) => (
+                        <button key={t.id} onClick={() => theme !== t.id && toggleTheme()}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${theme === t.id ? 'bg-accent/15 text-accent border border-accent/30' : 'bg-elevated text-text-sec border border-border hover:border-accent/30'}`}>
+                          <t.icon size={13} />{t.label}
                         </button>
                       ))}
                     </div>
@@ -213,17 +383,9 @@ export function SettingsDialog({ onClose }: Props) {
                 <Section title="Accent Color">
                   <div className="flex gap-2 flex-wrap">
                     {ACCENT_COLORS.map((c) => (
-                      <button
-                        key={c.value}
-                        onClick={() => setAccentColor(c.value)}
-                        className={`w-7 h-7 rounded-full border-2 transition-all ${
-                          accentColor === c.value
-                            ? 'border-white scale-110'
-                            : 'border-transparent hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: c.value }}
-                        title={c.name}
-                      />
+                      <button key={c.value} onClick={() => { setAccentColor(c.value); setTimeout(saveSettings, 100) }}
+                        className={`w-7 h-7 rounded-full border-2 transition-all ${accentColor === c.value ? 'border-white scale-110' : 'border-transparent hover:scale-105'}`}
+                        style={{ backgroundColor: c.value }} title={c.name} />
                     ))}
                   </div>
                 </Section>
@@ -231,40 +393,29 @@ export function SettingsDialog({ onClose }: Props) {
                   <Field label="Font Size">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-text-muted">10</span>
-                      <input
-                        type="range"
-                        min={10}
-                        max={22}
-                        value={fontSize}
-                        onChange={(e) => setFontSize(Number(e.target.value))}
-                        className="flex-1 accent-accent"
-                      />
+                      <input type="range" min={10} max={22} value={fontSize}
+                        onChange={(e) => { setFontSize(Number(e.target.value)); setTimeout(saveSettings, 100) }}
+                        className="flex-1 accent-accent" />
                       <span className="text-xs text-text-muted">22</span>
                       <span className="text-xs text-accent w-8 text-center">{fontSize}px</span>
                     </div>
                   </Field>
                   <Field label="Compact mode">
-                    <Toggle checked={compactMode} onChange={setCompactMode} />
+                    <Toggle checked={compactMode} onChange={(v) => { setCompactMode(v); setTimeout(saveSettings, 100) }} />
                   </Field>
                 </Section>
               </div>
             )}
 
+            {/* === KEYBOARD TAB === */}
             {activeTab === 'keyboard' && (
               <div className="space-y-3">
-                <div className="text-sm text-text-muted mb-3">
-                  Keyboard shortcuts reference
-                </div>
+                <p className="text-sm text-text-muted mb-3">Keyboard shortcuts reference</p>
                 <div className="space-y-1">
                   {SHORTCUTS.map((s, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-elevated/40"
-                    >
+                    <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-elevated/40">
                       <span className="text-sm text-text-sec">{s.action}</span>
-                      <kbd className="px-2 py-0.5 bg-elevated border border-border rounded text-xs text-text-muted font-mono">
-                        {s.keys}
-                      </kbd>
+                      <kbd className="px-2 py-0.5 bg-elevated border border-border rounded text-xs text-text-muted font-mono">{s.keys}</kbd>
                     </div>
                   ))}
                 </div>
@@ -295,20 +446,30 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+function SliderField({ label, value, min, max, step, onChange, hint }: {
+  label: string; value: number; min: number; max: number; step: number;
+  onChange: (v: number) => void; hint?: string
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm text-text-sec">{label}</span>
+        <span className="text-xs text-accent font-mono w-12 text-right">{value.toFixed(2)}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-accent" />
+      {hint && <p className="text-[10px] text-text-muted mt-0.5">{hint}</p>}
+    </div>
+  )
+}
+
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative w-9 h-5 rounded-full transition-colors ${
-        checked ? 'bg-accent' : 'bg-border'
-      }`}
-    >
-      <div
-        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-          checked ? 'translate-x-4.5' : 'translate-x-0.5'
-        }`}
-        style={{ left: checked ? '18px' : '2px' }}
-      />
+    <button onClick={() => onChange(!checked)}
+      className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-border'}`}>
+      <div className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+        style={{ left: checked ? '18px' : '2px' }} />
     </button>
   )
 }
