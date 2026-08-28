@@ -18,7 +18,7 @@ export const useUIStore = create<UIState>((set) => ({
   leftPanelOpen: true,
   rightPanelOpen: true,
   rightPanelTab: 'files',
-  agentMode: false,
+  agentMode: true,
 
   toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
