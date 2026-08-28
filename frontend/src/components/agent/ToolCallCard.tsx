@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -8,6 +8,9 @@ import {
   Clock,
   Copy,
   Check,
+  Shield,
+  AlertTriangle,
+  AlertOctagon,
 } from 'lucide-react'
 import { MarkdownRenderer } from '../chat/MarkdownRenderer'
 import type { ToolCall } from '../../stores/chatStore'
@@ -15,6 +18,37 @@ import type { ToolCall } from '../../stores/chatStore'
 interface Props {
   tool: ToolCall
   onApprove?: (id: string, approved: boolean) => void
+}
+
+// Risk classification based on tool name (matches OpenHands pattern)
+const TOOL_RISK: Record<string, 'low' | 'medium' | 'high'> = {
+  read_file: 'low',
+  list_files: 'low',
+  search_files: 'low',
+  get_file: 'low',
+  write_file: 'medium',
+  edit_file: 'medium',
+  create_file: 'medium',
+  run_terminal_command: 'high',
+  delete_file: 'high',
+  bash: 'high',
+  shell: 'high',
+}
+
+function getToolRisk(name: string): 'low' | 'medium' | 'high' {
+  const lower = name.toLowerCase()
+  for (const [key, risk] of Object.entries(TOOL_RISK)) {
+    if (lower.includes(key)) return risk
+  }
+  if (lower.includes('read') || lower.includes('get') || lower.includes('list') || lower.includes('search')) return 'low'
+  if (lower.includes('write') || lower.includes('edit') || lower.includes('create') || lower.includes('update')) return 'medium'
+  return 'high'
+}
+
+const RISK_CONFIG = {
+  low: { icon: Shield, label: 'LOW', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/30' },
+  medium: { icon: AlertTriangle, label: 'MED', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
+  high: { icon: AlertOctagon, label: 'HIGH', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30' },
 }
 
 const STATUS_CONFIG = {
@@ -28,7 +62,7 @@ const STATUS_CONFIG = {
   },
   completed: {
     icon: CheckCircle2,
-    label: 'Completed',
+    label: 'Done',
     color: 'text-green-400',
     bg: 'bg-green-500/10',
     border: 'border-green-500/30',
@@ -44,7 +78,7 @@ const STATUS_CONFIG = {
   },
   pending_approval: {
     icon: Clock,
-    label: 'Awaiting Approval',
+    label: 'Awaiting',
     color: 'text-yellow-400',
     bg: 'bg-yellow-500/10',
     border: 'border-yellow-500/30',
@@ -55,8 +89,25 @@ const STATUS_CONFIG = {
 export function ToolCallCard({ tool, onApprove }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [duration, setDuration] = useState<number | null>(null)
+  const [startTime] = useState(Date.now())
   const config = STATUS_CONFIG[tool.status]
   const Icon = config.icon
+  const risk = getToolRisk(tool.name)
+  const riskConfig = RISK_CONFIG[risk]
+  const RiskIcon = riskConfig.icon
+
+  // Track duration while running
+  useEffect(() => {
+    if (tool.status !== 'running') {
+      if (duration === null) setDuration(Date.now() - startTime)
+      return
+    }
+    const interval = setInterval(() => {
+      setDuration(Date.now() - startTime)
+    }, 100)
+    return () => clearInterval(interval)
+  }, [tool.status, startTime, duration])
 
   function handleCopy() {
     const text = JSON.stringify(tool.args, null, 2)
@@ -65,8 +116,13 @@ export function ToolCallCard({ tool, onApprove }: Props) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  function formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
+  }
+
   return (
-    <div className={`rounded-lg border ${config.border} ${config.bg} overflow-hidden`}>
+    <div className={`rounded-lg border ${config.border} ${config.bg} overflow-hidden animate-slide-up`}>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2">
         <button
@@ -83,28 +139,42 @@ export function ToolCallCard({ tool, onApprove }: Props) {
             className={`${config.color} ${config.animate ? 'animate-spin' : ''}`}
           />
           <span className="text-sm font-medium text-text">{tool.name}</span>
+
+          {/* Risk badge */}
+          <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${riskConfig.bg} ${riskConfig.color} ${riskConfig.border} border font-medium`}>
+            <RiskIcon size={9} />
+            {riskConfig.label}
+          </span>
+
+          {/* Duration */}
+          {duration !== null && (
+            <span className="text-[10px] text-text-muted font-mono">
+              {formatDuration(duration)}
+            </span>
+          )}
+
           <span className={`text-xs ${config.color}`}>{config.label}</span>
         </button>
 
         <div className="flex items-center gap-1">
           <button
             onClick={handleCopy}
-            className="p-1 text-text-muted hover:text-text rounded transition-colors"
+            className="p-1 text-text-muted hover:text-text rounded transition-colors opacity-0 group-hover:opacity-100"
             title="Copy args"
           >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
+            {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
           </button>
         </div>
       </div>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="border-t border-border/50 px-3 py-2 space-y-2">
+        <div className="border-t border-border/50 px-3 py-2 space-y-2 animate-fade-in">
           {/* Arguments */}
           {Object.keys(tool.args).length > 0 && (
             <div>
-              <div className="text-xs text-text-muted mb-1">Arguments</div>
-              <pre className="text-xs bg-bg/50 rounded p-2 overflow-x-auto text-text-sec">
+              <div className="text-xs text-text-muted mb-1 font-medium">Arguments</div>
+              <pre className="text-xs bg-bg/50 rounded p-2 overflow-x-auto text-text-sec border border-border/30">
                 {JSON.stringify(tool.args, null, 2)}
               </pre>
             </div>
@@ -113,8 +183,8 @@ export function ToolCallCard({ tool, onApprove }: Props) {
           {/* Result */}
           {tool.result && (
             <div>
-              <div className="text-xs text-text-muted mb-1">Result</div>
-              <div className="text-xs bg-bg/50 rounded p-2 max-h-40 overflow-y-auto">
+              <div className="text-xs text-text-muted mb-1 font-medium">Result</div>
+              <div className="text-xs bg-bg/50 rounded p-2 max-h-40 overflow-y-auto border border-border/30">
                 <MarkdownRenderer content={tool.result} />
               </div>
             </div>
