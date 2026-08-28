@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from ggufloader.api.routes import agent, chat, files, gpu, model, session
+from ggufloader.api.routes import agent, chat, files, files_render, gpu, model, session, mcp, tools, workflows, plugins
 from ggufloader.api.websocket.handler import websocket_endpoint
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,12 @@ def create_app() -> FastAPI:
     app.include_router(session.router, prefix="/api/sessions", tags=["sessions"])
     app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
     app.include_router(files.router, prefix="/api/files", tags=["files"])
+    app.include_router(files_render.router, prefix="/api/files", tags=["files-render"])
     app.include_router(gpu.router, prefix="/api/gpu", tags=["gpu"])
+    app.include_router(mcp.router, prefix="/api/mcp", tags=["mcp"])
+    app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
+    app.include_router(workflows.router, prefix="/api/workflows", tags=["workflows"])
+    app.include_router(plugins.router, prefix="/api/plugins", tags=["plugins"])
 
     # WebSocket endpoint
     app.websocket("/ws")(websocket_endpoint)
