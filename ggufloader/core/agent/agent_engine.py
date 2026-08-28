@@ -18,27 +18,71 @@ Flow per user message (multi-step, budgeted):
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .text_extract import TEXT_EXTENSIONS
-from .tool_registry import ToolRegistry, tool_content_for_context, validate_tool_call
+from .tool_registry import ToolRegistry, GitTool, tool_content_for_context, validate_tool_call
 from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemory
 from .history_processors import (
     HistoryProcessorPipeline,
     SummaryInserter,
     create_default_pipeline,
 )
+from .delegation import ChildAgent, should_delegate
+from .context_budget import ContextBudget, estimate_tokens
+from .memory_persistence import MemoryPersistence
+from .plugin_manager import PluginManager
+from .retry_handler import RetryHandler
+from .checkpoint_manager import CheckpointManager
+from .stream_handler import StreamHandler, StreamAbort
+from .auto_commit import AutoCommit
+from .auto_test import AutoTest
+from .agents_md import AgentsMdGenerator
+from .cost_estimator import CostEstimator
+from .parallel_executor import ParallelExecutor
+from .approval_manager import ApprovalManager
+from .structured_output import StructuredOutput, SCHEMAS
+from .knowledge_base import KnowledgeBase
+from .mcp_client import MCPClient
+from .health_monitor import HealthMonitor
+from .audit_log import AuditLog, EventType
+from .self_improve import SelfImprove
+from .config_manager import ConfigManager, AgentConfig
+from .onboarding import OnboardingWizard
+from .capabilities import CapabilitiesRegistry
+from .workflow_engine import WorkflowEngine, Workflow
+from .hooks import Hooks, HookPoint
+from .response_cache import ResponseCache
+from .workflow_templates import WorkflowTemplates
+from .benchmark import BenchmarkSuite, BenchmarkTask
+from .error_patterns import ErrorPatternDetector
+from .tool_analytics import ToolAnalytics
+from .session_replay import SessionReplay
+from .rate_limiter import RateLimiter
+from .feature_index import get_all_features, get_feature_count
+from .docs_generator import DocsGenerator
+from .auto_setup import AutoSetup
+from .config_migration import ConfigMigration
+from .project_templates import ProjectTemplateManager
 
 logger = logging.getLogger(__name__)
 
 StatusCallback = Callable[[str], None]
 ToolCallback = Callable[[Dict[str, Any]], None]
 ApprovalCallback = Callable[[Dict[str, Any]], bool]  # (payload) -> approved?
+
+# --- Risk levels for security assessment (from OpenHands) ---
+RISK_LOW = "low"       # read-only tools: list, read, search
+RISK_MEDIUM = "medium" # non-destructive writes: write_file, edit_file
+RISK_HIGH = "high"     # destructive/external: run_command, run_python, git write ops
 
 _SYSTEM_PROMPT = """You are an AI assistant built to help developers. You're knowledgeable, decisive, and supportive.
 
@@ -95,6 +139,39 @@ SUMMARIZE_KEYWORDS = (
 CLIP_RECENT = 2000   # last 3 tool results
 CLIP_OLD = 400       # older tool results
 CLIP_STEP_LOG = 200  # compact summaries in step log
+
+# --- Stuck detection constants (from OpenHands) ---
+MAX_CONSECUTIVE_SAME_TOOL = 3    # stop if same tool called 3x in a row
+MAX_CONSECUTIVE_FAILURES = 4     # stop if 4 failures in a row
+MAX_DUPLICATE_SIGNATURES = 3     # stop if same signature called 3x
+
+# --- Templated error messages (from SWE-agent) ---
+ERROR_TEMPLATES = {
+    "malformed_json": (
+        "Your response was not valid JSON. Reply with ONLY a JSON object:\n"
+        '{"reasoning": "...", "tool_calls": [...], "answer": "..."}'
+    ),
+    "missing_tool": (
+        "You referenced a tool that doesn't exist. Available tools: {tools}.\n"
+        "Check the tool name and try again."
+    ),
+    "missing_params": (
+        "The tool call is missing required parameters. Check the schema and retry."
+    ),
+    "blocked_command": (
+        "This command is blocked for safety. Try a different approach."
+    ),
+    "timeout": (
+        "The command timed out. Try a simpler command or reduce scope."
+    ),
+    "syntax_error": (
+        "The code has a syntax error. Fix it and retry."
+    ),
+    "stuck_loop": (
+        "The agent appears stuck (repeating the same actions).\n"
+        "Please describe what you want differently or try a new approach."
+    ),
+}
 
 # File types the agent can actually read (text/Markdown + extracted PDF/DOCX).
 READABLE_EXTS = TEXT_EXTENSIONS | frozenset({".pdf", ".docx"})
@@ -368,6 +445,232 @@ class AgentEngine:
         self._reflection_enabled = True
         self._max_reflections = 2
         self._reflection_count = 0
+        # --- Stuck detection state (from OpenHands) ---
+        self._consecutive_failures = 0
+        self._last_tool_name = ""
+        self._same_tool_count = 0
+        self._signature_counts: Dict[str, int] = {}
+        # --- Cost tracking (from Aider) ---
+        self._total_tokens = 0
+        self._step_tokens = 0
+        self._total_llm_calls = 0
+        # --- Security risk cache ---
+        self._risk_cache: Dict[str, str] = {}
+        # Context budget manager (Pydantic AI Harness compaction pattern)
+        self._context_budget = ContextBudget()
+        # Persistent memory across sessions (Aider memory pattern)
+        self._memory_store = MemoryPersistence(self.workspace)
+        # Plugin manager for custom tools
+        self._plugin_manager = PluginManager(self.workspace)
+        # Retry handler with exponential backoff (OpenHands RetryAgent pattern)
+        self._retry_handler = RetryHandler()
+        # Checkpoint manager for undo support (Aider .gguf-undo pattern)
+        self._checkpoint_mgr = CheckpointManager(self.workspace)
+        # Stream handler for graceful abort and JSON repair
+        self._stream_handler = StreamHandler()
+        self._abort: Optional[StreamAbort] = None
+        # Auto-commit after file edits (Aider pattern)
+        self._auto_commit = AutoCommit(self.workspace)
+        # Auto-test after code changes
+        self._auto_test = AutoTest(self.workspace)
+        # AGENTS.md generator
+        self._agents_md = AgentsMdGenerator(self.workspace)
+        # Cost estimator
+        self._cost_estimator = CostEstimator()
+        # Parallel executor for multi-task agent runs
+        self._parallel_executor = ParallelExecutor(max_workers=3)
+        # Approval manager with risk-based rules
+        self._approval_mgr = ApprovalManager()
+        # Structured output enforcer
+        self._structured_output = StructuredOutput()
+        # Project knowledge base
+        self._knowledge = KnowledgeBase(self.workspace)
+        # MCP client for external tool servers
+        self._mcp_client = MCPClient(self.workspace)
+        # Health monitor for system diagnostics
+        self._health = HealthMonitor()
+        # Audit log for full traceability
+        self._audit = AuditLog(self.workspace)
+        # Self-improvement from corrections
+        self._self_improve = SelfImprove(self.workspace)
+        # Unified configuration
+        self._config_mgr = ConfigManager(self.workspace)
+        # Capabilities registry
+        self._capabilities = CapabilitiesRegistry()
+        # Workflow engine for complex tasks
+        self._workflow_engine = WorkflowEngine()
+        self._workflow_templates = WorkflowTemplates(self._workflow_engine)
+        # Lifecycle hooks
+        self._hooks = Hooks()
+        # Response cache
+        self._response_cache = ResponseCache(workspace=self.workspace)
+        # Benchmark suite
+        self._benchmark = BenchmarkSuite(self.process)
+        # Error pattern detector
+        self._error_patterns = ErrorPatternDetector(self.workspace)
+        # Tool usage analytics
+        self._tool_analytics = ToolAnalytics()
+        # Session replay
+        self._replay = SessionReplay(self.workspace)
+        # Rate limiter
+        self._rate_limiter = RateLimiter()
+        # Auto-setup for first launch
+        self._auto_setup = AutoSetup(self.workspace)
+        # Config migration for version upgrades
+        self._config_migration = ConfigMigration(self.workspace)
+        # Project templates
+        self._project_templates = ProjectTemplateManager(self.workspace)
+
+    # ------------------------------------------------------------------
+    # Security risk assessment (from OpenHands)
+    # ------------------------------------------------------------------
+    def _assess_risk(self, tool_name: str, params: Dict[str, Any]) -> str:
+        """Classify the risk level of a tool call.
+
+        Returns RISK_LOW, RISK_MEDIUM, or RISK_HIGH.
+        High-risk tools get extra scrutiny before execution.
+        """
+        cache_key = f"{tool_name}:{json.dumps(params, sort_keys=True)[:200]}"
+        if cache_key in self._risk_cache:
+            return self._risk_cache[cache_key]
+
+        if tool_name in ("list_directory", "read_file", "search_files"):
+            risk = RISK_LOW
+        elif tool_name in ("write_file", "edit_file", "python_interpreter"):
+            risk = RISK_MEDIUM
+        elif tool_name == "run_command":
+            cmd = (params.get("command") or "").lower()
+            # Destructive commands are high risk
+            destructive = ("rm ", "rmdir", "del ", "format ", "shutdown",
+                           "reboot", "mkfs", "dd ", " > /dev/",
+                           "git push", "git reset --hard", "git clean")
+            risk = RISK_HIGH if any(d in cmd for d in destructive) else RISK_MEDIUM
+        elif tool_name == "run_python":
+            code = (params.get("code") or "").lower()
+            risky = ("os.remove", "shutil.rmtree", "subprocess",
+                     "__import__", "eval(", "exec(", "open(", "import os")
+            risk = RISK_HIGH if any(r in code for r in risky) else RISK_MEDIUM
+        elif tool_name == "git":
+            args = params.get("args", [])
+            if args and args[0] in GitTool.WRITE_OPS:
+                risk = RISK_HIGH
+            else:
+                risk = RISK_LOW
+        else:
+            risk = RISK_MEDIUM
+
+        self._risk_cache[cache_key] = risk
+        return risk
+
+    # ------------------------------------------------------------------
+    # Syntax validation (from SWE-agent: bash -n)
+    # ------------------------------------------------------------------
+    def _validate_syntax(self, tool_name: str, params: Dict[str, Any]) -> Optional[str]:
+        """Pre-execution syntax check. Returns error message or None.
+
+        - Python code: ast.parse() check
+        - Shell commands: basic pattern validation
+        This catches errors before they waste execution time.
+        """
+        if tool_name == "run_python":
+            code = params.get("code", "")
+            if not code.strip():
+                return "Empty Python code"
+            try:
+                ast.parse(code)
+            except SyntaxError as e:
+                return f"Python syntax error at line {e.lineno}: {e.msg}"
+        elif tool_name == "run_command":
+            cmd = params.get("command", "")
+            if not cmd.strip():
+                return "Empty command"
+            # Check for obviously broken commands
+            if cmd.count("\'") % 2 != 0:
+                return "Unmatched single quotes in command"
+            if cmd.count('\"') % 2 != 0:
+                return "Unmatched double quotes in command"
+        return None
+
+    # ------------------------------------------------------------------
+    # Stuck detection (from OpenHands)
+    # ------------------------------------------------------------------
+    def _check_stuck(self, call: Dict[str, Any]) -> Optional[str]:
+        """Detect if the agent is stuck in a loop. Returns error or None."""
+        tool_name = call.get("tool", "")
+        sig = self._signature(call)
+
+        # Track consecutive same-tool calls
+        if tool_name == self._last_tool_name:
+            self._same_tool_count += 1
+        else:
+            self._same_tool_count = 1
+            self._last_tool_name = tool_name
+
+        if self._same_tool_count >= MAX_CONSECUTIVE_SAME_TOOL:
+            return (
+                f"Stuck detection: '{tool_name}' called {self._same_tool_count} times in a row. "
+                "Try a different tool or approach."
+            )
+
+        # Track signature duplicates
+        self._signature_counts[sig] = self._signature_counts.get(sig, 0) + 1
+        if self._signature_counts[sig] >= MAX_DUPLICATE_SIGNATURES:
+            return (
+                f"Stuck detection: identical call attempted {self._signature_counts[sig]} times. "
+                "This approach is not working. Try something different."
+            )
+
+        # Track consecutive failures
+        if self._consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+            return (
+                f"Stuck detection: {self._consecutive_failures} consecutive failures. "
+                "The agent is going in circles. Please provide guidance or try a new approach."
+            )
+
+        return None
+
+    def _record_success(self) -> None:
+        """Reset failure counters on success."""
+        self._consecutive_failures = 0
+
+    def _record_failure(self) -> None:
+        """Increment failure counter."""
+        self._consecutive_failures += 1
+
+    # ------------------------------------------------------------------
+    # Post-edit verification (from Aider auto-lint)
+    # ------------------------------------------------------------------
+    def _verify_post_edit(self, call: Dict[str, Any], result: Dict[str, Any]) -> Optional[str]:
+        """After a file edit, verify the result is syntactically valid.
+
+        Returns a warning message if verification fails, or None if OK.
+        This prevents compounding errors from bad edits.
+        """
+        if result.get("status") != "success":
+            return None
+        tool_name = call.get("tool", "")
+        params = call.get("parameters", {})
+
+        if tool_name == "write_file":
+            path = params.get("path", "")
+            content = params.get("content", "")
+            if path.endswith(".py") and content.strip():
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    return f"Warning: {path} has syntax error at line {e.lineno}: {e.msg}. The model should fix this."
+        elif tool_name == "edit_file":
+            path = params.get("path", "")
+            if path.endswith(".py"):
+                # Re-read the file after edit to verify
+                try:
+                    resolved = self.tools.resolve(path)
+                    if resolved.is_file():
+                        source = resolved.read_text(encoding="utf-8")
+                        ast.parse(source)
+                except (SyntaxError, OSError) as e:
+                    return f"Warning: {path} has syntax error after edit: {e}. The model should fix this."
+        return None
 
     # ------------------------------------------------------------------
     # Reflection loop
@@ -482,6 +785,20 @@ class AgentEngine:
         self._pending_directive = ""
         self._directive_rounds = 0
 
+        # Context budget check — compact history if needed
+        strategy = self._context_budget.check_budget(self.conversation_history)
+        if strategy != "ok":
+            status(f"📦 Compacting context ({strategy})...")
+            self._context_budget.compact(self.conversation_history)
+
+        # Inject memory context if available
+        memory_ctx = self._memory_store.get_context(max_chars=1500)
+        if memory_ctx:
+            self.conversation_history.insert(0, {
+                "role": "system",
+                "content": memory_ctx,
+            })
+
         try:
             # 1. Optional quick analysis for complex requests
             if self._is_complex(user_message):
@@ -493,11 +810,30 @@ class AgentEngine:
                     status(f"💡 {analysis.strip()}")
                     status("")
 
+            # 1b. Delegation: spawn read-only child for exploration (Mini-Coding pattern)
+            if should_delegate(user_message):
+                status("🔍 Spawning exploration agent...")
+                child = ChildAgent(self.llm, self.workspace, self.tools, max_tokens=512)
+                delegation_result = child.explore(user_message)
+                if delegation_result.summary:
+                    status(f"📋 Exploration complete ({len(delegation_result.tools_used)} tools used)")
+                    # Inject the child's findings into context for the main agent
+                    self.conversation_history.append({
+                        "role": "assistant",
+                        "content": f"[Delegation result]: {delegation_result.summary}"
+                    })
+                    # Continue with main agent to formulate the answer
+
             tool_results: List[Dict[str, Any]] = []
             final_answer: Optional[str] = None
 
             # 2. Multi-step loop with a hard budget
             for step in range(1, self.max_steps + 1):
+                # Check for graceful abort
+                if self._abort and self._abort.is_aborted:
+                    status(f"⏹ Aborted: {self._abort.reason}")
+                    break
+
                 if step > 1:
                     status(f"▶ Step {step}/{self.max_steps}")
 
@@ -555,13 +891,37 @@ class AgentEngine:
                     if self._failed_signatures.get(signature, 0) >= 2:
                         status(f"  ⏭ Skipping repeated failing call: {self._describe(call)}")
                         continue
+                    # --- Stuck detection (from OpenHands) ---
+                    stuck_msg = self._check_stuck(call)
+                    if stuck_msg:
+                        status(f"  ⚠ {stuck_msg}")
+                        self._consecutive_failures = MAX_CONSECUTIVE_FAILURES
+                        failures.append((call, {"status": "error", "error": stuck_msg, "tool_name": call.get("tool", "")}))
+                        break
+
                     # Validate tool call before execution
                     validation_error = validate_tool_call(call, self.tools)
                     if validation_error:
                         status(f"  ✗ Invalid call: {validation_error}")
                         self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
+                        self._record_failure()
                         failures.append((call, {"status": "error", "error": validation_error, "tool_name": call.get("tool", "")}))
                         continue
+
+                    # --- Syntax validation (from SWE-agent bash -n) ---
+                    syntax_error = self._validate_syntax(call.get("tool", ""), call.get("parameters", {}))
+                    if syntax_error:
+                        status(f"  ✗ Syntax error: {syntax_error}")
+                        self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
+                        self._record_failure()
+                        failures.append((call, {"status": "error", "error": syntax_error, "tool_name": call.get("tool", "")}))
+                        continue
+
+                    # --- Security risk assessment (from OpenHands) ---
+                    risk = self._assess_risk(call.get("tool", ""), call.get("parameters", {}))
+                    if risk == RISK_HIGH:
+                        status(f"  🔴 High-risk action: {self._describe(call)}")
+
                     # Check approval before executing
                     if self.tools.requires_approval(call.get("tool", ""), call.get("parameters", {})):
                         approval_payload = {
@@ -569,6 +929,7 @@ class AgentEngine:
                             "call": call,
                             "description": self._describe(call),
                             "workspace": str(self.workspace),
+                            "risk": risk,
                         }
                         status(f"  🔐 Approval needed: {self._describe(call)}")
                         if not self._on_approval(approval_payload):
@@ -581,7 +942,12 @@ class AgentEngine:
                             if on_tool:
                                 on_tool(result)
                             status(f"  ✗ Approval denied")
+                            self._record_failure()
                             continue
+
+                    # Backup file before modification (Aider undo pattern)
+                    self._checkpoint_mgr.backup(
+                        call.get("tool", ""), call.get("parameters", {}))
                     result = self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
                     self._executed_calls.append(
                         {"signature": signature, "tool": call.get("tool", "")}
@@ -590,11 +956,19 @@ class AgentEngine:
                     if on_tool:
                         on_tool(result)
                     self._log_tool_result(call, result)
+
                     if result.get("status") == "success":
                         status(f"  ✓ {self._summarize_result(result)}")
+                        self._record_success()
+
+                        # --- Post-edit verification (from Aider auto-lint) ---
+                        verify_warn = self._verify_post_edit(call, result)
+                        if verify_warn:
+                            status(f"  ⚠ {verify_warn}")
                     else:
                         status(f"  ✗ {result.get('error', 'Unknown error')}")
                         self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
+                        self._record_failure()
                         failures.append((call, result))
 
                 # 3. One corrective retry per failed call
@@ -619,6 +993,11 @@ class AgentEngine:
                 final_answer = self._final_response(user_message, tool_results)
 
             self.conversation_history.append({"role": "assistant", "content": final_answer})
+
+            # Store useful facts from the session in persistent memory
+            if tool_results:
+                self._store_session_memories(user_message, final_answer, tool_results)
+
             return {"response": final_answer, "tool_results": tool_results}
 
         except Exception as e:
@@ -686,9 +1065,18 @@ class AgentEngine:
     # ------------------------------------------------------------------
     def _ask(self, prompt: str) -> str:
         try:
-            return self.llm(prompt, max_tokens=self.max_tokens, temperature=0.1)
+            # Use retry handler with exponential backoff
+            result = self._retry_handler.retry_llm(
+                self.llm, args=(prompt,),
+                kwargs={"max_tokens": self.max_tokens, "temperature": 0.1},
+            )
+            # Track token usage (rough estimate: 1 token ~ 4 chars)
+            self._total_llm_calls += 1
+            self._step_tokens += len(result) // 4 if result else 0
+            self._total_tokens += len(result) // 4 if result else 0
+            return result or ""
         except Exception as e:
-            logger.error("LLM call failed: %s", e)
+            logger.error("LLM call failed after retries: %s", e)
             return ""
 
     def _request_action(self) -> Optional[Dict[str, Any]]:
@@ -851,6 +1239,80 @@ class AgentEngine:
         if tool == "search_files":
             return f"Found {result.get('total_matches', 0)} matches" if result.get("total_matches") else "No matches"
         return "Done"
+
+    def request_abort(self, reason: str = "User requested stop") -> None:
+        """Request graceful abort of the current agent run."""
+        if self._abort is not None:
+            self._abort.abort(reason)
+        else:
+            abort = StreamAbort()
+            abort.abort(reason)
+            self._abort = abort
+
+    def start_new_session(self, session_id: str) -> None:
+        """Begin a new checkpoint session for undo support."""
+        self._checkpoint_mgr.start_session(session_id)
+
+    def end_session(self) -> Optional[str]:
+        """End the current checkpoint session."""
+        return self._checkpoint_mgr.end_session()
+
+    def undo_last(self) -> list:
+        """Undo the most recent file changes."""
+        return self._checkpoint_mgr.undo_last()
+
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Return combined performance statistics."""
+        return {
+            "tokens": {
+                "total": self._total_tokens,
+                "llm_calls": self._total_llm_calls,
+            },
+            "retries": self._retry_handler.get_stats(),
+            "checkpoints": self._checkpoint_mgr.get_stats(),
+            "context": self._context_budget.get_stats(),
+            "memories": self._memory_store.count(),
+            "plugins": self._plugin_manager.get_loaded(),
+            "auto_commit": self._auto_commit.get_stats(),
+            "auto_test": self._auto_test.get_stats(),
+            "cost": self._cost_estimator.summary(),
+        }
+
+    def _store_session_memories(self, user_message: str, answer: str,
+                                tool_results: List[Dict[str, Any]]) -> None:
+        """Extract and store useful facts from the session.
+
+        Learns from file reads, edits, and command outputs to build
+        persistent memory across sessions.
+        """
+        try:
+            # Learn file paths the user works with
+            for result in tool_results:
+                if result.get("status") != "success":
+                    continue
+                path = result.get("path", "")
+                if path and result.get("tool_name") in ("read_file", "write_file", "edit_file"):
+                    ext = Path(path).suffix
+                    if ext:
+                        self._memory_store.remember(
+                            f"user works with {ext} files",
+                            f"{path} ({ext})",
+                            category="pattern",
+                        )
+
+            # Learn from command outputs
+            for result in tool_results:
+                if result.get("tool_name") == "run_command" and result.get("status") == "success":
+                    output = str(result.get("result", ""))[:200]
+                    if output and len(output) > 10:
+                        self._memory_store.remember(
+                            f"command output: {user_message[:50]}",
+                            output[:150],
+                            category="context",
+                            source="session",
+                        )
+        except Exception:
+            pass  # Never crash on memory operations
 
     def _final_response(self, user_message: str, tool_results: List[Dict[str, Any]]) -> str:
         context = [f"User asked: {user_message}", "", "I completed these operations:"]

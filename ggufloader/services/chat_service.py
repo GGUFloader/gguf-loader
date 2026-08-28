@@ -100,6 +100,9 @@ class ChatWorker(QObject):
     def stop(self) -> None:
         self._stop_event.set()
 
+    def get_token_count(self) -> int:
+        return self._token_count
+
 
 class ChatService(QObject):
     """Streams assistant responses token-by-token."""
@@ -109,6 +112,7 @@ class ChatService(QObject):
     rate_update = Signal(float)  # tokens per second
     finished = Signal()
     error = Signal(str)
+    token_count_updated = Signal(int)  # total tokens for this response
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
@@ -143,6 +147,7 @@ class ChatService(QObject):
         thread.started.connect(worker.process)
         worker.token_received.connect(self.token_received.emit)
         worker.finished.connect(self.finished.emit)
+        worker.finished.connect(lambda: self.token_count_updated.emit(worker.get_token_count()))
         worker.error.connect(self.error.emit)
         worker.finished.connect(thread.quit)
         worker.error.connect(thread.quit)

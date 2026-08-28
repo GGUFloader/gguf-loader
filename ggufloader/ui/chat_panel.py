@@ -20,14 +20,61 @@ from PySide6.QtWidgets import (
 from ggufloader.config import BUBBLE_FONT_SIZE, CHAT_BUBBLE_FONT_SIZE, FONT_FAMILY
 from ggufloader.core.reasoning import ReasoningStreamParser, format_answer, split_reasoning
 from ggufloader.ui.agent_panel import AgentPanel
+from ggufloader.ui.slash_commands import SlashCommands
 from ggufloader.widgets.chat_bubble import ChatBubble, _BubbleRow
 from ggufloader.widgets.reasoning_block import ReasoningBlock
 
 
 class MessageInput(QTextEdit):
-    """Input box where plain Enter sends and Shift+Enter inserts a newline."""
+    """Input box where plain Enter sends and Shift+Enter inserts a newline.
+
+    Supports drag-and-drop of text files (.txt, .md, .py, .json, etc.).
+    """
 
     send_requested = Signal()
+    stop_requested = Signal()  # Esc pressed while generating
+    file_dropped = Signal(str, str)  # (filename, content)
+
+    # Supported text file extensions
+    _TEXT_EXTS = frozenset({
+        ".txt", ".md", ".rst", ".py", ".js", ".ts", ".jsx", ".tsx",
+        ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".conf",
+        ".html", ".css", ".xml", ".csv", ".log", ".sh", ".bat",
+        ".rs", ".go", ".java", ".c", ".cpp", ".h", ".hpp",
+        ".rb", ".php", ".sql", ".r", ".m", ".swift",
+    })
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        urls = event.mimeData().urls()
+        if not urls:
+            super().dropEvent(event)
+            return
+        for url in urls:
+            path = url.toLocalFile()
+            if not path:
+                continue
+            import os
+            ext = os.path.splitext(path)[1].lower()
+            if ext not in self._TEXT_EXTS:
+                continue
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read(10000)  # limit to 10k chars
+                filename = os.path.basename(path)
+                self.file_dropped.emit(filename, content)
+            except Exception:
+                pass
+        event.acceptProposedAction()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt naming
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -36,6 +83,9 @@ class MessageInput(QTextEdit):
             else:
                 self.send_requested.emit()
                 return
+        elif event.key() == Qt.Key_Escape:
+            self.stop_requested.emit()
+            return
         else:
             super().keyPressEvent(event)
 
@@ -67,6 +117,13 @@ class ChatPanel(QWidget):
         self._parser: ReasoningStreamParser | None = None
         self._reasoning: ReasoningBlock | None = None
         self._reasoning_blocks: list[ReasoningBlock] = []
+        # Slash commands (Aider pattern)
+        self._slash_commands = SlashCommands()
+        # Smart autocomplete (Aider AutoCompleter pattern)
+        self._autocomplete = None  # lazy init after build_ui
+        # TTFT tracking (DeepSeek StatsLine pattern)
+        self._ttft_start: float | None = None
+        self._last_ttft_ms: int | None = None
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -124,6 +181,49 @@ class ChatPanel(QWidget):
 
         self.chat_scroll.setWidget(self.chat_stack)
         layout.addWidget(self.chat_scroll)
+
+        # ---- search bar (hidden by default, Ctrl+F to toggle) ----
+        self._search_bar = QWidget()
+        self._search_bar.setObjectName("searchBar")
+        self._search_bar.setVisible(False)
+        search_layout = QHBoxLayout(self._search_bar)
+        search_layout.setContentsMargins(20, 4, 20, 4)
+        search_layout.setSpacing(6)
+
+        from PySide6.QtWidgets import QLineEdit as _QLE
+        self._search_input = _QLE()
+        self._search_input.setPlaceholderText("🔍 Search in conversation...")
+        self._search_input.setClearButtonEnabled(True)
+        self._search_input.setMaximumHeight(26)
+        self._search_input.setStyleSheet("font-size: 11px; padding: 2px 8px;")
+        self._search_input.returnPressed.connect(self._find_next)
+        search_layout.addWidget(self._search_input)
+
+        self._search_count = QLabel("")
+        self._search_count.setStyleSheet("font-size: 10px; color: #9ca3af;")
+        search_layout.addWidget(self._search_count)
+
+        find_prev = QPushButton("◀")
+        find_prev.setFixedSize(24, 24)
+        find_prev.setStyleSheet("font-size: 10px; border: none;")
+        find_prev.clicked.connect(self._find_prev)
+        search_layout.addWidget(find_prev)
+
+        find_next = QPushButton("▶")
+        find_next.setFixedSize(24, 24)
+        find_next.setStyleSheet("font-size: 10px; border: none;")
+        find_next.clicked.connect(self._find_next)
+        search_layout.addWidget(find_next)
+
+        close_search = QPushButton("✕")
+        close_search.setFixedSize(24, 24)
+        close_search.setStyleSheet("font-size: 10px; border: none;")
+        close_search.clicked.connect(self._hide_search)
+        search_layout.addWidget(close_search)
+
+        layout.addWidget(self._search_bar)
+        self._search_matches: list = []
+        self._search_index = -1
 
         # ---- input frame ----
         input_frame = QFrame()
@@ -196,6 +296,17 @@ class ChatPanel(QWidget):
         self.agent_status_label.setVisible(False)
         controls.addWidget(self.agent_status_label)
 
+        # Agent preset badge
+        self.preset_badge = QLabel("🚀 full_stack")
+        self.preset_badge.setObjectName("agentBadge")
+        self.preset_badge.setStyleSheet(
+            "font-size: 9px; padding: 2px 6px; border-radius: 4px; "
+            "background: #374151; color: #d1d5db;"
+        )
+        self.preset_badge.setVisible(False)
+        self.preset_badge.setToolTip("Current agent preset")
+        controls.addWidget(self.preset_badge)
+
         controls.addStretch()
 
         self.send_btn = QPushButton("Send")
@@ -247,12 +358,17 @@ class ChatPanel(QWidget):
         self.message_submitted.emit(text)
 
     def set_generating(self, generating: bool) -> None:
-        """While a reply streams, Send turns into a Stop button."""
+        """While a reply streams, Send turns into a Stop button.
+
+        Also sets pending state on the current AI bubble (DeepSeek pattern).
+        """
         self._generating = bool(generating)
         for _container, bubble in self._bubbles:
             bubble.links_locked = self._generating
         if self._current_ai_bubble is not None:
             self._current_ai_bubble.links_locked = self._generating
+            # Set pending state indicator (blue left border while generating)
+            self._current_ai_bubble.set_pending_state("generating" if generating else None)
         if generating:
             self.send_btn.setText("⏹ Stop")
             self.send_btn.setEnabled(True)
@@ -335,6 +451,9 @@ class ChatPanel(QWidget):
         self.stopped_in_reasoning = False
         self.last_thinking_ms: int | None = None
         self.hide_followups()
+        # Track TTFT (DeepSeek StatsLine pattern)
+        import time as _time
+        self._ttft_start = _time.monotonic()
         self._parser = ReasoningStreamParser()
         self._reasoning = ReasoningBlock()
         self._apply_block_theme(self._reasoning)
@@ -380,6 +499,12 @@ class ChatPanel(QWidget):
 
     def finish_streaming(self) -> str:
         """Finalize the streaming bubble; returns the clean answer text."""
+        # Record TTFT if we have it
+        if self._ttft_start is not None:
+            import time as _time
+            ttft_ms = int((_time.monotonic() - self._ttft_start) * 1000)
+            self._last_ttft_ms = ttft_ms
+            self._ttft_start = None
         had_thoughts = (
             self._reasoning is not None and bool(self._reasoning.body.text().strip())
         )
@@ -479,11 +604,47 @@ class ChatPanel(QWidget):
         self.agent_status_label.style().unpolish(self.agent_status_label)
         self.agent_status_label.style().polish(self.agent_status_label)
 
+    def set_preset_badge(self, preset: str) -> None:
+        """Update the preset badge text."""
+        icons = {
+            "research": "🔍", "code_review": "📝", "refactor": "♻️",
+            "debug": "🐛", "full_stack": "🚀", "quick_fix": "⚡",
+        }
+        icon = icons.get(preset, "🤖")
+        self.preset_badge.setText(f"{icon} {preset}")
+        self.preset_badge.setVisible(True)
+
+
     def get_workspace(self) -> str:
         return self.workspace_combo.currentText().strip()
 
     def set_workspace(self, path: str) -> None:
         self.workspace_combo.setCurrentText(path)
+        # Initialize or update autocomplete with workspace
+        if path and self._autocomplete is None:
+            try:
+                from ggufloader.widgets.smart_autocomplete import SmartAutocomplete
+                from pathlib import Path as _P
+                self._autocomplete = SmartAutocomplete(_P(path), self)
+                self._autocomplete.scan_workspace()
+                self._autocomplete.suggestion_selected.connect(self._on_autocomplete_select)
+            except Exception:
+                pass
+        elif path and self._autocomplete is not None:
+            from pathlib import Path as _P
+            self._autocomplete.workspace = _P(path)
+            self._autocomplete.scan_workspace()
+
+    def _on_autocomplete_select(self, text: str) -> None:
+        """Handle autocomplete suggestion selection."""
+        if text.startswith("/"):
+            # It's a slash command - execute it directly
+            response = self._slash_commands.handle(text)
+            if response:
+                self.add_system_message(response)
+        else:
+            # Insert into input
+            self.input_text.setPlainText(text)
 
     # ------------------------------------------------------------------
     # Input state
@@ -527,6 +688,14 @@ class ChatPanel(QWidget):
             text = "Please review the attached file(s)."
         self.input_text.clear()
         self.clear_attachments()
+
+        # Handle slash commands (Aider pattern)
+        if text.startswith("/"):
+            response = self._slash_commands.handle(text)
+            if response:
+                self.add_system_message(response)
+                return
+
         self.message_submitted.emit(text + attachments)
 
     def _on_input_changed(self) -> None:
@@ -534,6 +703,21 @@ class ChatPanel(QWidget):
             return  # Stop button stays enabled regardless of text
         has_text = bool(self.input_text.toPlainText().strip())
         self.send_btn.setEnabled(has_text)
+        # Show autocomplete for slash commands
+        if self._autocomplete is not None:
+            text = self.input_text.toPlainText()
+            if text.startswith("/"):
+                suggestions = self._autocomplete.get_suggestions(text, limit=8)
+                if suggestions:
+                    self._autocomplete.show_suggestions(suggestions)
+                    # Position below input
+                    pos = self.input_text.mapToGlobal(self.input_text.rect().bottomLeft())
+                    self._autocomplete.move(self.mapFromGlobal(pos))
+                    self._autocomplete.show()
+                else:
+                    self._autocomplete.setVisible(False)
+            else:
+                self._autocomplete.setVisible(False)
 
     def copy_conversation(self) -> str:
         """Whole transcript as text (GPT4All's copy-conversation parity)."""
@@ -699,3 +883,83 @@ class ChatPanel(QWidget):
         QTimer.singleShot(50, lambda: self.chat_scroll.verticalScrollBar().setValue(
             self.chat_scroll.verticalScrollBar().maximum()
         ))
+
+    # ------------------------------------------------------------------
+    # Export conversation (Aider markdown export pattern)
+    # ------------------------------------------------------------------
+    def export_conversation(self) -> str:
+        """Export the full conversation as a markdown file."""
+        lines = ["# GGUF Loader Conversation\n"]
+        from datetime import datetime
+        lines.append(f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+        lines.append("---\n")
+        for _container, bubble in self._bubbles:
+            if bubble.is_user:
+                lines.append(f"## You\n\n{bubble.text}\n")
+            else:
+                lines.append(f"## AI\n\n{bubble.text}\n")
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Chat search (Ctrl+F)
+    # ------------------------------------------------------------------
+    def toggle_search(self) -> None:
+        """Toggle the search bar visibility."""
+        if self._search_bar.isVisible():
+            self._hide_search()
+        else:
+            self._show_search()
+
+    def _show_search(self) -> None:
+        self._search_bar.setVisible(True)
+        self._search_input.setFocus()
+        self._search_input.selectAll()
+
+    def _hide_search(self) -> None:
+        self._search_bar.setVisible(False)
+        self._search_input.clear()
+        self._search_count.setText("")
+        self._clear_search_highlights()
+
+    def _find_next(self) -> None:
+        self._do_search(forward=True)
+
+    def _find_prev(self) -> None:
+        self._do_search(forward=False)
+
+    def _do_search(self, forward: bool = True) -> None:
+        """Search through all bubbles for the query text."""
+        query = self._search_input.text().strip()
+        if not query:
+            self._search_count.setText("")
+            return
+
+        # Collect all text from bubbles
+        self._search_matches = []
+        for i, (_container, bubble) in enumerate(self._bubbles):
+            text = bubble.text.lower()
+            if query.lower() in text:
+                self._search_matches.append(i)
+
+        if not self._search_matches:
+            self._search_count.setText("No matches")
+            return
+
+        # Move to next/prev match
+        if forward:
+            self._search_index = (self._search_index + 1) % len(self._search_matches)
+        else:
+            self._search_index = (self._search_index - 1) % len(self._search_matches)
+
+        match_idx = self._search_matches[self._search_index]
+        self._search_count.setText(f"{self._search_index + 1}/{len(self._search_matches)}")
+
+        # Scroll to the matching bubble
+        if 0 <= match_idx < len(self._bubbles):
+            container, _ = self._bubbles[match_idx]
+            self.chat_scroll.ensureWidgetVisible(container)
+
+    def _clear_search_highlights(self) -> None:
+        self._search_matches = []
+        self._search_index = -1
+

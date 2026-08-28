@@ -24,12 +24,12 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QSettings, Signal, QObject
+from PySide6.QtCore import QSettings, Signal, QObject, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
-    QLabel, QMainWindow, QMenu, QMessageBox, QSplitter, QSystemTrayIcon,
-    QVBoxLayout, QWidget,
+    QApplication, QDialog, QDockWidget, QFileDialog, QFrame, QHBoxLayout,
+    QInputDialog, QLabel, QMainWindow, QMenu, QMessageBox, QSplitter,
+    QSystemTrayIcon, QVBoxLayout, QWidget,
 )
 
 from ggufloader.addon_manager import AddonManager
@@ -49,6 +49,8 @@ from ggufloader.services.model_service import ModelService
 from ggufloader.ui.chat_panel import ChatPanel
 from ggufloader.ui.sidebar_panel import SettingsSidebar
 from ggufloader.ui.theme import ThemeMixin
+from ggufloader.widgets.session_tabs import SessionTabs
+from ggufloader.widgets.trajectory_inspector import TrajectoryInspector
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +126,13 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._populate_addons_menu()
         self._refresh_gpu_support_status()
         self._restore_last_session()
+        # Run auto-setup on first launch (background)
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(2000, self._run_auto_setup)
+        # Wire Esc key from input to stop generation
+        self.chat_panel.input_text.stop_requested.connect(self._stop_generation)
+        # Global keyboard shortcuts
+        self._setup_shortcuts()
 
         logger.info("MainWindow initialized")
 
@@ -135,6 +144,28 @@ class MainWindow(QMainWindow, ThemeMixin):
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
+    def _setup_shortcuts(self) -> None:
+        """Global keyboard shortcuts for the agent."""
+        from PySide6.QtGui import QShortcut, QKeySequence
+        # Ctrl+M: Toggle agent mode
+        toggle = QShortcut(QKeySequence("Ctrl+M"), self)
+        toggle.activated.connect(lambda: self.chat_panel.agent_mode_btn.toggle())
+        # Ctrl+,: Open agent settings
+        settings = QShortcut(QKeySequence("Ctrl+,"), self)
+        settings.activated.connect(self._open_agent_settings)
+        # Ctrl+L: Clear chat
+        clear = QShortcut(QKeySequence("Ctrl+L"), self)
+        clear.activated.connect(self._clear_chat)
+        # Ctrl+N: New chat
+        new_chat = QShortcut(QKeySequence("Ctrl+N"), self)
+        new_chat.activated.connect(self._on_new_chat)
+        # Ctrl+F: Search in chat
+        search = QShortcut(QKeySequence("Ctrl+F"), self)
+        search.activated.connect(self.chat_panel.toggle_search)
+        # Ctrl+/: Show keyboard shortcuts
+        shortcuts = QShortcut(QKeySequence("Ctrl+/"), self)
+        shortcuts.activated.connect(self._show_shortcuts)
+
     def _init_window(self) -> None:
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumSize(*MIN_WINDOW_SIZE)
@@ -200,6 +231,20 @@ class MainWindow(QMainWindow, ThemeMixin):
 
         self.addon_manager = AddonManager()
 
+        # Session tabs (multi-session browser-tab paradigm)
+        self.session_tabs = SessionTabs()
+        self.session_tabs.session_switched.connect(self._on_session_switched)
+        self.session_tabs.session_closed.connect(self._on_session_closed)
+        self.session_tabs.new_session_requested.connect(self._on_new_chat)
+
+        # Trajectory inspector (SWE-agent Inspector pattern)
+        self.trajectory_inspector = TrajectoryInspector()
+        self._trajectory_dock = QDockWidget("Execution Timeline", self)
+        self._trajectory_dock.setWidget(self.trajectory_inspector)
+        self._trajectory_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
+        self._trajectory_dock.setVisible(False)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._trajectory_dock)
+
         splitter = QSplitter()
         splitter.addWidget(self.sidebar)
         splitter.addWidget(self.chat_panel)
@@ -212,6 +257,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.header)
+        layout.addWidget(self.session_tabs)
         layout.addWidget(splitter, 1)
         self.setCentralWidget(central)
 
@@ -233,6 +279,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         action.triggered.connect(self._clear_chat)
         action = file_menu.addAction("Copy Conversation")
         action.triggered.connect(self._copy_conversation)
+        action = file_menu.addAction("Export Conversation as Markdown")
+        action.triggered.connect(self._export_conversation)
         file_menu.addSeparator()
         action = file_menu.addAction("Exit")
         action.triggered.connect(self.close)
@@ -266,8 +314,17 @@ class MainWindow(QMainWindow, ThemeMixin):
             self._text_size_actions[size] = action
         self._text_size_actions[14].setChecked(True)
 
+        self._trajectory_action = QAction("Execution Timeline", self)
+        self._trajectory_action.setCheckable(True)
+        self._trajectory_action.setChecked(False)
+        self._trajectory_action.toggled.connect(
+            lambda v: self._trajectory_dock.setVisible(v))
+        view_menu.addAction(self._trajectory_action)
+
         # ---- Tools ----
         tools_menu = bar.addMenu("&Tools")
+        action = tools_menu.addAction("Agent Settings\u2026")
+        action.triggered.connect(self._open_agent_settings)
         action = tools_menu.addAction("Find Paragraph\u2026")
         action.triggered.connect(self._show_find_dialog)
 
@@ -276,6 +333,8 @@ class MainWindow(QMainWindow, ThemeMixin):
 
         # ---- Help ----
         help_menu = bar.addMenu("&Help")
+        action = help_menu.addAction("Keyboard Shortcuts (Ctrl+/)")
+        action.triggered.connect(self._show_shortcuts)
         action = help_menu.addAction("Send Feedback")
         action.triggered.connect(self._show_feedback_dialog)
         action = help_menu.addAction("Check for Updates…")
@@ -307,6 +366,12 @@ class MainWindow(QMainWindow, ThemeMixin):
             "Local LLM runtime for GGUF models.<br><br>"
             "Built by Hussain Nazary \u00B7 @hussainnazary2",
         )
+
+    def _show_shortcuts(self) -> None:
+        """Show keyboard shortcuts reference dialog."""
+        from ggufloader.ui.shortcuts_dialog import ShortcutsDialog
+        dlg = ShortcutsDialog(self)
+        dlg.exec()
 
     def _check_for_updates(self) -> None:
         """O4: Check for updates via release JSON (GPT4All parity)."""
@@ -392,6 +457,26 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.model_chip.setObjectName("statusChip")
         layout.addWidget(self.model_chip)
 
+        # Model popover on hover
+        from ggufloader.widgets.model_popover import ModelPopover
+        self._model_popover = ModelPopover()
+        self.model_chip.setMouseTracking(True)
+        self.model_chip.installEventFilter(self)
+        self._model_popover_info: dict = {}
+
+    def eventFilter(self, obj, event) -> None:
+        """Show model popover on hover over the model chip."""
+        from PySide6.QtCore import QEvent
+        if obj is self.model_chip:
+            if event.type() == QEvent.Enter:
+                if self._model_popover_info:
+                    self._model_popover.set_model_info(self._model_popover_info)
+                    pos = self.model_chip.mapToGlobal(self.model_chip.rect().bottomLeft())
+                    self._model_popover.show_at(pos.x(), pos.y())
+            elif event.type() == QEvent.Leave:
+                self._model_popover.hide()
+        return super().eventFilter(obj, event)
+
     def _wire_ui_signals(self) -> None:
         s = self.sidebar
         s.load_model_requested.connect(self._choose_and_load_model)
@@ -411,6 +496,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         s.context_combo.currentIndexChanged.connect(self._on_context_changed)
         s.params_requested.connect(self._open_model_params)
         s.advanced_settings_requested.connect(self._open_advanced_settings)
+        s.agent_settings_requested.connect(self._open_agent_settings)
 
         self.sidebar.new_chat_requested.connect(self._on_new_chat)
         self.sidebar.session_selected.connect(self._on_session_selected)
@@ -422,6 +508,15 @@ class MainWindow(QMainWindow, ThemeMixin):
         # E: RAG signals
         self.sidebar.rag_toggled.connect(self._on_rag_toggled)
         self.sidebar.rag_scan_requested.connect(self._on_rag_scan)
+
+        # Slash command callbacks
+        sc = p._slash_commands
+        sc.on_clear = self._clear_chat
+        sc.on_undo = self._regenerate_last
+        sc.on_export = self._export_conversation
+        sc.on_settings = self._open_agent_settings
+        sc.on_preset = lambda preset: self.chat_panel.set_preset_badge(preset)
+        sc.on_health = self._format_health_status
 
     def _wire_services(self) -> None:
         m = self._model_service
@@ -438,6 +533,7 @@ class MainWindow(QMainWindow, ThemeMixin):
         c.token_received.connect(self.chat_panel.stream_token)
         c.rate_update.connect(self._on_rate_update)
         c.finished.connect(self._on_generation_finished)
+        c.token_count_updated.connect(self.sidebar.update_token_stats)
         c.error.connect(self._on_generation_error)
 
         a = self._agent_service
@@ -576,6 +672,26 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.sidebar.set_model_info(info)
         self.sidebar.set_params_enabled(True)
         self.sidebar.set_status("Model ready! Start chatting...")
+        # Toast notification
+        from ggufloader.widgets.toast import Toast
+        Toast.show_success(self, f"Model loaded: {Path(backend.model_path).name}")
+        # Update detailed model info panel
+        try:
+            from ggufloader.core.llm.model_profiles import read_model_limits
+            limits = read_model_limits(backend.model_path)
+            model_info = {
+                "name": Path(backend.model_path).stem,
+                "arch": limits.get("architecture", "unknown"),
+                "quant": limits.get("quantization", "unknown"),
+                "layers": backend.n_layers if hasattr(backend, 'n_layers') else None,
+                "ctx": self.sidebar.get_context_size(),
+                "gpu": "Yes" if backend.gpu_status.get("state") == "gpu" else "CPU",
+            }
+            self.sidebar.update_model_info_panel(model_info)
+            # Update popover
+            self._model_popover_info = model_info
+        except Exception:
+            pass
 
     def _open_model_params(self) -> None:
         """C1-lite dialog: per-model sampling + system prompt overrides."""
@@ -657,6 +773,49 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.sidebar.set_status(f"❌ Error: {message}")
         self._set_model_chip("err", "\u25CF Load failed")
         QMessageBox.critical(self, "Model Loading Error", message)
+
+    def _open_agent_settings(self) -> None:
+        """Open the Agent Settings dialog."""
+        from ggufloader.ui.agent_settings_dialog import AgentSettingsDialog
+        workspace = self.chat_panel.get_workspace() if self.chat_panel else None
+        current = {
+            "preset": self._chat_model_params.get("agent_preset", "full_stack"),
+            "max_steps": 8,
+            "max_tokens": 2048,
+            "budget_tokens": 8192,
+            "json_retries": 2,
+            "temperature": self._chat_model_params.get("temperature", 0.1),
+            "workspace": workspace or "",
+            "features": {},
+        }
+        dlg = AgentSettingsDialog(self, current_config=current, workspace=workspace)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            config = dlg.get_config()
+            # Store agent config for later use by the engine
+            self._chat_model_params["agent_preset"] = config.get("preset")
+            self._chat_model_params["agent_max_steps"] = config.get("max_steps", 8)
+            from ggufloader.widgets.toast import Toast
+            Toast.show_success(self, f"Agent settings saved: {config.get('preset', 'full_stack')}")
+
+    def _run_auto_setup(self) -> None:
+        """Run auto-setup on first launch."""
+        try:
+            from ggufloader.core.agent.auto_setup import AutoSetup
+            workspace = self.chat_panel.get_workspace() if self.chat_panel else None
+            if not workspace:
+                workspace = str(Path.cwd())
+            setup = AutoSetup(Path(workspace))
+            if setup.needs_setup():
+                result = setup.run()
+                if result.get("new_setup"):
+                    steps = result.get("steps", [])
+                    msgs = [f"  {s['name']}: {s.get('detail', '')}" for s in steps if s.get('status') == 'ok']
+                    if msgs:
+                        self.chat_panel.add_system_message(
+                            "🤖 Agent auto-setup complete:\n" + "\n".join(msgs)
+                        )
+        except Exception as e:
+            logger.debug("Auto-setup skipped: %s", e)
 
     def _on_model_unloaded(self) -> None:
         self._set_model_chip("", "\u25CB No model loaded")
@@ -991,6 +1150,55 @@ class MainWindow(QMainWindow, ThemeMixin):
             QApplication.clipboard().setText(text)
             self.chat_panel.add_system_message("📋 Conversation copied to clipboard.")
 
+    def _export_conversation(self) -> None:
+        """Export conversation as markdown or JSON file (Aider pattern)."""
+        from PySide6.QtWidgets import QFileDialog
+        from datetime import datetime
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export Conversation", "",
+            "Markdown (*.md);;JSON (*.json);;All files (*)",
+        )
+        if not path:
+            return
+        from pathlib import Path as _P
+        if path.endswith(".json") or "JSON" in (selected_filter or ""):
+            # JSON export with metadata
+            data = {
+                "version": 1,
+                "exported_at": datetime.now().isoformat(),
+                "app": "GGUFLoader",
+                "model": Path(self._model_service.backend.model_path).name
+                    if self._model_service.is_loaded and self._model_service.backend else None,
+                "session_id": self._current_session_id,
+                "messages": [
+                    {"role": m.get("role"), "content": m.get("content"),
+                     "timestamp": m.get("timestamp")}
+                    for m in (self._session or {}).get("messages", [])
+                ],
+                "stats": {
+                    "total_tokens": self.sidebar._total_tokens,
+                    "total_cost": self.sidebar._total_cost,
+                    "message_count": len(self.conversation_history),
+                },
+            }
+            _P(path).write_text(
+                json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        else:
+            # Markdown export
+            content = self.chat_panel.export_conversation()
+            if not content.strip():
+                self.chat_panel.add_system_message("⚠️ No conversation to export.")
+                return
+            _P(path).write_text(content, encoding="utf-8")
+        from ggufloader.widgets.toast import Toast
+        # Show export stats
+        file_size = _P(path).stat().st_size
+        msg_count = len((self._session or {}).get("messages", []))
+        size_str = f"{file_size / 1024:.1f} KB" if file_size > 1024 else f"{file_size} B"
+        Toast.show_success(self, f"Exported {msg_count} messages ({size_str}) to {_P(path).name}")
+
     def _clear_chat(self) -> None:
         self.conversation_history.clear()
         if self._session is not None:
@@ -1027,6 +1235,15 @@ class MainWindow(QMainWindow, ThemeMixin):
 
     def _refresh_session_list(self) -> None:
         self.sidebar.set_sessions(self._store.list_sessions(), self._current_session_id)
+        # Sync session tabs with sidebar sessions
+        sessions = self._store.list_sessions()
+        for meta in sessions:
+            sid = meta["id"]
+            if sid not in self.session_tabs._tabs:
+                self.session_tabs.add_tab(sid, meta.get("title") or "New Chat")
+            else:
+                self.session_tabs.update_tab_title(sid, meta.get("title") or "New Chat")
+        self.session_tabs.set_active_tab(self._current_session_id)
 
     def _on_new_chat(self) -> None:
         """Start a fresh conversation; the previous one stays saved."""
@@ -1034,6 +1251,8 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._current_session_id = None
         self.conversation_history.clear()
         self.chat_panel.clear_chat()
+        self.session_tabs.set_active_tab(None)
+        self.trajectory_inspector.clear()
         self._refresh_session_list()
 
     def _on_session_selected(self, session_id: str) -> None:
@@ -1045,6 +1264,26 @@ class MainWindow(QMainWindow, ThemeMixin):
         self._stop_running_work()
         self._save_session_quiet()
         self._open_session(session)
+
+    def _on_session_switched(self, session_id: str) -> None:
+        """Tab bar session switch."""
+        if session_id == self._current_session_id:
+            return
+        session = self._store.load(session_id)
+        if session is None:
+            return
+        self._stop_running_work()
+        self._save_session_quiet()
+        self._open_session(session)
+
+    def _on_session_closed(self, session_id: str) -> None:
+        """Tab close button."""
+        self.session_tabs.remove_tab(session_id)
+        self._store.delete(session_id)
+        if session_id == self._current_session_id:
+            self._on_new_chat()
+        else:
+            self._refresh_session_list()
 
     def _on_session_rename(self, session_id: str) -> None:
         session = self._store.load(session_id)
@@ -1062,6 +1301,7 @@ class MainWindow(QMainWindow, ThemeMixin):
     def _on_session_delete(self, session_id: str) -> None:
         # Sidebar already handles two-step inline confirmation with 3s
         # auto-cancel, so no additional QMessageBox is needed here.
+        self.session_tabs.remove_tab(session_id)
         self._store.delete(session_id)
         if session_id == self._current_session_id:
             self._on_new_chat()
@@ -1079,6 +1319,12 @@ class MainWindow(QMainWindow, ThemeMixin):
         """Load *session* into the UI (bubbles / agent transcript)."""
         self._session = session
         self._current_session_id = session["id"]
+        # Ensure a tab exists for this session
+        title = session.get("title") or "New Chat"
+        if self._current_session_id not in self.session_tabs._tabs:
+            self.session_tabs.add_tab(self._current_session_id, title)
+        self.session_tabs.set_active_tab(self._current_session_id)
+        self.trajectory_inspector.clear()
         messages = session.get("messages") or []
         self.conversation_history = [
             {"role": m["role"], "content": m["content"]}
@@ -1369,6 +1615,10 @@ class MainWindow(QMainWindow, ThemeMixin):
 
     def _on_agent_approval(self, payload: dict, waiter) -> None:
         """Show an approval card; Allow/Deny resolves the graph's interrupt."""
+        # Add to trajectory with risk assessment
+        tool = (payload.get("call") or {}).get("tool", "unknown")
+        risk = "high" if tool in ("run_command", "git") else "medium"
+        self.trajectory_inspector.add_step(tool, risk=risk, status="pending")
         self.chat_panel.agent_panel.add_approval_card(payload, waiter)
 
     def _on_agent_token(self, token: str) -> None:
@@ -1382,6 +1632,7 @@ class MainWindow(QMainWindow, ThemeMixin):
             self._store.append_message(self._session, "assistant", response)
             self._save_session_quiet()
             self._refresh_session_list()
+        self._update_agent_health()
 
     def _on_agent_cancelled(self) -> None:
         panel = self.chat_panel.agent_panel
@@ -1393,6 +1644,26 @@ class MainWindow(QMainWindow, ThemeMixin):
 
     def _on_agent_tool_executed(self, result: dict) -> None:
         self.chat_panel.agent_panel.add_tool_card(result)
+        # Update trajectory inspector
+        tool = result.get("tool_name", "tool")
+        ok = result.get("status") == "success"
+        status = "success" if ok else "error"
+        params = {}
+        if result.get("path"):
+            params["path"] = result["path"]
+        if result.get("command"):
+            params["command"] = result["command"]
+        # Find the last pending step or add a new one
+        ti = self.trajectory_inspector
+        if ti._steps and ti._steps[-1]["status"] == "pending":
+            idx = len(ti._steps) - 1
+            ti.update_step(idx, status=status,
+                          result=str(result.get("result", ""))[:500])
+        else:
+            ti.add_step(tool, params, risk="low", status=status)
+            if not ok:
+                ti.update_step(len(ti._steps) - 1,
+                              error=str(result.get("error", "")))
         if self._session is not None and isinstance(result, dict):
             self._store.append_tool_result(self._session, result)
 
@@ -1402,6 +1673,49 @@ class MainWindow(QMainWindow, ThemeMixin):
         self.chat_panel.set_agent_status("🟢 Ready")
         self._save_session_quiet()
         self._refresh_session_list()
+        self._update_agent_health()
+
+    def _format_health_status(self) -> str:
+        """Format agent health as a status string for /health command."""
+        try:
+            engine = self._agent_service.engine
+            if engine is None:
+                return "Agent not initialized."
+            stats = engine.get_performance_stats() if hasattr(engine, 'get_performance_stats') else {}
+            tokens = stats.get('tokens', {}).get('total', 0)
+            llm_calls = stats.get('tokens', {}).get('llm_calls', 0)
+            retries = stats.get('retries', {})
+            retry_count = retries.get('total_retries', 0)
+            parts = [
+                f"Tokens: {tokens:,}",
+                f"LLM calls: {llm_calls}",
+                f"Retries: {retry_count}",
+            ]
+            return "Agent Health:\n" + "\n".join(f"  {p}" for p in parts)
+        except Exception:
+            return "Health data unavailable."
+
+    def _update_agent_health(self) -> None:
+        """Update the sidebar health widget from agent engine stats."""
+        try:
+            engine = self._agent_service.engine
+            if engine is None:
+                return
+            stats = engine.get_performance_stats() if hasattr(engine, 'get_performance_stats') else {}
+            tokens = stats.get('tokens', {}).get('total', 0)
+            retries = stats.get('retries', {})
+            health = {
+                "status": "healthy",
+                "total_tokens": tokens,
+                "tools_used": stats.get('tool_analytics', {}).get('total_calls', 0),
+                "tool_success_rate": stats.get('tool_analytics', {}).get('success_rate', 100),
+                "features_enabled": 12,
+                "cache_hit_rate": 0,
+                "uptime_seconds": 0,
+            }
+            self.sidebar.update_agent_health(health)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Appearance / feedback

@@ -10,6 +10,7 @@ entirely in the launcher scripts (launch.sh / launch.bat).
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont
@@ -35,6 +36,7 @@ class SettingsSidebar(QFrame):
     rag_scan_requested = Signal()
     rag_toggled = Signal(bool)
     advanced_settings_requested = Signal()
+    agent_settings_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -127,6 +129,14 @@ class SettingsSidebar(QFrame):
         self.advanced_btn.clicked.connect(self.advanced_settings_requested.emit)
         layout.addWidget(self.advanced_btn)
 
+        # Agent Settings button
+        self.agent_settings_btn = QPushButton("🤖 Agent Settings")
+        self.agent_settings_btn.setObjectName("gpuInstallBtn")
+        self.agent_settings_btn.setMinimumHeight(36)
+        self.agent_settings_btn.setToolTip("Configure agent presets, features, and behavior")
+        self.agent_settings_btn.clicked.connect(self.agent_settings_requested.emit)
+        layout.addWidget(self.agent_settings_btn)
+
         # Progress + status
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -137,6 +147,43 @@ class SettingsSidebar(QFrame):
         self.status_label.setWordWrap(True)
         self.status_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         layout.addWidget(self.status_label)
+
+        # Cost/token counter (Aider/SWE-agent/DeepSeek pattern)
+        self.stats_label = QLabel("")
+        self.stats_label.setObjectName("mutedLabel")
+        self.stats_label.setWordWrap(True)
+        self.stats_label.setVisible(False)
+        layout.addWidget(self.stats_label)
+        self._total_tokens = 0
+        self._total_cost = 0.0
+        self._cache_hit_rate = 0.0
+        self._last_ttft_ms = None
+        # Approximate cost per 1K tokens (varies by model)
+        self._cost_per_1k = 0.002  # $2 per 1M tokens (rough estimate)
+
+        # Agent Health widget (compact, collapsible)
+        from ggufloader.widgets.agent_health_widget import AgentHealthWidget
+        self.agent_health = AgentHealthWidget()
+        self.agent_health.setVisible(False)
+        layout.addWidget(self.agent_health)
+
+        # ---- Model Info panel ----
+        layout.addWidget(self._section_label("Model Info"))
+        self.model_info_panel = QLabel("No model loaded")
+        self.model_info_panel.setObjectName("mutedLabel")
+        self.model_info_panel.setWordWrap(True)
+        self.model_info_panel.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.model_info_panel.setMaximumHeight(80)
+        layout.addWidget(self.model_info_panel)
+
+        # ---- File Tree ----
+        layout.addWidget(self._section_label("Workspace Files"))
+        from ggufloader.widgets.file_tree import FileTree
+        self.file_tree = FileTree()
+        self.file_tree.setMinimumHeight(120)
+        self.file_tree.setMaximumHeight(200)
+        self.file_tree.setVisible(False)
+        layout.addWidget(self.file_tree)
 
         # ---- Chats section ----
         layout.addWidget(self._section_label("Chats"))
@@ -173,6 +220,7 @@ class SettingsSidebar(QFrame):
         self.session_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.session_list.customContextMenuRequested.connect(self._show_session_menu)
         self.session_list.itemClicked.connect(self._on_session_clicked)
+        self.session_list.itemDoubleClicked.connect(self._on_session_double_click)
         layout.addWidget(self.session_list, 1)
 
         layout.addStretch()
@@ -199,6 +247,31 @@ class SettingsSidebar(QFrame):
 
     def set_model_info(self, text: str) -> None:
         self.model_info.setText(text)
+
+    def update_model_info_panel(self, info: dict) -> None:
+        """Update the detailed model info panel."""
+        parts = []
+        if info.get("name"):
+            parts.append(f"Name: {info['name']}")
+        if info.get("arch"):
+            parts.append(f"Arch: {info['arch']}")
+        if info.get("quant"):
+            parts.append(f"Quant: {info['quant']}")
+        if info.get("layers"):
+            parts.append(f"Layers: {info['layers']}")
+        if info.get("ctx"):
+            parts.append(f"Context: {info['ctx']:,}")
+        if info.get("gpu"):
+            parts.append(f"GPU: {info['gpu']}")
+        if info.get("vram"):
+            parts.append(f"VRAM: {info['vram']}")
+        self.model_info_panel.setText("\n".join(parts) if parts else "No model loaded")
+
+    def set_workspace(self, path: str) -> None:
+        """Set the workspace for the file tree."""
+        self.file_tree.setVisible(bool(path))
+        if path:
+            self.file_tree.set_workspace(Path(path))
 
     def set_memory_estimate(self, estimate: dict) -> None:
         """Show memory estimate for a model file before loading."""
@@ -249,6 +322,42 @@ class SettingsSidebar(QFrame):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
+    def update_token_stats(self, tokens: int) -> None:
+        """Update the token/cost counter (Aider/SWE-agent/DeepSeek pattern)."""
+        self._total_tokens += tokens
+        self._total_cost = self._total_tokens / 1000.0 * self._cost_per_1k
+        if self._total_tokens > 0:
+            stats_text = f"📊 Tokens: {self._total_tokens:,}  ~${self._total_cost:.4f}"
+            # Add TTFT if available
+            ttft = getattr(self, '_last_ttft_ms', None)
+            if ttft is not None:
+                stats_text += f"  ⚡ {ttft}ms TTFT"
+            self.stats_label.setText(stats_text)
+            self.stats_label.setVisible(True)
+
+    def update_ttft(self, ttft_ms: int) -> None:
+        """Update time-to-first-token display (DeepSeek StatsLine pattern)."""
+        self._last_ttft_ms = ttft_ms
+        # Refresh the stats display
+        if self._total_tokens > 0:
+            stats_text = f"📊 Tokens: {self._total_tokens:,}  ~${self._total_cost:.4f}  ⚡ {ttft_ms}ms TTFT"
+            self.stats_label.setText(stats_text)
+
+    def update_cache_hit(self, hit_rate: float) -> None:
+        """Update cache hit rate display (DeepSeek StatsLine pattern)."""
+        self._cache_hit_rate = hit_rate
+        if self._total_tokens > 0:
+            stats_text = f"📊 Tokens: {self._total_tokens:,}  ~${self._total_cost:.4f}"
+            if self._cache_hit_rate > 0:
+                stats_text += f"  💾 {self._cache_hit_rate:.0%} cache"
+            self.stats_label.setText(stats_text)
+
+    def reset_token_stats(self) -> None:
+        """Reset token counters for a new session."""
+        self._total_tokens = 0
+        self._total_cost = 0.0
+        self.stats_label.setVisible(False)
+
     def set_params_enabled(self, enabled: bool) -> None:
         """Enable/disable the per-model params button (now a no-op, kept for compat)."""
         pass  # params button moved to AdvancedSettingsDialog
@@ -293,6 +402,11 @@ class SettingsSidebar(QFrame):
         if len(line) > 72:
             line = line[:72] + "\u2026"
         self.gpu_install_status.setText(line)
+
+    def update_agent_health(self, health: dict) -> None:
+        """Update the agent health widget."""
+        self.agent_health.setVisible(True)
+        self.agent_health.update_health(health)
 
     def get_context_size(self) -> int:
         try:
@@ -422,6 +536,13 @@ class SettingsSidebar(QFrame):
         if self._pending_delete_id is not None:
             self._cancel_pending_delete()
         self.session_selected.emit(session_id)
+
+    def _on_session_double_click(self, item: QListWidgetItem) -> None:
+        """Double-click a session to rename it."""
+        session_id = item.data(Qt.UserRole)
+        if not session_id:
+            return
+        self.session_rename_requested.emit(session_id)
 
     def _show_session_menu(self, pos) -> None:
         item = self.session_list.itemAt(pos)

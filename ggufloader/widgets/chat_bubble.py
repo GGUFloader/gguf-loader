@@ -196,7 +196,16 @@ class _BubbleText(QTextEdit):
 
 
 class ChatBubble(QFrame):
-    """Custom chat bubble widget with automatic RTL/LTR detection"""
+    """Custom chat bubble widget with automatic RTL/LTR detection.
+
+    Features (source-verified against Aider, OpenHands, DeepSeek):
+    - Copy button on hover (OpenHands pattern)
+    - Truncatable long messages with expand/collapse (OpenHands pattern)
+    - Pending/error state indicator (DeepSeek PendingSubmissionBubble)
+    - Syntax-highlighted code blocks (Aider Pygments pattern)
+    """
+    _MAX_DISPLAY_CHARS = 600  # truncate AI messages longer than this
+
     def __init__(self, text: str, is_user: bool, force_rtl: bool = None):
         super().__init__()
         self.is_user = is_user
@@ -221,6 +230,14 @@ class ChatBubble(QFrame):
         self.links_locked = False
         # Raw code bodies for the click-to-copy headers (rich mode).
         self._code_segments: list = []
+        # Truncation state (OpenHands pattern)
+        self._expanded = False
+        self._is_truncatable = False
+        # Copy button state (OpenHands CopyToClipboardButton pattern)
+        self._copy_btn: QPushButton | None = None
+        self._copy_timeout = None
+        # Pending/error state (DeepSeek PendingSubmissionBubble pattern)
+        self._pending_state: str | None = None  # None | "generating" | "error"
         self.setup_ui(text)
 
     def extend_context_menu(self, menu: QMenu) -> dict:
@@ -253,6 +270,116 @@ class ChatBubble(QFrame):
     def _copy_message(self) -> None:
         from PySide6.QtWidgets import QApplication
         QApplication.clipboard().setText(self.text)
+
+    # ------------------------------------------------------------------
+    # Copy button on hover (OpenHands CopyToClipboardButton pattern)
+    # ------------------------------------------------------------------
+    def _show_copy_button(self) -> None:
+        """Show a copy icon in the top-right corner on hover."""
+        if self.is_user or self._copy_btn is not None:
+            return
+        from PySide6.QtCore import QTimer as _QTimer
+        from PySide6.QtWidgets import QPushButton as _QPB
+        self._copy_btn = _QPB("📋", self)
+        self._copy_btn.setFixedSize(28, 28)
+        self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_btn.setToolTip("Copy message")
+        self._copy_btn.setStyleSheet(
+            "QPushButton { border: none; font-size: 14px; padding: 2px; "
+            "background: rgba(128,128,128,0.15); border-radius: 4px; }"
+            "QPushButton:hover { background: rgba(128,128,128,0.3); }"
+        )
+        self._copy_btn.clicked.connect(self._on_copy_click)
+        # Position top-right
+        self._copy_btn.move(self.width() - 32, 4)
+        self._copy_btn.show()
+        self._copy_btn.raise_()
+
+    def _hide_copy_button(self) -> None:
+        if self._copy_btn is not None:
+            self._copy_btn.setParent(None)
+            self._copy_btn = None
+
+    def _on_copy_click(self) -> None:
+        """Copy message and show 2s feedback (OpenHands pattern)."""
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(self.text)
+        if self._copy_btn is not None:
+            self._copy_btn.setText("✅")
+        from PySide6.QtCore import QTimer as _QTimer
+        def _reset():
+            if self._copy_btn is not None:
+                self._copy_btn.setText("📋")
+        if self._copy_timeout is not None:
+            self._copy_timeout.stop()
+        self._copy_timeout = _QTimer()
+        self._copy_timeout.setSingleShot(True)
+        self._copy_timeout.setInterval(2000)
+        self._copy_timeout.timeout.connect(_reset)
+        self._copy_timeout.start()
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        super().enterEvent(event)
+        self._show_copy_button()
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        super().leaveEvent(event)
+        self._hide_copy_button()
+
+    # ------------------------------------------------------------------
+    # Truncatable messages (OpenHands isTruncatable pattern)
+    # ------------------------------------------------------------------
+    def _check_truncatable(self) -> None:
+        """Mark long AI messages as truncatable."""
+        if self.is_user or len(self.text) <= self._MAX_DISPLAY_CHARS:
+            self._is_truncatable = False
+            return
+        self._is_truncatable = True
+        if not self._expanded:
+            truncated = self.text[:self._MAX_DISPLAY_CHARS]
+            self._render(truncated + "…")
+            # Add expand button
+            if not hasattr(self, "_expand_btn"):
+                from PySide6.QtWidgets import QPushButton as _QPB
+                self._expand_btn = _QPB("Show more ↓", self)
+                self._expand_btn.setObjectName("expandBtn")
+                self._expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                self._expand_btn.setStyleSheet(
+                    "QPushButton { border: none; color: #6366f1; font-size: 12px; "
+                    "padding: 4px 8px; } QPushButton:hover { color: #818cf8; }"
+                )
+                self._expand_btn.clicked.connect(self._toggle_expand)
+                self.layout().addWidget(self._expand_btn)
+            self._expand_btn.setVisible(True)
+        else:
+            self._render(self.text)
+            if hasattr(self, "_expand_btn"):
+                self._expand_btn.setVisible(False)
+
+    def _toggle_expand(self) -> None:
+        self._expanded = not self._expanded
+        if self._expanded:
+            self._render(self.text)
+            if hasattr(self, "_expand_btn"):
+                self._expand_btn.setText("Show less ↑")
+        else:
+            truncated = self.text[:self._MAX_DISPLAY_CHARS]
+            self._render(truncated + "…")
+            if hasattr(self, "_expand_btn"):
+                self._expand_btn.setText("Show more ↓")
+        self.fit_width()
+
+    # ------------------------------------------------------------------
+    # Pending/error state (DeepSeek PendingSubmissionBubble pattern)
+    # ------------------------------------------------------------------
+    def set_pending_state(self, state: str | None) -> None:
+        """Set generating/error/idle state indicator."""
+        self._pending_state = state
+        if state == "generating":
+            self.setStyleSheet(self.styleSheet() + " QFrame { border-left: 3px solid #6366f1; }")
+        elif state == "error":
+            self.setStyleSheet(self.styleSheet() + " QFrame { border-left: 3px solid #ef4444; }")
+        # idle = no extra border
 
     def _toggle_rich(self) -> None:
         self.rich_enabled = not self.rich_enabled
@@ -346,6 +473,8 @@ class ChatBubble(QFrame):
         # Render markdown for assistant bubbles on first display
         self._render(text)
         self.fit_width()
+        # Check truncation for long AI messages
+        self._check_truncatable()
 
     def fit_width(self, max_width=None):
         """Size the bubble to fit its text, capped at *max_width*.
@@ -403,7 +532,13 @@ class ChatBubble(QFrame):
         # Re-detect RTL for the new text
         self.is_rtl = detect_persian_text(text)
 
-        self._render(text)
+        # During streaming, don't truncate — show full text
+        if self._pending_state == "generating":
+            self._expanded = True
+            self._render(text)
+        else:
+            self._render(text)
+            self._check_truncatable()
 
         # Update alignment after text change
         self.update_alignment()

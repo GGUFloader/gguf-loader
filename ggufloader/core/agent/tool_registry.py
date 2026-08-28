@@ -757,6 +757,14 @@ class ToolRegistry:
         tool = tool_cls(self.workspace)
         self._tools[tool.name] = tool
 
+    def register_instance(self, tool: Tool) -> None:
+        """Register a pre-built tool instance (for plugins)."""
+        self._tools[tool.name] = tool
+
+    def unregister(self, name: str) -> None:
+        """Remove a tool by name."""
+        self._tools.pop(name, None)
+
     def names(self) -> List[str]:
         return list(self._tools)
 
