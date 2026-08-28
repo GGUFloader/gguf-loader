@@ -6,6 +6,7 @@ import { StreamingText } from './StreamingText'
 import { ReasoningBlock } from './ReasoningBlock'
 import { ToolCallCard } from '../agent/ToolCallCard'
 import { ToolApprovalDialog } from '../agent/ToolApprovalDialog'
+import { PlanTracker } from '../agent/PlanTracker'
 import { AgentMetricsBar } from '../agent/AgentMetricsBar'
 import { ContextLens } from '../agent/ContextLens'
 import { MessageInput } from './MessageInput'
@@ -34,6 +35,11 @@ export function ChatPanel() {
   useEffect(() => {
     connectWebSocket()
   }, [])
+
+  // Sync agent mode from UI store to chat store
+  useEffect(() => {
+    useChatStore.getState().setAgentMode(agentMode)
+  }, [agentMode])
 
   // Show approval dialog for first pending approval
   useEffect(() => {
@@ -112,7 +118,9 @@ export function ChatPanel() {
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <PlanTracker />
+        <div className="p-4 space-y-4">
         {messages.length === 0 && !isStreaming ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
             <div className="text-6xl mb-4">🦜</div>
@@ -174,6 +182,7 @@ export function ChatPanel() {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Turn navigator rail — right edge */}
