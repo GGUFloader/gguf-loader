@@ -103,11 +103,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const store = get()
     store.addMessage({ id: `user_${Date.now()}`, role: 'user', content: text, timestamp: Date.now() })
 
+    // Load sampling params from localStorage
+    let sampling = { temperature: 0.7, max_tokens: 4096 }
+    let systemPrompt = ''
+    try {
+      const saved = localStorage.getItem('ggufloader_settings')
+      if (saved) {
+        const s = JSON.parse(saved)
+        if (s.sampling) sampling = { ...sampling, ...s.sampling }
+        if (s.systemPrompt) systemPrompt = s.systemPrompt
+      }
+    } catch {}
+
     // Try WebSocket first, fallback to REST
     if (ws && ws.readyState === WebSocket.OPEN) {
       const msgId = store.startStreaming()
       store.addMessage({ id: msgId, role: 'assistant', content: '', timestamp: Date.now() })
-      ws.send(JSON.stringify({ type: 'chat_message', message: text }))
+      ws.send(JSON.stringify({
+        type: 'chat_message',
+        message: text,
+        temperature: sampling.temperature,
+        max_tokens: sampling.max_tokens,
+        system_prompt: systemPrompt || undefined,
+      }))
     } else {
       const msgId = store.startStreaming()
       store.addMessage({ id: msgId, role: 'assistant', content: '', timestamp: Date.now() })
@@ -115,7 +133,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const res = await fetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify({ message: text, system_prompt: systemPrompt || undefined }),
         })
         const data = await res.json()
         store.appendToMessage(msgId, data.response)
@@ -146,10 +164,34 @@ export function connectWebSocket() {
           store.addReasoningBlock(data.content)
           break
         case 'tool_call':
-          // TODO: handle tool call display
+          // Add tool call to current streaming message
+          if (store.currentStreamingId) {
+            const msgs = useChatStore.getState().messages
+            const current = msgs.find(m => m.id === store.currentStreamingId)
+            if (current) {
+              current.toolCalls = [...(current.toolCalls || []), {
+                name: data.name,
+                args: data.args || {},
+                status: 'running' as const,
+                approvalId: data.call_id,
+              }]
+              useChatStore.setState({ messages: [...msgs] })
+            }
+          }
           break
         case 'tool_result':
-          // TODO: handle tool result display
+          if (store.currentStreamingId) {
+            const msgs = useChatStore.getState().messages
+            const current = msgs.find(m => m.id === store.currentStreamingId)
+            if (current && current.toolCalls) {
+              const tc = current.toolCalls.find(t => t.approvalId === data.call_id || t.name === data.tool)
+              if (tc) {
+                tc.status = data.success ? 'completed' : 'failed'
+                tc.result = data.result || data.error
+                useChatStore.setState({ messages: [...msgs] })
+              }
+            }
+          }
           break
         case 'tool_approval':
           store.addPendingApproval({ id: data.id, tool: data.tool, args: data.args })
