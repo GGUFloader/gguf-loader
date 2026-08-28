@@ -121,6 +121,19 @@ export function ToolCallCard({ tool, onApprove }: Props) {
     return `${(ms / 1000).toFixed(1)}s`
   }
 
+  // Compact chip mode during streaming
+  if (tool.status === 'running' && !expanded) {
+    return (
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/10 border border-accent/30 text-xs animate-slide-up">
+        <Loader2 size={10} className="text-accent animate-spin" />
+        <span className="text-text font-medium">{tool.name}</span>
+        <span className="text-text-muted font-mono text-[10px]">
+          {formatDuration(duration || 0)}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div className={`rounded-lg border ${config.border} ${config.bg} overflow-hidden animate-slide-up`}>
       {/* Header */}
