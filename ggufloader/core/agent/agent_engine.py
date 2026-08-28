@@ -84,7 +84,7 @@ RISK_LOW = "low"       # read-only tools: list, read, search
 RISK_MEDIUM = "medium" # non-destructive writes: write_file, edit_file
 RISK_HIGH = "high"     # destructive/external: run_command, run_python, git write ops
 
-_SYSTEM_PROMPT = """You are an AI assistant built to help developers. You're knowledgeable, decisive, and supportive.
+_SYSTEM_PROMPT = """You are a friendly, helpful AI assistant. You help people understand, summarize, and work with their documents. You are patient, clear, and always explain things in simple language.
 
 Your workspace: __WORKSPACE__
 
@@ -102,25 +102,25 @@ You talk to the system through a strict JSON protocol. Whenever you need to use 
 }
 
 Rules:
+- Be helpful, patient, and explain things in plain language - avoid technical jargon
 - Jump straight into action when the task is clear; use tools proactively
 - "tool_calls" and "answer" are MUTUALLY EXCLUSIVE: either you still need tools (non-empty "tool_calls", NO "answer"), or you are finished ("tool_calls": [], with your final answer in "answer"). Never include both.
 - If you're unsure about your answer, set "reflect": true and "reflect_reason": "<what you want to verify>". This triggers a verification step before your answer is shown.
-- Every tool result is listed for you under "Tool results" right after the conversation. NEVER call a tool again with the same parameters when its result is already listed, unless the workspace may have changed since (for example you just wrote or edited a file and want to verify). Repeating a finished tool call wastes steps.
-- To answer questions about the workspace's files, READ them: list_directory to see what exists, then read_file each relevant file (read_file extracts text from Markdown, PDF, and DOCX). search_files finds text INSIDE files - it does not read files into your context, so never use it just to enumerate or find file names.
-- When a tool fails, read the error message and retry with corrected parameters
+- Every tool result is listed for you under "Tool results" right after the conversation. NEVER call a tool again with the same parameters when its result is already listed. Repeating a finished tool call wastes steps.
+- To work with documents: use list_directory to see files, read_file to open them (read_file handles PDF, DOCX, and Markdown automatically). search_files finds text inside files.
+- When someone asks about a document, read it first, then give a clear summary or answer
+- When a tool fails, read the error message and try a different approach
 - Always work within the workspace directory
+- For calculations or data processing, use the python_interpreter tool
 
 Example conversation:
 
-User: Create notes.md containing "Hello", then list the workspace.
+User: Can you summarize the report.pdf file?
 Assistant:
-{"reasoning": "I'll create the file first.", "tool_calls": [{"tool": "write_file", "parameters": {"path": "notes.md", "content": "Hello"}}]}
-Tool result for write_file: success - Successfully wrote 5 characters to notes.md
+{"reasoning": "I need to read the PDF file first to summarize it.", "tool_calls": [{"tool": "read_file", "parameters": {"path": "report.pdf"}}]}
+Tool result for read_file: success - [extracted text content]
 Assistant:
-{"reasoning": "The file was created. Now I'll list the workspace.", "tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}
-Tool result for list_directory: success - notes.md (1 items)
-Assistant:
-{"reasoning": "I already see both tool results, so I don't need any more tool calls.", "tool_calls": [], "answer": "Created notes.md with the text \"Hello\" and confirmed it's in the workspace."}
+{"reasoning": "I have the document content. Now I'll provide a clear summary.", "tool_calls": [], "answer": "Here's a summary of your report:\n\n**Key Points:**\n- ...\n\n**Conclusion:**\n- ..."}
 """
 
 
@@ -416,10 +416,26 @@ class AgentEngine:
         max_tokens: int = 2048,
         max_steps: int = 8,
         json_retries: int = 2,
+        model_path: Optional[str] = None,
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
         self.tools = tools or ToolRegistry(self.workspace)
+        # --- Model-specific router ---
+        self._model_path = model_path
+        self._model_profile: Dict[str, Any] = {}
+        self._model_params: Dict[str, Any] = {}
+        if model_path:
+            try:
+                self._model_profile = resolve_chat_config(model_path)
+                self._model_params = self._model_profile.get("params", {})
+                logger.info(
+                    "Model router: family=%s params=%s",
+                    self._model_profile.get("family", "unknown"),
+                    self._model_params,
+                )
+            except Exception as e:
+                logger.warning("Failed to load model profile: %s", e)
         self.max_tokens = max_tokens
         self.max_steps = max_steps
         self.json_retries = json_retries
@@ -1193,7 +1209,12 @@ class AgentEngine:
     # ------------------------------------------------------------------
     def _system_prompt(self) -> str:
         """Build system prompt with workspace context and AGENTS.md injection."""
-        base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
+        # If model doesn't support system prompts, use a minimal prompt
+        if self._model_profile and not self._model_profile.get("supports_system_prompt", True):
+            base = "You are a friendly, helpful AI assistant. Help with documents."
+            base = base.replace("__WORKSPACE__", str(self.workspace))
+        else:
+            base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
         workspace_ctx = self._workspace_ctx.build_context()
         if workspace_ctx:
             base += "\n\n" + workspace_ctx
@@ -1252,7 +1273,10 @@ class AgentEngine:
             # Use retry handler with exponential backoff
             result = self._retry_handler.retry_llm(
                 self.llm, args=(prompt,),
-                kwargs={"max_tokens": self.max_tokens, "temperature": 0.1},
+                kwargs={
+                    "max_tokens": self.max_tokens,
+                    "temperature": self._model_params.get("temperature", 0.1),
+                },
             )
             # Track token usage (rough estimate: 1 token ~ 4 chars)
             self._total_llm_calls += 1
