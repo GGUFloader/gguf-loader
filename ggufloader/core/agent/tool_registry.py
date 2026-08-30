@@ -677,13 +677,325 @@ def tool_content_for_context(result: Dict[str, Any], max_chars: int = 4000) -> O
     if tool == "search_files" and isinstance(payload, list):
         paths = ", ".join(str(p) for p in payload[:50])
         return f"{paths} ({len(payload)} matches)"
+    if tool == "glob" and isinstance(payload, list):
+        paths = ", ".join(str(p) for p in payload[:50])
+        return f"{paths} ({len(payload)} files)"
+    if tool == "move_file" and isinstance(payload, str):
+        return payload
+    if tool == "remember" and isinstance(payload, str):
+        return payload
+    if tool == "recall" and isinstance(payload, str):
+        return payload[:2000]
+    if tool == "forget" and isinstance(payload, str):
+        return payload
     return None
+
+
+class GlobTool(Tool):
+    """Find files matching a glob pattern under the workspace."""
+
+    name = "glob"
+    description = "Find files matching a glob pattern (e.g. **/*.py, src/**/*.ts)"
+    schema = {
+        "type": "object",
+        "properties": {
+            "pattern": {
+                "type": "string",
+                "description": "Glob pattern (supports **, *, ?)",
+            },
+            "path": {
+                "type": "string",
+                "description": "Directory to search in (defaults to workspace root)",
+            },
+        },
+        "required": ["pattern"],
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            pattern = params.get("pattern", "")
+            if not pattern:
+                return {"status": "error", "error": "pattern is required", "tool_name": self.name}
+            base = self.resolve(params.get("path", "."))
+            if not base.is_dir():
+                return {"status": "error", "error": "Directory not found", "tool_name": self.name}
+            matches = sorted(str(p.relative_to(self.workspace)) for p in base.glob(pattern) if p.is_file())
+            return {
+                "status": "success",
+                "result": matches[:200],
+                "total_matches": len(matches),
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class MoveFileTool(Tool):
+    """Move or rename a file within the workspace."""
+
+    name = "move_file"
+    description = "Move or rename a file within the workspace"
+    requires_approval = True
+    schema = {
+        "type": "object",
+        "properties": {
+            "source": {"type": "string", "description": "Current file path (relative to workspace)"},
+            "destination": {"type": "string", "description": "New file path (relative to workspace)"},
+        },
+        "required": ["source", "destination"],
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            src = self.resolve(params.get("source", ""))
+            dst = self.resolve(params.get("destination", ""))
+            if not src.exists():
+                return {"status": "error", "error": f"Source not found: {src.name}", "tool_name": self.name}
+            if dst.exists():
+                return {"status": "error", "error": f"Destination already exists: {dst.name}", "tool_name": self.name}
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+            return {
+                "status": "success",
+                "result": f"Moved {src.name} -> {dst.relative_to(self.workspace)}",
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class RememberTool(Tool):
+    """Store a fact or preference in long-term memory."""
+
+    name = "remember"
+    description = "Store a fact, preference, or observation in long-term memory (persists across sessions)"
+    schema = {
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Short label for the memory (e.g. 'project structure', 'user prefers tests')"},
+            "value": {"type": "string", "description": "The fact or preference to remember"},
+            "category": {
+                "type": "string",
+                "description": "Category: fact, preference, pattern, correction, context",
+                "enum": ["fact", "preference", "pattern", "correction", "context"],
+            },
+        },
+        "required": ["key", "value"],
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            key = params.get("key", "")
+            value = params.get("value", "")
+            category = params.get("category", "fact")
+            if not key or not value:
+                return {"status": "error", "error": "key and value are required", "tool_name": self.name}
+            # Import here to avoid circular imports
+            from .memory_persistence import MemoryPersistence
+            mem = MemoryPersistence(self.workspace)
+            mem.remember(key, value, category=category)
+            return {
+                "status": "success",
+                "result": f"Remembered: {key} = {value[:200]}",
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class RecallTool(Tool):
+    """Search long-term memory for relevant facts."""
+
+    name = "recall"
+    description = "Search long-term memory for facts, preferences, or past observations"
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query (matches against memory keys and values)"},
+        },
+        "required": ["query"],
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            query = params.get("query", "")
+            if not query:
+                return {"status": "error", "error": "query is required", "tool_name": self.name}
+            from .memory_persistence import MemoryPersistence
+            mem = MemoryPersistence(self.workspace)
+            results = mem.recall(query, limit=10)
+            if not results:
+                return {"status": "success", "result": "No matching memories found", "tool_name": self.name}
+            lines = [f"- [{e.category}] {e.key}: {e.value}" for e in results]
+            return {
+                "status": "success",
+                "result": "\n".join(lines),
+                "total_matches": len(results),
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class ForgetTool(Tool):
+    """Remove a memory by key."""
+
+    name = "forget"
+    description = "Remove a previously stored memory by its key"
+    schema = {
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "The key of the memory to forget"},
+        },
+        "required": ["key"],
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            key = params.get("key", "")
+            if not key:
+                return {"status": "error", "error": "key is required", "tool_name": self.name}
+            from .memory_persistence import MemoryPersistence
+            mem = MemoryPersistence(self.workspace)
+            removed = mem.forget(key)
+            if removed:
+                return {"status": "success", "result": f"Forgot: {key}", "tool_name": self.name}
+            return {"status": "success", "result": f"No memory found with key: {key}", "tool_name": self.name}
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class RecordCorrectionTool(Tool):
+    """Record a correction so the agent learns from mistakes."""
+
+    name = "record_correction"
+    description = "Record a correction: what the agent did wrong and what it should have done. Used for self-improvement."
+    schema = {
+        "type": "object",
+        "properties": {
+            "context": {"type": "string", "description": "What was being done (e.g. 'Editing main.py')"},
+            "agent_action": {"type": "string", "description": "What the agent did incorrectly"},
+            "correct_action": {"type": "string", "description": "What it should have done instead"},
+            "category": {
+                "type": "string",
+                "description": "Category: style, correctness, performance, security",
+                "enum": ["style", "correctness", "performance", "security"],
+            },
+        },
+        "required": ["context", "agent_action", "correct_action"],
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            from .self_improve import SelfImprove
+            improve = SelfImprove(self.workspace)
+            improve.record_correction(
+                context=params.get("context", ""),
+                agent_action=params.get("agent_action", ""),
+                correct_action=params.get("correct_action", ""),
+                category=params.get("category", "correctness"),
+            )
+            return {
+                "status": "success",
+                "result": f"Recorded correction: {params.get('agent_action', '')} → {params.get('correct_action', '')}",
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class GenerateAgentsMdTool(Tool):
+    """Auto-generate AGENTS.md from workspace analysis."""
+
+    name = "generate_agents_md"
+    description = "Scan the workspace and generate/update AGENTS.md with project structure, conventions, and agent instructions"
+    schema = {
+        "type": "object",
+        "properties": {
+            "force": {
+                "type": "boolean",
+                "description": "Overwrite existing AGENTS.md (default: false)",
+            },
+        },
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            from .agents_md import AgentsMdGenerator
+            gen = AgentsMdGenerator(self.workspace)
+            force = params.get("force", False)
+            written = gen.write(force=force)
+            if written:
+                content = gen.generate()
+                return {
+                    "status": "success",
+                    "result": f"Generated AGENTS.md ({len(content)} chars)",
+                    "content_preview": content[:500],
+                    "tool_name": self.name,
+                }
+            return {
+                "status": "success",
+                "result": "AGENTS.md already exists (use force=true to overwrite)",
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
+
+
+class ExportSessionTool(Tool):
+    """Export the current session as Markdown or JSON."""
+
+    name = "export_session"
+    description = "Export the current agent session as a Markdown or JSON file"
+    requires_approval = True
+    schema = {
+        "type": "object",
+        "properties": {
+            "format": {
+                "type": "string",
+                "description": "Export format: markdown or json",
+                "enum": ["markdown", "json"],
+            },
+            "filename": {
+                "type": "string",
+                "description": "Output filename (optional)",
+            },
+        },
+    }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            from .session_export import SessionExport
+            exporter = SessionExport(self.workspace)
+            fmt = params.get("format", "markdown")
+            session_data = {
+                "title": "Agent Session Export",
+                "mode": "agent",
+                "messages": [],
+            }
+            if fmt == "markdown":
+                content = exporter.export_markdown(session_data)
+            else:
+                content = exporter.export_json(session_data)
+            filepath = exporter.save(session_data, params.get("filename"))
+            return {
+                "status": "success",
+                "result": f"Exported to {filepath.name}",
+                "path": str(filepath),
+                "tool_name": self.name,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "tool_name": self.name}
 
 
 ALL_TOOL_CLASSES = (
     ListDirectoryTool, ReadFileTool, WriteFileTool, EditFileTool,
     SearchFilesTool, RunCommandTool, RunPythonTool, GitTool,
     PythonInterpreterTool, BatchExecuteTool,
+    GlobTool, MoveFileTool,
+    RememberTool, RecallTool, ForgetTool,
+    RecordCorrectionTool,
+    GenerateAgentsMdTool, ExportSessionTool,
 )
 
 

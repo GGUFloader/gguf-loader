@@ -38,6 +38,27 @@ export interface PlanState {
   phaseLog: string[]
 }
 
+export interface ProgressStep {
+  id: string
+  type: 'announce' | 'tool_call' | 'tool_result' | 'message' | 'error' | 'thinking'
+  content: string
+  timestamp: number
+  toolName?: string
+  toolArgs?: Record<string, any>
+  toolResult?: string
+  success?: boolean
+  completedSteps?: number
+  active?: boolean
+}
+
+export interface AgentMetrics {
+  tokenCount: number
+  toolCalls: number
+  toolSuccesses: number
+  durationMs: number
+  preset: string
+}
+
 interface ChatState {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -47,6 +68,9 @@ interface ChatState {
   pendingApprovals: ToolApprovalRequest[]
   plan: PlanState
   isAgentMode: boolean
+  agentMetrics: AgentMetrics
+  progressSteps: ProgressStep[]
+  currentAnnouncement: string
   addMessage: (msg: ChatMessage) => void
   appendToMessage: (id: string, content: string) => void
   setThinking: (id: string, thinking: string) => void
@@ -60,11 +84,26 @@ interface ChatState {
   updatePlan: (phase: string, plan?: PlanStep[], planStep?: PlanState['planStep'], goal?: string) => void
   resetPlan: () => void
   setAgentMode: (v: boolean) => void
+  updateAgentMetrics: (partial: Partial<AgentMetrics>) => void
+  resetAgentMetrics: () => void
   clearMessages: () => void
   sendMessage: (text: string) => Promise<void>
+  // Progress step actions
+  addProgressStep: (step: Omit<ProgressStep, 'id' | 'timestamp'>) => void
+  setCurrentAnnouncement: (text: string) => void
+  updateProgressStep: (id: string, updates: Partial<ProgressStep>) => void
+  clearProgressSteps: () => void
 }
 
 let ws: WebSocket | null = null
+
+const DEFAULT_METRICS: AgentMetrics = {
+  tokenCount: 0,
+  toolCalls: 0,
+  toolSuccesses: 0,
+  durationMs: 0,
+  preset: '',
+}
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -75,6 +114,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingApprovals: [],
   plan: { phase: 'idle', goal: '', plan: [], planStep: null, phaseLog: [] },
   isAgentMode: false,
+  agentMetrics: { ...DEFAULT_METRICS },
+  progressSteps: [],
+  currentAnnouncement: '',
 
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
 
@@ -94,14 +136,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   startStreaming: () => {
     const id = `msg_${Date.now()}`
-    set({ isStreaming: true, currentStreamingId: id, streamingText: '', reasoningBlocks: [] })
+    set({
+      isStreaming: true,
+      currentStreamingId: id,
+      streamingText: '',
+      reasoningBlocks: [],
+      agentMetrics: { ...DEFAULT_METRICS },
+    })
     return id
   },
 
   stopStreaming: () => {
     const { streamingText, currentStreamingId } = get()
     if (currentStreamingId && streamingText) {
-      // Move streaming text to a permanent message
       get().appendToMessage(currentStreamingId, streamingText)
     }
     set({ isStreaming: false, currentStreamingId: null, streamingText: '' })
@@ -109,11 +156,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setStreamingText: (text) => set({ streamingText: text }),
 
-  appendStreamingText: (token) => set((s) => ({ streamingText: s.streamingText + token })),
+  appendStreamingText: (token) => set((s) => ({
+    streamingText: s.streamingText + token,
+    agentMetrics: { ...s.agentMetrics, tokenCount: s.agentMetrics.tokenCount + 1 },
+  })),
 
-  addReasoningBlock: (content) => set((s) => ({ reasoningBlocks: [...s.reasoningBlocks, content] })),
+  addReasoningBlock: (content) => set((s) => ({
+    reasoningBlocks: [...s.reasoningBlocks, content],
+  })),
 
-  addPendingApproval: (req) => set((s) => ({ pendingApprovals: [...s.pendingApprovals, req] })),
+  addPendingApproval: (req) => set((s) => ({
+    pendingApprovals: [...s.pendingApprovals, req],
+  })),
 
   removePendingApproval: (id) => set((s) => ({
     pendingApprovals: s.pendingApprovals.filter((p) => p.id !== id),
@@ -133,22 +187,68 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setAgentMode: (v) => set({ isAgentMode: v }),
 
-  clearMessages: () => set({ messages: [], isStreaming: false, currentStreamingId: null, streamingText: '', reasoningBlocks: [], plan: { phase: 'idle', goal: '', plan: [], planStep: null, phaseLog: [] } }),
+  updateAgentMetrics: (partial) => set((s) => ({
+    agentMetrics: { ...s.agentMetrics, ...partial },
+  })),
+
+  resetAgentMetrics: () => set({ agentMetrics: { ...DEFAULT_METRICS } }),
+
+  addProgressStep: (step) => set((s) => ({
+    progressSteps: [...s.progressSteps, {
+      ...step,
+      id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+    }],
+  })),
+
+  setCurrentAnnouncement: (text) => set({ currentAnnouncement: text }),
+
+  updateProgressStep: (id, updates) => set((s) => ({
+    progressSteps: s.progressSteps.map((ps) =>
+      ps.id === id ? { ...ps, ...updates } : ps
+    ),
+  })),
+
+  clearProgressSteps: () => set({ progressSteps: [], currentAnnouncement: '' }),
+
+  clearMessages: () => set({
+    messages: [],
+    isStreaming: false,
+    currentStreamingId: null,
+    streamingText: '',
+    reasoningBlocks: [],
+    plan: { phase: 'idle', goal: '', plan: [], planStep: null, phaseLog: [] },
+    agentMetrics: { ...DEFAULT_METRICS },
+    progressSteps: [],
+    currentAnnouncement: '',
+  }),
 
   sendMessage: async (text: string) => {
     const store = get()
     store.addMessage({ id: `user_${Date.now()}`, role: 'user', content: text, timestamp: Date.now() })
 
-    // Load sampling params from localStorage
+    // Load settings from localStorage
     let sampling = { temperature: 0.7, max_tokens: 4096 }
     let systemPrompt = ''
+    let workspace = '.'
+    let preset = 'full_stack'
     try {
       const saved = localStorage.getItem('ggufloader_settings')
       if (saved) {
         const s = JSON.parse(saved)
         if (s.sampling) sampling = { ...sampling, ...s.sampling }
         if (s.systemPrompt) systemPrompt = s.systemPrompt
+        if (s.workspace) workspace = s.workspace
+        if (s.preset) preset = s.preset
       }
+    } catch {}
+
+    // Get current model path from model store
+    let modelPath: string | undefined
+    try {
+      const { useModelStore } = await import('./modelStore')
+      const modelInfo = useModelStore.getState().info
+      if (modelInfo?.path) modelPath = modelInfo.path
     } catch {}
 
     // Try WebSocket first, fallback to REST
@@ -162,6 +262,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         temperature: sampling.temperature,
         max_tokens: sampling.max_tokens,
         system_prompt: systemPrompt || undefined,
+        // Agent-specific fields
+        ...(isAgent ? {
+          workspace,
+          preset,
+          model_path: modelPath,
+        } : {}),
       }))
     } else {
       const msgId = store.startStreaming()
@@ -229,21 +335,80 @@ export function connectWebSocket() {
               }
             }
           }
+          // Update agent metrics
+          useChatStore.getState().updateAgentMetrics({
+            toolCalls: useChatStore.getState().agentMetrics.toolCalls + 1,
+            toolSuccesses: useChatStore.getState().agentMetrics.toolSuccesses + (data.success ? 1 : 0),
+          })
+          break
+        case 'progress_announce':
+          // Agent announces what it's about to do
+          useChatStore.getState().setCurrentAnnouncement(data.content)
+          break
+        case 'progress_tool_call':
+          // Agent is executing a tool
+          useChatStore.getState().addProgressStep({
+            type: 'tool_call',
+            content: data.content || data.name,
+            toolName: data.name,
+            toolArgs: data.args,
+            active: true,
+          })
+          break
+        case 'progress_tool_result':
+          // Tool completed — mark the last active tool_call as done
+          {
+            const state = useChatStore.getState()
+            const lastActive = [...state.progressSteps].reverse().find(
+              s => s.type === 'tool_call' && s.active
+            )
+            if (lastActive) {
+              useChatStore.getState().updateProgressStep(lastActive.id, {
+                active: false,
+                success: data.success,
+              })
+            }
+            useChatStore.getState().addProgressStep({
+              type: 'tool_result',
+              content: data.result || data.error || 'Done',
+              toolName: data.tool,
+              toolResult: data.result || data.error,
+              success: data.success,
+            })
+          }
+          // Commit announcement when first tool starts
+          {
+            const announcement = useChatStore.getState().currentAnnouncement
+            if (announcement) {
+              useChatStore.getState().addProgressStep({
+                type: 'announce',
+                content: announcement,
+              })
+              useChatStore.getState().setCurrentAnnouncement('')
+            }
+          }
+          break
+        case 'progress_step_complete':
+          // A high-level step is done
+          useChatStore.getState().addProgressStep({
+            type: 'message',
+            content: data.content,
+          })
           break
         case 'agent_phase':
-          // Handle structured phase events from agent engine
           useChatStore.getState().updatePlan(
             data.phase || 'idle',
             undefined,
             data.plan_step || undefined,
           )
-          // Append phase status as reasoning block
           if (data.status) {
             useChatStore.getState().addReasoningBlock(data.status)
           }
+          if (data.preset) {
+            useChatStore.getState().updateAgentMetrics({ preset: data.preset })
+          }
           break
         case 'agent_plan_update':
-          // Real-time plan step status updates (running -> done/failed)
           useChatStore.getState().updatePlan(
             data.phase || 'idle',
             data.plan || undefined,
@@ -251,12 +416,7 @@ export function connectWebSocket() {
           )
           break
         case 'agent_complete':
-          // Final plan + phase log from agent run
-          useChatStore.getState().updatePlan(
-            'idle',
-            data.plan || [],
-            null,
-          )
+          useChatStore.getState().updatePlan('idle', data.plan || [], null)
           useChatStore.setState((s) => ({
             plan: { ...s.plan, phaseLog: data.phase_log || [] },
           }))
@@ -273,6 +433,21 @@ export function connectWebSocket() {
           }
           if (data.plan) {
             useChatStore.getState().updatePlan('idle', data.plan)
+          }
+          // Commit any remaining announcement as final message
+          {
+            const announcement = useChatStore.getState().currentAnnouncement
+            if (announcement) {
+              useChatStore.getState().addProgressStep({
+                type: 'announce',
+                content: announcement,
+              })
+              useChatStore.getState().setCurrentAnnouncement('')
+            }
+          }
+          // Update duration metric
+          if (data.duration_ms) {
+            useChatStore.getState().updateAgentMetrics({ durationMs: data.duration_ms })
           }
           store.stopStreaming()
           break

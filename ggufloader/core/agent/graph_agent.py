@@ -38,6 +38,20 @@ from langgraph.types import Command, StreamWriter, interrupt
 from typing import TypedDict
 
 from .agent_engine import _SYSTEM_PROMPT, extract_json, stale_repeat_signatures, summarize_directive
+from .audit_log import AuditLog, EventType
+from .context_budget import ContextBudget, estimate_tokens
+from .cost_estimator import CostEstimator
+from .error_patterns import ErrorPatternDetector
+from .health_monitor import HealthMonitor
+from .memory_persistence import MemoryPersistence
+from .mcp_bridge import MCPBridge
+from .plugin_manager import PluginManager
+from .profiler import AgentProfiler
+from .rate_limiter import RateLimiter
+from .self_improve import SelfImprove
+from .session_replay import SessionReplay
+from .agents_md import AgentsMdGenerator
+from .session_export import SessionExport
 from .tool_registry import ToolRegistry, tool_content_for_context, validate_tool_call
 from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemory
 
@@ -108,6 +122,50 @@ class GraphAgent:
         self._prefix_cache = PromptPrefixCache()
         self._memory = WorkingMemory()
 
+        # Long-term memory persistence (survives restarts)
+        self._memory_store = MemoryPersistence(self.workspace)
+
+        # Context budget tracking and compaction
+        self._context_budget = ContextBudget()
+
+        # Plugin system: discover and load custom tools
+        self._plugin_mgr = PluginManager(self.workspace)
+        self._plugin_mgr.load_all(self.tools)
+
+        # Error pattern detection
+        self._error_patterns = ErrorPatternDetector(self.workspace)
+
+        # Self-improvement from corrections
+        self._self_improve = SelfImprove(self.workspace)
+
+        # Audit log for full traceability
+        self._audit = AuditLog(self.workspace)
+
+        # Cost estimation (tokens, throughput, electricity)
+        self._cost = CostEstimator()
+
+        # Health monitoring
+        self._health = HealthMonitor()
+
+        # Rate limiting for LLM and tool calls
+        self._rate_limiter = RateLimiter()
+
+        # Session replay for debugging
+        self._replay = SessionReplay(self.workspace)
+        self._replay_session = None
+
+        # AGENTS.md generator
+        self._agents_md = AgentsMdGenerator(self.workspace)
+
+        # Session export
+        self._export = SessionExport(self.workspace)
+
+        # MCP bridge: discover and use tools from external MCP servers
+        self._mcp_bridge = MCPBridge(self.workspace)
+
+        # Performance profiler: per-step latency, throughput, bottleneck detection
+        self._profiler = AgentProfiler()
+
         self._saver_conn, self._saver = self._open_checkpointer()
         self._app = self._build_graph()
 
@@ -157,7 +215,30 @@ class GraphAgent:
         self._on_token = on_token or (lambda _tok: None)
         self._on_approval = on_approval or (lambda _payload: True)
 
+        # Start replay session
+        import time as _time
+        session_id = f"replay_{int(_time.time() * 1000)}"
+        self._replay_session = self._replay.create_session(session_id, title=user_message[:80])
+        self._replay.record_user_message(user_message)
+
+        # Start profiling
+        self._profiler.start_run(session_id)
+
+        # Discover MCP tools if any servers are configured
+        try:
+            self._mcp_bridge.register_tools(self.tools)
+        except Exception:
+            pass
+
         base_messages = self._load_thread_messages() or list(self.messages)
+
+        # Context compaction: trim old messages if approaching token limit
+        if base_messages:
+            strategy = self._context_budget.check_budget(base_messages)
+            if strategy != "ok":
+                on_status(f"📦 Compacting context ({strategy})...")
+                base_messages = self._context_budget.compact(base_messages)
+
         inputs: GraphState = {
             "messages": base_messages + [{"role": "user", "content": user_message}],
             "tool_results": [],
@@ -216,7 +297,30 @@ class GraphAgent:
         # The checkpoint holds the authoritative conversation (includes the
         # assistant reply); fall back to the inputs when nothing was saved.
         self.messages = self._load_thread_messages() or inputs["messages"]
-        return {"response": final_answer or "Done.", "tool_results": tool_results}
+
+        # Update context budget for next turn
+        if self.messages:
+            self._context_budget.check_budget(self.messages)
+
+        # Replay: record final response and save
+        self._replay.record_agent_response(final_answer or "Done.")
+        self._replay.record_state({
+            "total_tokens": self._cost._total_output_tokens if hasattr(self._cost, '_total_output_tokens') else 0,
+            "steps": len(tool_results),
+        })
+        try:
+            self._replay.save_session(self._replay_session)
+        except Exception:
+            pass
+
+        # Finish profiling
+        profile_summary = self._profiler.finish_run()
+
+        return {
+            "response": final_answer or "Done.",
+            "tool_results": tool_results,
+            "profile": profile_summary,
+        }
 
     def cancel(self) -> None:
         """Cooperatively stop the running turn at the next safe boundary."""
@@ -355,21 +459,61 @@ class GraphAgent:
                 self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
                 failures.append((call, {"status": "error", "error": validation_error, "tool_name": call.get("tool", "")}))
                 continue
+            # Audit: log tool call
+            self._audit.log_tool_call(call.get("tool", "unknown"), call.get("parameters", {}))
+            # Replay: record tool call
+            self._replay.record_tool_call(call.get("tool", "unknown"), call.get("parameters", {}))
+            # Rate limit check for tools
+            self._rate_limiter.allow_tool()
             if index - 1 in approvals and not approvals[index - 1]:
                 result = {"status": "error", "error": "Approval denied by the user",
                           "tool_name": call.get("tool", "")}
+                self._audit.log_approval(call.get("tool", "unknown"), "denied")
             else:
+                if index - 1 in approvals:
+                    self._audit.log_approval(call.get("tool", "unknown"), "approved")
+                self._profiler.begin_step("tool_execute", tool_name=call.get("tool", ""))
                 result = self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
+                self._profiler.end_step(
+                    success=result.get("status") == "success",
+                    error=result.get("error", ""),
+                )
                 executed_calls.append(
                     {"signature": signature, "tool": call.get("tool", "")}
                 )
             tool_results.append(result)
             writer({"event": "tool", "result": result})
+            # Audit: log tool result
+            self._audit.log_tool_result(
+                call.get("tool", "unknown"),
+                result.get("status", "unknown"),
+                error=result.get("error"),
+            )
+            # Replay: record tool result
+            self._replay.record_tool_result(
+                call.get("tool", "unknown"),
+                result.get("status", "unknown"),
+                error=result.get("error"),
+            )
+            # Health: record tool metrics
+            self._health.increment("tool_calls")
             if result.get("status") == "success":
+                self._health.increment("tool_successes")
                 writer({"event": "status", "text": f"  ✓ {self._summarize_result(result)}"})
             else:
-                writer({"event": "status", "text": f"  ✗ {result.get('error', 'Unknown error')}"})
+                self._health.increment("errors")
+                error_msg = result.get("error", "Unknown error")
+                writer({"event": "status", "text": f"  ✗ {error_msg}"})
                 self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
+                # Record error pattern for self-improvement
+                try:
+                    self._error_patterns.record_error(
+                        "tool_failure", error_msg,
+                        tool=call.get("tool", ""),
+                        file_path=str(call.get("parameters", {}).get("path", "")),
+                    )
+                except Exception:
+                    pass
                 failures.append((call, result))
 
         for failed_call, failed_result in failures:
@@ -409,11 +553,27 @@ class GraphAgent:
     # Prompt construction
     # ------------------------------------------------------------------
     def _system_prompt(self) -> str:
-        """Build system prompt with workspace context and AGENTS.md injection."""
+        """Build system prompt with workspace context, AGENTS.md, memory, and learned patterns."""
         base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
         workspace_ctx = self._workspace_ctx.build_context()
         if workspace_ctx:
             base += "\n\n" + workspace_ctx
+        # Inject long-term memory
+        memory_ctx = self._memory_store.get_context(max_chars=2000)
+        if memory_ctx:
+            base += "\n\n" + memory_ctx
+        # Inject error patterns (things to avoid)
+        patterns = self._error_patterns.get_patterns(min_occurrences=2)
+        if patterns:
+            error_lines = ["## Known Error Patterns (avoid these)"]
+            for p in patterns[:10]:
+                fix = f" → {p.suggested_fix}" if p.suggested_fix else ""
+                error_lines.append(f"- {p.description} ({p.occurrences}x){fix}")
+            base += "\n\n" + "\n".join(error_lines)
+        # Inject self-improvement advice
+        improve_ctx = self._self_improve.get_advice("general")
+        if improve_ctx:
+            base += "\n\n" + improve_ctx
         return base
 
     def _get_prefix(self) -> str:
@@ -537,19 +697,47 @@ class GraphAgent:
     def _call_llm(self, prompt: str, writer: StreamWriter, stream_tokens: bool = False) -> str:
         """Call the LLM; streams token events when the callable yields chunks.
 
-        The final-answer synthesis streams plain text to the UI. The JSON
-        protocol calls do not (dumping raw JSON into the chat is noise).
+        Instruments: audit log, cost tracking, health metrics, rate limiting.
         """
         self._check_cancel()
+
+        # Rate limit check
+        self._rate_limiter.allow_llm()
+
+        # Profiling: begin step
+        self._profiler.begin_step("llm_call")
+
+        # Audit: log LLM request
+        self._audit.log(EventType.LLM_REQUEST, {
+            "prompt_preview": prompt[:200],
+            "max_tokens": self.max_tokens,
+        })
+
+        import time as _time
+        llm_start = _time.monotonic()
         try:
             result = self.llm(prompt, max_tokens=self.max_tokens, temperature=0.1)
         except AgentCancelled:
             raise
         except Exception as e:  # noqa: BLE001
             logger.error("LLM call failed: %s", e)
+            self._audit.log(EventType.LLM_ERROR, {"error": str(e)})
+            self._health.increment("errors")
             return ""
+        llm_ms = int((_time.monotonic() - llm_start) * 1000)
+
         if isinstance(result, str):
             self._check_cancel()
+            # Estimate tokens (4 chars per token)
+            out_tokens = max(1, len(result) // 4)
+            in_tokens = max(1, len(prompt) // 4)
+            self._cost.record_call(in_tokens, out_tokens, llm_ms)
+            self._audit.log(EventType.LLM_RESPONSE, {
+                "tokens_out": out_tokens, "latency_ms": llm_ms,
+            })
+            self._health.record("llm.latency_ms", llm_ms)
+            self._health.increment("llm_calls")
+            self._profiler.end_step(input_tokens=in_tokens, output_tokens=out_tokens)
             return result
         chunks: List[str] = []
         for chunk in result:
@@ -558,7 +746,17 @@ class GraphAgent:
                 chunks.append(chunk)
                 if stream_tokens:
                     writer({"event": "token", "chunk": chunk})
-        return "".join(chunks)
+        full = "".join(chunks)
+        out_tokens = max(1, len(full) // 4)
+        in_tokens = max(1, len(prompt) // 4)
+        self._cost.record_call(in_tokens, out_tokens, llm_ms)
+        self._audit.log(EventType.LLM_RESPONSE, {
+            "tokens_out": out_tokens, "latency_ms": llm_ms,
+        })
+        self._health.record("llm.latency_ms", llm_ms)
+        self._health.increment("llm_calls")
+        self._profiler.end_step(input_tokens=in_tokens, output_tokens=out_tokens)
+        return full
 
     # ------------------------------------------------------------------
     # Event plumbing

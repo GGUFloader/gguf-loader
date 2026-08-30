@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
-  X, Bot, Palette, Keyboard, Cpu, Sliders, Monitor, Moon, Sun,
+  X, Bot, Palette, Keyboard, Cpu, Sliders,
   FolderOpen, RefreshCw, Zap, Trash2, Eye, EyeOff, Globe, Cloud,
+  Search, FileText, Bug, Rocket,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
-import { gpuApi } from '../../api/client'
+import { gpuApi, agentApi } from '../../api/client'
+import { ThemeSwitcher } from '../ui/ThemeSwitcher'
 
 interface Props {
   onClose: () => void
@@ -17,17 +19,6 @@ const TABS = [
   { id: 'hardware', label: 'Hardware', icon: Zap },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'keyboard', label: 'Keyboard', icon: Keyboard },
-]
-
-const ACCENT_COLORS = [
-  { name: 'Amber', value: '#f59e0b' },
-  { name: 'Blue', value: '#3b82f6' },
-  { name: 'Purple', value: '#8b5cf6' },
-  { name: 'Pink', value: '#ec4899' },
-  { name: 'Green', value: '#22c55e' },
-  { name: 'Cyan', value: '#06b6d4' },
-  { name: 'Orange', value: '#f97316' },
-  { name: 'Red', value: '#ef4444' },
 ]
 
 const SHORTCUTS = [
@@ -55,7 +46,7 @@ const DEFAULT_SAMPLING = {
 
 export function SettingsDialog({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState('model')
-  const { theme, toggleTheme } = useUIStore()
+  useUIStore()
 
   // Model settings
   const [gpuLayers, setGpuLayers] = useState(-1)
@@ -343,14 +334,8 @@ export function SettingsDialog({ onClose }: Props) {
             {activeTab === 'agent' && (
               <div className="space-y-6">
                 <Section title="Agent Preset">
-                  <div className="grid grid-cols-2 gap-2">
-                    {['standard', 'agent', 'minimal', 'creator'].map((p) => (
-                      <button key={p} onClick={() => { setPreset(p); setTimeout(saveSettings, 100) }}
-                        className={`px-3 py-2 rounded-lg text-sm capitalize transition-colors ${preset === p ? 'bg-accent/15 text-accent border border-accent/30' : 'bg-elevated text-text-sec border border-border hover:border-accent/30'}`}>
-                        {p}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-xs text-text-muted mb-2">Choose a preset that controls the agent's tools, steps, and behavior.</p>
+                  <AgentPresetGrid preset={preset} onSelect={(p) => { setPreset(p); setTimeout(saveSettings, 100) }} />
                 </Section>
 
                 <Section title="System Prompt">
@@ -456,27 +441,7 @@ export function SettingsDialog({ onClose }: Props) {
             {/* === APPEARANCE TAB === */}
             {activeTab === 'appearance' && (
               <div className="space-y-6">
-                <Section title="Theme">
-                  <Field label="Mode">
-                    <div className="flex gap-2">
-                      {[{ id: 'dark', icon: Moon, label: 'Dark' }, { id: 'light', icon: Sun, label: 'Light' }, { id: 'system', icon: Monitor, label: 'System' }].map((t) => (
-                        <button key={t.id} onClick={() => theme !== t.id && toggleTheme()}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${theme === t.id ? 'bg-accent/15 text-accent border border-accent/30' : 'bg-elevated text-text-sec border border-border hover:border-accent/30'}`}>
-                          <t.icon size={13} />{t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </Field>
-                </Section>
-                <Section title="Accent Color">
-                  <div className="flex gap-2 flex-wrap">
-                    {ACCENT_COLORS.map((c) => (
-                      <button key={c.value} onClick={() => { setAccentColor(c.value); setTimeout(saveSettings, 100) }}
-                        className={`w-7 h-7 rounded-full border-2 transition-all ${accentColor === c.value ? 'border-white scale-110' : 'border-transparent hover:scale-105'}`}
-                        style={{ backgroundColor: c.value }} title={c.name} />
-                    ))}
-                  </div>
-                </Section>
+                <ThemeSwitcher />
                 <Section title="Text">
                   <Field label="Font Size">
                     <div className="flex items-center gap-3">
@@ -559,5 +524,56 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       <div className="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform"
         style={{ left: checked ? '18px' : '2px' }} />
     </button>
+  )
+}
+
+const ICON_MAP: Record<string, typeof Bot> = {
+  '🔍': Search, '📝': FileText, '♻️': RefreshCw,
+  '🐛': Bug, '🚀': Rocket, '⚡': Zap,
+}
+
+interface AgentPresetInfo {
+  id: string; name: string; description: string; icon: string
+  max_steps: number; temperature: number
+}
+
+const FALLBACK_PRESETS: AgentPresetInfo[] = [
+  { id: 'research', name: 'Research', description: 'Read-only exploration.', icon: '🔍', max_steps: 12, temperature: 0.1 },
+  { id: 'code_review', name: 'Code Review', description: 'Structured analysis.', icon: '📝', max_steps: 10, temperature: 0.1 },
+  { id: 'refactor', name: 'Refactor', description: 'Safe refactoring.', icon: '♻️', max_steps: 15, temperature: 0.05 },
+  { id: 'debug', name: 'Debug', description: 'Error-focused debugging.', icon: '🐛', max_steps: 12, temperature: 0.1 },
+  { id: 'full_stack', name: 'Full Stack', description: 'All tools, maximum flexibility.', icon: '🚀', max_steps: 20, temperature: 0.1 },
+  { id: 'quick_fix', name: 'Quick Fix', description: 'Fast, minimal changes.', icon: '⚡', max_steps: 4, temperature: 0.05 },
+]
+
+function AgentPresetGrid({ preset, onSelect }: { preset: string; onSelect: (id: string) => void }) {
+  const [presets, setPresets] = useState<AgentPresetInfo[]>(FALLBACK_PRESETS)
+
+  useEffect(() => {
+    agentApi.presets().then((data) => {
+      if (data && data.length > 0) setPresets(data)
+    }).catch(() => {})
+  }, [])
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {presets.map((p) => {
+        const Icon = ICON_MAP[p.icon] || Bot
+        const isActive = preset === p.id
+        return (
+          <button key={p.id} onClick={() => onSelect(p.id)}
+            className={`flex items-start gap-2 px-3 py-2 rounded-lg text-left transition-colors ${
+              isActive ? 'bg-accent/15 text-accent border border-accent/30' : 'bg-elevated text-text-sec border border-border hover:border-accent/30'
+            }`}>
+            <Icon size={14} className="mt-0.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{p.name}</div>
+              <div className="text-[10px] text-text-muted leading-tight">{p.description}</div>
+              <div className="text-[10px] text-text-muted mt-0.5">{p.max_steps} steps · t={p.temperature}</div>
+            </div>
+          </button>
+        )
+      })}
+    </div>
   )
 }

@@ -93,3 +93,50 @@ body {
 .animate-scale-in {
   animation: scale-in 0.15s ease-out;
 }
+
+/* Reduced motion */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Safe area for mobile bottom nav */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Mobile touch targets */
+@media (pointer: coarse) {
+  button, a, [role='button'] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Responsive panel overlay on tablet */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .panel-overlay {
+    position: fixed;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+  }
+}

@@ -1,65 +1,63 @@
 import { useEffect } from 'react'
+import { useShortcutsStore, eventToKey } from '../stores/shortcutsStore'
 import { useUIStore } from '../stores/uiStore'
 import { useChatStore } from '../stores/chatStore'
 
+/**
+ * Global keyboard shortcuts listener.
+ * Registers default shortcuts and listens for keydown events.
+ */
 export function useKeyboardShortcuts() {
-  const { toggleAgentMode, toggleLeftPanel, toggleRightPanel } = useUIStore()
-  const { isStreaming, stopStreaming } = useChatStore()
+  const { register, shortcuts, toggleCommandPalette } = useShortcutsStore()
+  const { setRightPanelTab, toggleAgentMode, toggleLeftPanel, toggleRightPanel } = useUIStore()
+  const { clearMessages } = useChatStore()
 
+  // Register default shortcuts on mount
+  useEffect(() => {
+    const defaults = [
+      { id: 'cmd+k', label: 'Command Palette', description: 'Open command palette', category: 'System', keys: ['Cmd', 'K'], action: toggleCommandPalette },
+      { id: 'ctrl+k', label: 'Command Palette', description: 'Open command palette', category: 'System', keys: ['Ctrl', 'K'], action: toggleCommandPalette, hidden: true },
+      { id: 'toggle-agent', label: 'Toggle Agent Mode', description: 'Switch between chat and agent mode', category: 'Agent', keys: ['Cmd', 'Shift', 'A'], action: toggleAgentMode },
+      { id: 'clear-chat', label: 'Clear Chat', description: 'Clear all messages', category: 'Chat', keys: ['Cmd', 'Shift', 'L'], action: clearMessages },
+      { id: 'toggle-left', label: 'Toggle Left Panel', description: 'Show/hide left sidebar', category: 'View', keys: ['Cmd', 'Shift', '['], action: toggleLeftPanel },
+      { id: 'toggle-right', label: 'Toggle Right Panel', description: 'Show/hide right panel', category: 'View', keys: ['Cmd', 'Shift', ']'], action: toggleRightPanel },
+      { id: 'panel-files', label: 'Open Files', description: 'Switch to file explorer', category: 'Navigation', keys: ['Cmd', '1'], action: () => setRightPanelTab('files') },
+      { id: 'panel-dash', label: 'Open Dashboard', description: 'Switch to dashboard', category: 'Navigation', keys: ['Cmd', '2'], action: () => setRightPanelTab('dashboard') },
+      { id: 'panel-models', label: 'Open Models', description: 'Switch to model catalog', category: 'Navigation', keys: ['Cmd', '3'], action: () => setRightPanelTab('catalog') },
+      { id: 'panel-templates', label: 'Open Templates', description: 'Switch to templates', category: 'Navigation', keys: ['Cmd', '4'], action: () => setRightPanelTab('templates') },
+    ]
+
+    for (const s of defaults) {
+      register(s)
+    }
+  }, []) // register only once
+
+  // Listen for keydown events
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Don't trigger shortcuts when typing in inputs
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        // Allow Escape even in inputs (to stop generation)
-        if (e.key !== 'Escape') return
-      }
+      const pressed: string[] = []
+      if (e.metaKey || e.ctrlKey) pressed.push('Cmd')
+      if (e.shiftKey) pressed.push('Shift')
+      if (e.altKey) pressed.push('Alt')
+      pressed.push(eventToKey(e))
 
-      // Ctrl+M — Toggle agent mode
-      if (e.ctrlKey && e.key === 'm') {
-        e.preventDefault()
-        toggleAgentMode()
-      }
-
-      // Ctrl+N — New chat
-      if (e.ctrlKey && e.key === 'n') {
-        e.preventDefault()
-        // Trigger new chat via custom event
-        window.dispatchEvent(new CustomEvent('shortcut:new-chat'))
-      }
-
-      // Ctrl+B — Toggle left panel
-      if (e.ctrlKey && e.key === 'b') {
-        e.preventDefault()
-        toggleLeftPanel()
-      }
-
-      // Ctrl+\ — Toggle right panel
-      if (e.ctrlKey && e.key === '\\') {
-        e.preventDefault()
-        toggleRightPanel()
-      }
-
-      // Ctrl+/ — Show shortcuts help
-      if (e.ctrlKey && e.key === '/') {
-        e.preventDefault()
-        window.dispatchEvent(new CustomEvent('shortcut:show-help'))
-      }
-
-      // Ctrl+K — Focus search
-      if (e.ctrlKey && e.key === 'k') {
-        e.preventDefault()
-        window.dispatchEvent(new CustomEvent('shortcut:focus-search'))
-      }
-
-      // Esc — Stop generation
-      if (e.key === 'Escape' && isStreaming) {
-        e.preventDefault()
-        stopStreaming()
+      // Check against registered shortcuts
+      for (const shortcut of shortcuts) {
+        if (shortcut.keys.length !== pressed.length) continue
+        const match = shortcut.keys.every((k, i) => {
+          const p = pressed[i]
+          return k === p || (k === 'Cmd' && (p === 'Cmd' || p === 'Ctrl'))
+        })
+        if (match) {
+          e.preventDefault()
+          e.stopPropagation()
+          shortcut.action()
+          return
+        }
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleAgentMode, toggleLeftPanel, toggleRightPanel, isStreaming, stopStreaming])
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [shortcuts])
 }

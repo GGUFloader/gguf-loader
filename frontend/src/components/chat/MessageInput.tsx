@@ -2,6 +2,7 @@ import { useState, useRef, type KeyboardEvent } from 'react'
 import { Send, Square, Paperclip } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
 import { FileMentionPopup } from './FileMentionPopup'
+import { ChatAutocomplete, detectTrigger } from './ChatAutocomplete'
 
 export function MessageInput() {
   const [input, setInput] = useState('')
@@ -10,19 +11,35 @@ export function MessageInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isStreaming, sendMessage, stopStreaming } = useChatStore()
 
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const [acTrigger, setAcTrigger] = useState('')
+  const [acQuery, setAcQuery] = useState('')
+
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value
     setInput(val)
 
-    // Detect @ mention
+    // Detect @ mention (file references)
     const cursorPos = e.target.selectionStart
     const textBeforeCursor = val.slice(0, cursorPos)
     const atMatch = textBeforeCursor.match(/@([\w.\-/]*)$/)
     if (atMatch) {
       setShowMentions(true)
       setMentionQuery(atMatch[1])
+      setShowAutocomplete(false)
+      return
     } else {
       setShowMentions(false)
+    }
+
+    // Detect trigger for autocomplete (@, /, #)
+    const trigger = detectTrigger(textBeforeCursor)
+    if (trigger) {
+      setShowAutocomplete(true)
+      setAcTrigger(trigger.trigger)
+      setAcQuery(trigger.query)
+    } else {
+      setShowAutocomplete(false)
     }
   }
 
@@ -42,6 +59,23 @@ export function MessageInput() {
     textareaRef.current?.focus()
   }
 
+  function handleAutocompleteSelect(item: any) {
+    const cursorPos = textareaRef.current?.selectionStart ?? input.length
+    const textBeforeCursor = input.slice(0, cursorPos)
+    const textAfterCursor = input.slice(cursorPos)
+    // Find the trigger character position
+    const triggerIdx = textBeforeCursor.search(/[@/#]\w*$/)
+    const newText = textBeforeCursor.slice(0, triggerIdx) + item.insert + ' ' + textAfterCursor
+    setInput(newText)
+    setShowAutocomplete(false)
+    textareaRef.current?.focus()
+  }
+
+  function handleAutocompleteClose() {
+    setShowAutocomplete(false)
+    textareaRef.current?.focus()
+  }
+
   async function handleSend() {
     const text = input.trim()
     if (!text || isStreaming) return
@@ -51,8 +85,8 @@ export function MessageInput() {
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    // Let the FileMentionPopup handle keyboard nav when visible
-    if (showMentions) {
+    // Let popups handle keyboard nav when visible
+    if (showMentions || showAutocomplete) {
       return
     }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -62,12 +96,20 @@ export function MessageInput() {
   }
 
   return (
-    <div className="p-4 border-t border-border">
+    <div className="p-4 border-t border-border relative">
       {showMentions && (
         <FileMentionPopup
           query={mentionQuery}
           onSelect={handleMentionSelect}
           onClose={handleMentionClose}
+        />
+      )}
+      {showAutocomplete && (
+        <ChatAutocomplete
+          query={acQuery}
+          trigger={acTrigger}
+          onSelect={handleAutocompleteSelect}
+          onClose={handleAutocompleteClose}
         />
       )}
       <div className="flex items-end gap-2 bg-elevated border border-border rounded-xl px-4 py-3">
@@ -84,6 +126,8 @@ export function MessageInput() {
           onKeyDown={handleKeyDown}
           placeholder="Type a message... Use @ to mention files"
           rows={1}
+          data-chat-input
+          aria-label="Chat message input"
           className="flex-1 bg-transparent text-text placeholder-text-muted outline-none resize-none text-sm"
           style={{ minHeight: '24px', maxHeight: '120px' }}
         />
@@ -102,7 +146,7 @@ export function MessageInput() {
         </button>
       </div>
       <div className="text-xs text-text-muted text-center mt-2">
-        Enter to send · Shift+Enter for newline · @ to mention files
+        Enter to send · Shift+Enter for newline · @ files · / tools · # models
       </div>
     </div>
   )

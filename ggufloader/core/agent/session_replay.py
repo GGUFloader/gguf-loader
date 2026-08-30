@@ -228,7 +228,7 @@ class SessionReplay:
         actions_b = [s.action for s in session_b.steps]
 
         # Find divergence point
-        divergence = 0
+        divergence = min(steps_a, steps_b)  # default: no divergence
         for i, (a, b) in enumerate(zip(actions_a, actions_b)):
             if a != b:
                 divergence = i

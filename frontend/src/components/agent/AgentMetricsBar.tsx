@@ -3,7 +3,7 @@ import { Coins, Hash, Clock, Wrench, Zap, Database, Activity, TrendingUp } from 
 import { useChatStore } from '../../stores/chatStore'
 
 export function AgentMetricsBar() {
-  const { isStreaming, messages } = useChatStore()
+  const { isStreaming, messages, agentMetrics } = useChatStore()
   const [startTime, setStartTime] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [totalTokensIn, setTotalTokensIn] = useState(0)
@@ -75,6 +75,10 @@ export function AgentMetricsBar() {
     return '—'
   }
 
+  // Use server-reported duration when generation is complete
+  const displayDuration = !isStreaming && agentMetrics.durationMs > 0
+    ? agentMetrics.durationMs : elapsed
+
   if (!isStreaming && messages.length === 0) return null
 
   const totalTokens = totalTokensIn + totalTokensOut
@@ -82,10 +86,10 @@ export function AgentMetricsBar() {
   return (
     <div className="flex items-center gap-4 px-4 py-1.5 border-t border-border bg-bg/50 text-xs text-text-muted select-none">
       {/* Duration */}
-      {isStreaming && (
+      {displayDuration > 0 && (
         <div className="flex items-center gap-1" title="Elapsed time">
           <Clock size={11} />
-          <span>{formatDuration(elapsed)}</span>
+          <span>{formatDuration(displayDuration)}</span>
         </div>
       )}
 
@@ -110,10 +114,13 @@ export function AgentMetricsBar() {
       </div>
 
       {/* Tool calls */}
-      {toolCallCount > 0 && (
-        <div className="flex items-center gap-1" title={`${toolCallCount} tool calls executed`}>
+      {(toolCallCount > 0 || agentMetrics.toolCalls > 0) && (
+        <div className="flex items-center gap-1" title={`${agentMetrics.toolCalls || toolCallCount} tool calls (${agentMetrics.toolSuccesses || 0} succeeded)`}>
           <Wrench size={11} />
-          <span>{toolCallCount} tools</span>
+          <span>{agentMetrics.toolCalls || toolCallCount} tools</span>
+          {agentMetrics.toolSuccesses > 0 && agentMetrics.toolSuccesses < (agentMetrics.toolCalls || toolCallCount) && (
+            <span className="text-green-400">✓{agentMetrics.toolSuccesses}</span>
+          )}
         </div>
       )}
 
@@ -122,6 +129,14 @@ export function AgentMetricsBar() {
         <Coins size={11} />
         <span>{formatCost(estimatedCost)}</span>
       </div>
+
+      {/* Preset badge */}
+      {agentMetrics.preset && (
+        <div className="flex items-center gap-1 text-accent/70" title="Active agent preset">
+          <Zap size={11} />
+          <span>{agentMetrics.preset}</span>
+        </div>
+      )}
 
       {/* Tokens breakdown tooltip */}
       <div

@@ -3,6 +3,7 @@ import { useChatStore, connectWebSocket } from '../../stores/chatStore'
 import { useUIStore } from '../../stores/uiStore'
 import { ChatBubble } from './ChatBubble'
 import { StreamingText } from './StreamingText'
+import { StepProgressPanel } from './StepProgressPanel'
 import { ReasoningBlock } from './ReasoningBlock'
 import { ToolCallCard } from '../agent/ToolCallCard'
 import { ToolApprovalDialog } from '../agent/ToolApprovalDialog'
@@ -14,7 +15,7 @@ import { Bot, Loader2, ChevronUp, ChevronDown } from 'lucide-react'
 import type { ToolApprovalRequest, ChatMessage } from '../../stores/chatStore'
 
 export function ChatPanel() {
-  const { messages, isStreaming, streamingText, reasoningBlocks, pendingApprovals } = useChatStore()
+  const { messages, isStreaming, streamingText, reasoningBlocks, pendingApprovals, progressSteps, currentAnnouncement } = useChatStore()
   const { agentMode } = useUIStore()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [approvalDialog, setApprovalDialog] = useState<ToolApprovalRequest | null>(null)
@@ -163,9 +164,20 @@ export function ChatPanel() {
               <ReasoningBlock key={i} content={block} />
             ))}
 
-            {/* Live streaming text */}
-            {isStreaming && streamingText && (
-              <StreamingText content={streamingText} isStreaming={isStreaming} />
+            {/* Step progress panel (Codebuff-style) */}
+            {progressSteps.length > 0 || currentAnnouncement ? (
+              <div className="py-2">
+                <StepProgressPanel
+                  steps={progressSteps}
+                  isStreaming={isStreaming}
+                  currentAnnouncement={currentAnnouncement}
+                />
+              </div>
+            ) : (
+              /* Live streaming text (fallback when no progress steps) */
+              isStreaming && streamingText && (
+                <StreamingText content={streamingText} isStreaming={isStreaming} />
+              )
             )}
           </>
         )}

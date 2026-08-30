@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { useModelStore } from '../../stores/modelStore'
 import { useUIStore } from '../../stores/uiStore'
 import { modelApi, gpuApi } from '../../api/client'
-import { PanelLeftClose, PanelRightClose, Cpu, X } from 'lucide-react'
+import { PanelLeftClose, PanelRightClose, Cpu, X, Download } from 'lucide-react'
+import { NotificationBell } from '../ui/NotificationPanel'
+import { useUpdateStore } from '../../stores/updateStore'
 
 export function Header() {
   const { info } = useModelStore()
@@ -29,6 +31,17 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Update available indicator */}
+        {useUpdateStore.getState().updateAvailable && (
+          <button onClick={() => useUpdateStore.getState().togglePanel()}
+            className="p-1.5 bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors" title="Update available">
+            <Download size={16} />
+          </button>
+        )}
+
+        {/* Notifications */}
+        <NotificationBell />
+
         {/* GPU badge */}
         {gpuOk !== null && (
           <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] ${gpuOk ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-elevated text-text-muted border border-border'}`}>

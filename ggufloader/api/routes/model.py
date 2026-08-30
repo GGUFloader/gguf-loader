@@ -344,3 +344,161 @@ def _human_size(size_bytes: int) -> str:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.1f} PB"
+
+
+# ---------------------------------------------------------------------------
+# Model catalog: scan directories for GGUF files with deep profiles
+# ---------------------------------------------------------------------------
+
+@router.get("/catalog")
+async def model_catalog(
+    directory: Optional[str] = None,
+    recursive: bool = True,
+) -> dict:
+    """Scan a directory for GGUF files and return deep profiles.
+
+    If no directory is given, scans the user's default models directory.
+    Returns a list of models with family, architecture, quantization,
+    size, context length, and router-ready profile data.
+    """
+    from ggufloader.config import get_paths
+
+    if directory:
+        scan_dir = Path(directory)
+    else:
+        scan_dir = Path(get_paths()["models"]) if "models" in get_paths() else Path.home() / ".ggufloader" / "models"
+
+    if not scan_dir.is_dir():
+        return {"directory": str(scan_dir), "models": [], "error": "Directory not found"}
+
+    glob_pattern = "**/*.gguf" if recursive else "*.gguf"
+    gguf_files = sorted(scan_dir.glob(glob_pattern))
+
+    models = []
+    for f in gguf_files:
+        try:
+            size_bytes = f.stat().st_size
+            size_gb = round(size_bytes / (1024**3), 2)
+
+            # Quick metadata read
+            meta = {}
+            try:
+                meta = read_gguf_general_metadata(str(f))
+            except Exception:
+                pass
+
+            # Router inspection (lightweight)
+            profile_data = {}
+            try:
+                from ggufloader.core.router import ModelRouter
+                router = ModelRouter()
+                profile = router.quick_profile(str(f))
+                profile_data = {
+                    "family": profile.get("family", ""),
+                    "architecture": profile.get("architecture", ""),
+                    "size_tier": profile.get("size_tier", ""),
+                    "context_length": profile.get("context_length", 0),
+                    "quantization": profile.get("quantization", ""),
+                }
+            except Exception:
+                pass
+
+            models.append({
+                "path": str(f),
+                "filename": f.name,
+                "directory": str(f.parent),
+                "size_gb": size_gb,
+                "size_human": _human_size(size_bytes),
+                **profile_data,
+                "metadata": {k: str(v)[:200] for k, v in meta.items()} if meta else {},
+            })
+        except Exception:
+            continue
+
+    return {
+        "directory": str(scan_dir),
+        "count": len(models),
+        "models": models,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Model comparison: side-by-side deep profiles
+# ---------------------------------------------------------------------------
+
+@router.get("/compare")
+async def model_compare(paths: str) -> dict:
+    """Compare two or more GGUF models side-by-side.
+
+    paths: comma-separated list of model file paths
+    Returns deep profiles for each model plus a diff summary.
+    """
+    path_list = [p.strip() for p in paths.split(",") if p.strip()]
+    if len(path_list) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 comma-separated paths")
+
+    profiles = []
+    router = get_router()
+
+    for path in path_list[:5]:  # max 5 models
+        if not os.path.exists(path):
+            profiles.append({"path": path, "error": "File not found"})
+            continue
+        try:
+            profile = router.inspect(path)
+            strategy = router.plan(profile)
+            profiles.append({
+                "path": profile.path,
+                "filename": profile.filename,
+                "file_size_gb": profile.file_size_gb,
+                "architecture": profile.architecture,
+                "family": profile.family,
+                "family_label": profile.family_label,
+                "size_tier": profile.size_tier.value,
+                "param_estimate": profile.param_count_estimate,
+                "total_layers": profile.total_layers,
+                "quantization": profile.quantization,
+                "quant_tier": profile.quant_tier.value,
+                "trained_context": profile.trained_context,
+                "max_context": profile.max_context,
+                "supports_system_prompt": profile.supports_system_prompt,
+                "supports_vision": profile.supports_vision,
+                "is_embedding_model": profile.is_embedding_model,
+                "is_thinking_model": profile.is_thinking_model,
+                "model_memory_gb": profile.model_memory_gb,
+                "kv_memory_gb": profile.kv_memory_gb,
+                "total_memory_gb": profile.total_memory_gb,
+                "strategy": {
+                    "n_ctx": strategy.n_ctx,
+                    "n_gpu_layers": strategy.n_gpu_layers,
+                    "use_gpu": strategy.use_gpu,
+                    "batch_size": strategy.batch_size,
+                    "fits_vram": strategy.fits_vram,
+                    "fits_ram": strategy.fits_ram,
+                    "reasoning": strategy.reasoning,
+                },
+            })
+        except Exception as e:
+            profiles.append({"path": path, "error": str(e)})
+
+    # Build comparison summary
+    valid = [p for p in profiles if "error" not in p]
+    comparison = {}
+    if len(valid) >= 2:
+        comparison = {
+            "size_diff_gb": round(valid[0].get("file_size_gb", 0) - valid[1].get("file_size_gb", 0), 2),
+            "memory_diff_gb": round(valid[0].get("total_memory_gb", 0) - valid[1].get("total_memory_gb", 0), 2),
+            "same_family": valid[0].get("family") == valid[1].get("family"),
+            "same_architecture": valid[0].get("architecture") == valid[1].get("architecture"),
+            "smaller_model": valid[0].get("filename") if valid[0].get("file_size_gb", 0) < valid[1].get("file_size_gb", 0) else valid[1].get("filename"),
+            "higher_context": valid[0].get("filename") if valid[0].get("trained_context", 0) > valid[1].get("trained_context", 0) else valid[1].get("filename"),
+        }
+
+    return {
+        "models": profiles,
+        "comparison": comparison,
+        "system": {
+            "ram_gb": router.system.ram_gb,
+            "vram_gb": router.system.vram_gb,
+        },
+    }
