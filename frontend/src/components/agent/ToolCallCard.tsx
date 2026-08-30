@@ -8,9 +8,6 @@ import {
   Clock,
   Copy,
   Check,
-  Shield,
-  AlertTriangle,
-  AlertOctagon,
 } from 'lucide-react'
 import { MarkdownRenderer } from '../chat/MarkdownRenderer'
 import type { ToolCall } from '../../stores/chatStore'
@@ -20,70 +17,59 @@ interface Props {
   onApprove?: (id: string, approved: boolean) => void
 }
 
-// Risk classification based on tool name (matches OpenHands pattern)
-const TOOL_RISK: Record<string, 'low' | 'medium' | 'high'> = {
-  read_file: 'low',
-  list_files: 'low',
-  search_files: 'low',
-  get_file: 'low',
-  write_file: 'medium',
-  edit_file: 'medium',
-  create_file: 'medium',
-  run_terminal_command: 'high',
-  delete_file: 'high',
-  bash: 'high',
-  shell: 'high',
-}
-
-function getToolRisk(name: string): 'low' | 'medium' | 'high' {
-  const lower = name.toLowerCase()
-  for (const [key, risk] of Object.entries(TOOL_RISK)) {
-    if (lower.includes(key)) return risk
-  }
-  if (lower.includes('read') || lower.includes('get') || lower.includes('list') || lower.includes('search')) return 'low'
-  if (lower.includes('write') || lower.includes('edit') || lower.includes('create') || lower.includes('update')) return 'medium'
-  return 'high'
-}
-
-const RISK_CONFIG = {
-  low: { icon: Shield, label: 'LOW', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/30' },
-  medium: { icon: AlertTriangle, label: 'MED', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
-  high: { icon: AlertOctagon, label: 'HIGH', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30' },
-}
-
 const STATUS_CONFIG = {
   running: {
     icon: Loader2,
     label: 'Running',
     color: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/30',
     animate: true,
   },
   completed: {
     icon: CheckCircle2,
     label: 'Done',
     color: 'text-green-400',
-    bg: 'bg-green-500/10',
-    border: 'border-green-500/30',
     animate: false,
   },
   failed: {
     icon: XCircle,
     label: 'Failed',
     color: 'text-red-400',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/30',
     animate: false,
   },
   pending_approval: {
     icon: Clock,
-    label: 'Awaiting',
+    label: 'Awaiting approval',
     color: 'text-yellow-400',
-    bg: 'bg-yellow-500/10',
-    border: 'border-yellow-500/30',
     animate: false,
   },
+}
+
+/** Human-readable description for tool calls */
+function getToolDescription(tool: ToolCall): string {
+  const name = tool.name
+  const args = tool.args || {}
+
+  switch (name.toLowerCase()) {
+    case 'read_files':
+    case 'read_file':
+      return `Reading ${(args.paths || [args.path] || []).map((p: string) => p.split('/').pop()).join(', ')}`
+    case 'write_file':
+      return `Writing ${(args.path || '').split('/').pop() || 'file'}`
+    case 'str_replace':
+      return `Editing ${(args.path || '').split('/').pop() || 'file'}`
+    case 'list_directory':
+      return `Listing ${(args.path || '').split('/').pop() || 'directory'}`
+    case 'run_terminal_command':
+      return `Running command`
+    case 'code_search':
+      return `Searching for "${(args.pattern || '').slice(0, 30)}"`
+    case 'glob':
+      return `Finding files`
+    case 'web_search':
+      return `Searching web`
+    default:
+      return `Using ${name}`
+  }
 }
 
 export function ToolCallCard({ tool, onApprove }: Props) {
@@ -93,9 +79,6 @@ export function ToolCallCard({ tool, onApprove }: Props) {
   const [startTime] = useState(Date.now())
   const config = STATUS_CONFIG[tool.status]
   const Icon = config.icon
-  const risk = getToolRisk(tool.name)
-  const riskConfig = RISK_CONFIG[risk]
-  const RiskIcon = riskConfig.icon
 
   // Track duration while running
   useEffect(() => {
@@ -121,73 +104,74 @@ export function ToolCallCard({ tool, onApprove }: Props) {
     return `${(ms / 1000).toFixed(1)}s`
   }
 
-  // Compact chip mode during streaming
-  if (tool.status === 'running' && !expanded) {
-    return (
-      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/10 border border-accent/30 text-xs animate-slide-up">
-        <Loader2 size={10} className="text-accent animate-spin" />
-        <span className="text-text font-medium">{tool.name}</span>
-        <span className="text-text-muted font-mono text-[10px]">
-          {formatDuration(duration || 0)}
-        </span>
-      </div>
-    )
-  }
+  const description = getToolDescription(tool)
+  const hasDetails = Object.keys(tool.args).length > 0 || tool.result
 
   return (
-    <div className={`rounded-lg border ${config.border} ${config.bg} overflow-hidden animate-slide-up`}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 flex-1 text-left"
-        >
-          {expanded ? (
-            <ChevronDown size={14} className="text-text-muted" />
+    <div className="ml-0 animate-slide-up">
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
+          tool.status === 'running'
+            ? 'bg-accent/5 border-accent/20'
+            : tool.status === 'completed'
+              ? 'bg-elevated/50 border-border/50 hover:bg-elevated'
+              : tool.status === 'failed'
+                ? 'bg-red-500/5 border-red-500/20'
+                : 'bg-yellow-500/5 border-yellow-500/20'
+        } ${hasDetails ? 'cursor-pointer' : ''}`}
+      >
+        {/* Expand/collapse chevron */}
+        {hasDetails ? (
+          expanded ? (
+            <ChevronDown size={14} className="text-text-muted flex-shrink-0" />
           ) : (
-            <ChevronRight size={14} className="text-text-muted" />
-          )}
-          <Icon
-            size={14}
-            className={`${config.color} ${config.animate ? 'animate-spin' : ''}`}
-          />
-          <span className="text-sm font-medium text-text">{tool.name}</span>
+            <ChevronRight size={14} className="text-text-muted flex-shrink-0" />
+          )
+        ) : (
+          <div className="w-3.5" />
+        )}
 
-          {/* Risk badge */}
-          <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${riskConfig.bg} ${riskConfig.color} ${riskConfig.border} border font-medium`}>
-            <RiskIcon size={9} />
-            {riskConfig.label}
+        {/* Status icon */}
+        <Icon
+          size={14}
+          className={`${config.color} flex-shrink-0 ${config.animate ? 'animate-spin' : ''}`}
+        />
+
+        {/* Description */}
+        <span className="text-sm text-text-sec flex-1 text-left">{description}</span>
+
+        {/* Duration */}
+        {duration !== null && (
+          <span className="text-[10px] text-text-muted font-mono flex-shrink-0">
+            {formatDuration(duration)}
           </span>
+        )}
 
-          {/* Duration */}
-          {duration !== null && (
-            <span className="text-[10px] text-text-muted font-mono">
-              {formatDuration(duration)}
-            </span>
-          )}
+        {/* Status label */}
+        <span className={`text-[11px] flex-shrink-0 ${config.color}`}>{config.label}</span>
 
-          <span className={`text-xs ${config.color}`}>{config.label}</span>
-        </button>
-
-        <div className="flex items-center gap-1">
+        {/* Copy button */}
+        {hasDetails && (
           <button
-            onClick={handleCopy}
+            onClick={(e) => { e.stopPropagation(); handleCopy() }}
             className="p-1 text-text-muted hover:text-text rounded transition-colors opacity-0 group-hover:opacity-100"
             title="Copy args"
           >
             {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
           </button>
-        </div>
-      </div>
+        )}
+      </button>
 
-      {/* Expanded content */}
+      {/* Expanded content — command/args in code block */}
       {expanded && (
-        <div className="border-t border-border/50 px-3 py-2 space-y-2 animate-fade-in">
-          {/* Arguments */}
+        <div className="mt-1 ml-8 space-y-2 animate-fade-in">
+          {/* Arguments as code block */}
           {Object.keys(tool.args).length > 0 && (
             <div>
-              <div className="text-xs text-text-muted mb-1 font-medium">Arguments</div>
-              <pre className="text-xs bg-bg/50 rounded p-2 overflow-x-auto text-text-sec border border-border/30">
+              <div className="text-[10px] text-text-muted mb-1 font-medium uppercase tracking-wider">Request</div>
+              <pre className="text-xs bg-bg/80 rounded-lg p-3 overflow-x-auto text-text-sec border border-border/50 font-mono leading-relaxed">
                 {JSON.stringify(tool.args, null, 2)}
               </pre>
             </div>
@@ -196,8 +180,8 @@ export function ToolCallCard({ tool, onApprove }: Props) {
           {/* Result */}
           {tool.result && (
             <div>
-              <div className="text-xs text-text-muted mb-1 font-medium">Result</div>
-              <div className="text-xs bg-bg/50 rounded p-2 max-h-40 overflow-y-auto border border-border/30">
+              <div className="text-[10px] text-text-muted mb-1 font-medium uppercase tracking-wider">Result</div>
+              <div className="text-xs bg-bg/80 rounded-lg p-3 max-h-40 overflow-y-auto border border-border/50">
                 <MarkdownRenderer content={tool.result} />
               </div>
             </div>

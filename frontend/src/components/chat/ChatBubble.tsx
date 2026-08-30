@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
-import { User, Bot, Copy, Check, ChevronDown, ChevronUp, Loader2, AlertCircle, RotateCcw, FileText } from 'lucide-react'
+import { Copy, Check, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { ReasoningBlock } from './ReasoningBlock'
 import type { ChatMessage } from '../../stores/chatStore'
 
 interface Props {
@@ -15,7 +14,6 @@ const TRUNCATE_THRESHOLD = 800
 // Extract file references from message content
 function extractFileRefs(content: string): string[] {
   const files = new Set<string>()
-  // Match common file patterns mentioned in agent output
   const patterns = [
     /(?:wrote?|created?|edited?|modified?|read|listed?)\s+(?:file\s+)?[`"']?([\w/.\-]+\.(?:py|js|ts|tsx|jsx|json|md|yaml|yml|toml|cfg|txt|html|css))[`"']?/gi,
     /([\w/.\-]+\.(?:py|js|ts|tsx|jsx|json|md|yaml|yml|toml|cfg|txt|html|css))(?:\s|$|,|\))/g,
@@ -27,7 +25,7 @@ function extractFileRefs(content: string): string[] {
       if (f && !f.startsWith('http') && f.length < 100) files.add(f)
     }
   }
-  return Array.from(files).slice(0, 5) // max 5 file chips
+  return Array.from(files).slice(0, 5)
 }
 
 export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry }: Props) {
@@ -51,60 +49,38 @@ export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry
     setTimeout(() => setCopied(false), 2000)
   }
 
-  return (
-    <div className={`flex gap-3 group ${isUser ? 'justify-end' : 'justify-start'}`}>
-      {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 mt-1">
-          <Bot size={16} className="text-accent" />
-        </div>
-      )}
-
-      <div className={`max-w-[75%] relative ${isUser ? 'order-1' : ''}`}>
-        <div
-          className={`rounded-2xl px-4 py-3 ${
-            isUser
-              ? 'bg-accent text-onAccent'
-              : 'bg-elevated border border-border text-text'
-          }`}
-        >
-          {/* Thinking block */}
-          {message.thinking && (
-            <ReasoningBlock content={message.thinking} />
-          )}
-
-          {/* Tool calls as compact chips */}
-          {message.toolCalls && message.toolCalls.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {message.toolCalls.map((tc, i) => (
-                <div
-                  key={i}
-                  className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${
-                    tc.status === 'completed'
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                      : tc.status === 'failed'
-                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                        : tc.status === 'pending_approval'
-                          ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-                          : 'bg-accent/10 text-accent border border-accent/20'
-                  }`}
-                >
-                  {tc.status === 'running' && <Loader2 size={9} className="animate-spin" />}
-                  {tc.status === 'completed' && <Check size={9} />}
-                  {tc.status === 'failed' && <AlertCircle size={9} />}
-                  <span className="font-mono">{tc.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Message content */}
-          {isUser ? (
+  // User messages — right-aligned, accent background
+  if (isUser) {
+    return (
+      <div className="flex justify-end group">
+        <div className="max-w-[80%] relative">
+          <div className="bg-accent text-onAccent rounded-2xl px-4 py-3">
             <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
-          ) : (
-            <div className="prose prose-invert prose-sm max-w-none">
-              <MarkdownRenderer content={displayContent} />
-            </div>
-          )}
+          </div>
+          {/* Copy button on hover */}
+          <div className="absolute -left-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={handleCopy}
+              className="p-1 rounded bg-elevated border border-border text-text-muted hover:text-text transition-colors"
+              title="Copy message"
+            >
+              {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Assistant messages — left-aligned, no background, clean text
+  return (
+    <div className="flex justify-start group">
+      <div className="max-w-[80%] relative">
+        <div className="text-text">
+          {/* Message content */}
+          <div className="prose prose-invert prose-sm max-w-none">
+            <MarkdownRenderer content={displayContent} />
+          </div>
 
           {/* File reference chips */}
           {fileRefs.length > 0 && (
@@ -142,9 +118,9 @@ export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry
           )}
         </div>
 
-        {/* Action buttons */}
-        {!isUser && message.content && (
-          <div className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
+        {/* Action buttons on hover */}
+        {message.content && (
+          <div className="absolute -right-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
             <button
               onClick={handleCopy}
               className="p-1 rounded bg-elevated border border-border text-text-muted hover:text-text transition-colors"
@@ -158,18 +134,12 @@ export function ChatBubble({ message, isStreaming: _isStreaming = false, onRetry
                 className="p-1 rounded bg-elevated border border-border text-text-muted hover:text-text transition-colors"
                 title="Retry"
               >
-                <RotateCcw size={12} />
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 1 3.5-7.1"/><polyline points="3 2 3 8 9 8"/></svg>
               </button>
             )}
           </div>
         )}
       </div>
-
-      {isUser && (
-        <div className="w-8 h-8 rounded-full bg-elevated border border-border flex items-center justify-center flex-shrink-0 mt-1">
-          <User size={16} className="text-text-sec" />
-        </div>
-      )}
     </div>
   )
 }

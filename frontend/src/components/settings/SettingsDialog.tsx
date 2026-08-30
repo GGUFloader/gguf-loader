@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import {
   X, Bot, Palette, Keyboard, Cpu, Sliders,
   FolderOpen, RefreshCw, Zap, Trash2, Eye, EyeOff, Globe, Cloud,
-  Search, FileText, Bug, Rocket,
+  Search, FileText, Bug, Rocket, Puzzle,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import { gpuApi, agentApi } from '../../api/client'
+import { usePluginRegistry } from '../../stores/pluginRegistry'
 import { ThemeSwitcher } from '../ui/ThemeSwitcher'
 
 interface Props {
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'hardware', label: 'Hardware', icon: Zap },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'keyboard', label: 'Keyboard', icon: Keyboard },
+  { id: 'plugins', label: 'Plugins', icon: Puzzle },
 ]
 
 const SHORTCUTS = [
@@ -474,6 +476,10 @@ export function SettingsDialog({ onClose }: Props) {
                 </div>
               </div>
             )}
+            {/* === PLUGINS TAB === */}
+            {activeTab === 'plugins' && (
+              <PluginsSettings />
+            )}
           </div>
         </div>
       </div>
@@ -572,6 +578,42 @@ function AgentPresetGrid({ preset, onSelect }: { preset: string; onSelect: (id: 
               <div className="text-[10px] text-text-muted mt-0.5">{p.max_steps} steps · t={p.temperature}</div>
             </div>
           </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PluginsSettings() {
+  const { plugins, togglePlugin } = usePluginRegistry()
+  const categories = [
+    { key: 'core', label: 'Core (always on)' },
+    { key: 'model', label: 'Model' },
+    { key: 'agent', label: 'Agent' },
+    { key: 'dev', label: 'Developer' },
+    { key: 'collab', label: 'Collaboration' },
+  ]
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-text-muted">Toggle sidebar panels on or off.</p>
+      {categories.map((cat) => {
+        const catPlugins = plugins.filter((p) => p.category === cat.key)
+        if (catPlugins.length === 0) return null
+        return (
+          <div key={cat.key}>
+            <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">{cat.label}</h3>
+            <div className="space-y-1">
+              {catPlugins.map((plugin) => (
+                <div key={plugin.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-elevated/40 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-text-sec font-medium">{plugin.label}</div>
+                    <div className="text-[10px] text-text-muted truncate">{plugin.description}</div>
+                  </div>
+                  <Toggle checked={plugin.enabled} onChange={() => togglePlugin(plugin.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
         )
       })}
     </div>

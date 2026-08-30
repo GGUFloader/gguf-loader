@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
+import { usePluginRegistry } from '../../stores/pluginRegistry'
 import { FileExplorer } from '../workbench/FileExplorer'
 import { FileViewer } from '../workbench/FileViewer'
 import { SettingsDialog } from '../settings/SettingsDialog'
@@ -22,138 +23,136 @@ import { BenchmarkPanel } from '../agent/BenchmarkPanel'
 import { BenchmarkChartPanel } from '../agent/BenchmarkChartPanel'
 import { CollabPanel } from '../agent/CollabPanel'
 import { PluginSandboxPanel } from '../agent/PluginSandboxPanel'
-import { FileText, Settings, RotateCcw, LayoutDashboard, Activity, Brain, Sliders, GitCompare, Puzzle, Copy, FileCode, BarChart3, ArrowDownToLine, Search, FolderOpen, GitBranch, Zap, Users, LineChart, Shield } from 'lucide-react'
+import { ProgressSection } from '../chat/ProgressSection'
+import { ArtifactsSection } from '../chat/ArtifactsSection'
+import { ContextSection } from '../chat/ContextSection'
+import {
+  FileText, Settings, RotateCcw, LayoutDashboard, Activity, Brain, Sliders, GitCompare,
+  Puzzle, Copy, FileCode, BarChart3, ArrowDownToLine, Search, FolderOpen, GitBranch,
+  Zap, Users, LineChart, Shield,
+} from 'lucide-react'
 
-const tabs = [
-  { id: 'files', label: 'Docs', icon: FileText },
-  { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
-  { id: 'catalog', label: 'Models', icon: Brain },
-  { id: 'compare', label: 'Compare', icon: GitCompare },
-  { id: 'templates', label: 'Prompts', icon: Copy },
-  { id: 'diff', label: 'Diff', icon: FileCode },
-  { id: 'profiling', label: 'Profile', icon: Activity },
-  { id: 'analytics', label: 'Stats', icon: BarChart3 },
-  { id: 'replay', label: 'Replay', icon: RotateCcw },
-  { id: 'plugins', label: 'Plugins', icon: Puzzle },
-  { id: 'export', label: 'Export', icon: ArrowDownToLine },
-  { id: 'search', label: 'Search', icon: Search },
-  { id: 'workspace', label: 'Spaces', icon: FolderOpen },
-  { id: 'workflows', label: 'Flows', icon: GitBranch },
-  { id: 'canvas', label: 'Canvas', icon: GitBranch },
-  { id: 'collab', label: 'Collab', icon: Users },
-  { id: 'benchmark', label: 'Bench', icon: Zap },
-  { id: 'benchchart', label: 'Charts', icon: LineChart },
-  { id: 'sandbox', label: 'Sandbox', icon: Shield },
-  { id: 'config', label: 'Config', icon: Sliders },
-  { id: 'settings', label: 'Settings', icon: Settings },
-]
+// Map icon names to actual components
+const ICON_MAP: Record<string, typeof FileText> = {
+  FileText, Settings, RotateCcw, LayoutDashboard, Activity, Brain, Sliders, GitCompare,
+  Puzzle, Copy, FileCode, BarChart3, ArrowDownToLine, Search, FolderOpen, GitBranch,
+  Zap, Users, LineChart, Shield,
+}
+
+// Map plugin IDs to components
+const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
+  files: FileExplorer,
+  dashboard: WorkspaceDashboard,
+  config: AgentConfigPanel,
+  settings: SettingsDialog,
+  catalog: ModelCatalogPanel,
+  compare: ModelComparePanel,
+  templates: TemplatePanel,
+  diff: DiffViewerPanel,
+  analytics: AnalyticsDashboard,
+  export: ExportImportPanel,
+  search: AdvancedSearchPanel,
+  workspace: WorkspaceManagerPanel,
+  workflows: WorkflowBuilderPanel,
+  canvas: WorkflowCanvas,
+  profiling: ProfilingPanel,
+  plugins: PluginMarketplacePanel,
+  sandbox: PluginSandboxPanel,
+  collab: CollabPanel,
+  benchmark: BenchmarkPanel,
+  benchchart: BenchmarkChartPanel,
+  replay: SessionReplayPanel,
+}
 
 export function RightPanel() {
   const { rightPanelTab, setRightPanelTab } = useUIStore()
+  const { getEnabledPlugins } = usePluginRegistry()
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+
+  const enabledPlugins = getEnabledPlugins()
 
   function handleFileSelect(path: string) {
     setSelectedFile(path)
   }
 
+  function handleTabClick(id: string) {
+    setRightPanelTab(id)
+    if (id === 'files') setSelectedFile(null)
+  }
+
+  // Render the active tab content
+  function renderContent() {
+    const tab = rightPanelTab
+
+    // Special handling for files tab (file viewer)
+    if (tab === 'files' && selectedFile) {
+      return <FileViewer filePath={selectedFile} onClose={() => setSelectedFile(null)} />
+    }
+
+    // Special handling for settings tab
+    if (tab === 'settings') {
+      return <SettingsDialog onClose={() => setRightPanelTab('files')} />
+    }
+
+    // Look up component from map
+    const Component = COMPONENT_MAP[tab]
+    if (Component) {
+      if (tab === 'files') {
+        return <FileExplorer onFileSelect={handleFileSelect} selectedFile={selectedFile} />
+      }
+      return <Component />
+    }
+
+    return null
+  }
+
   return (
     <aside className="w-80 h-full flex flex-col bg-surface border-l border-border" aria-label="Right panel">
-      {/* Tab bar */}
-      <div className="flex border-b border-border" role="tablist" aria-label="Panel tabs">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          const active = rightPanelTab === tab.id
+      {/* Collapsible sections — always visible at top */}
+      <div className="border-b border-border">
+        <ProgressSection />
+        <ArtifactsSection />
+        <ContextSection />
+      </div>
+
+      {/* Plugin tabs — scrollable */}
+      <div className="flex border-b border-border overflow-x-auto" role="tablist" aria-label="Panel tabs">
+        {enabledPlugins.map((plugin) => {
+          const Icon = ICON_MAP[plugin.icon] || FileText
+          const active = rightPanelTab === plugin.id
           return (
             <button
-              key={tab.id}
-              onClick={() => {
-                setRightPanelTab(tab.id)
-                if (tab.id === 'files') setSelectedFile(null)
-              }}
+              key={plugin.id}
+              onClick={() => handleTabClick(plugin.id)}
               role="tab"
               aria-selected={active}
-              aria-controls={`panel-${tab.id}`}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium transition-colors relative ${
+              aria-controls={`panel-${plugin.id}`}
+              title={plugin.description}
+              className={`flex-shrink-0 flex items-center justify-center gap-1 px-2.5 py-2.5 text-[11px] font-medium transition-colors relative ${
                 active
                   ? 'text-accent border-b-2 border-accent'
                   : 'text-text-muted hover:text-text-sec'
               }`}
             >
               <Icon size={13} />
-              {tab.label}
+              <span className="hidden lg:inline">{plugin.label}</span>
             </button>
           )
         })}
+
+        {/* Gear icon for plugin settings */}
+        <button
+          onClick={() => handleTabClick('settings')}
+          title="Plugin Settings"
+          className="flex-shrink-0 flex items-center justify-center px-2.5 py-2.5 text-text-muted hover:text-text-sec transition-colors ml-auto border-l border-border"
+        >
+          <Settings size={13} />
+        </button>
       </div>
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
-        {rightPanelTab === 'files' && !selectedFile && (
-          <FileExplorer onFileSelect={handleFileSelect} selectedFile={selectedFile} />
-        )}
-        {rightPanelTab === 'files' && selectedFile && (
-          <FileViewer filePath={selectedFile} onClose={() => setSelectedFile(null)} />
-        )}
-        {rightPanelTab === 'dashboard' && (
-          <WorkspaceDashboard />
-        )}
-        {rightPanelTab === 'catalog' && (
-          <ModelCatalogPanel />
-        )}
-        {rightPanelTab === 'compare' && (
-          <ModelComparePanel />
-        )}
-        {rightPanelTab === 'profiling' && (
-          <ProfilingPanel />
-        )}
-        {rightPanelTab === 'replay' && (
-          <SessionReplayPanel />
-        )}
-        {rightPanelTab === 'plugins' && (
-          <PluginMarketplacePanel />
-        )}
-        {rightPanelTab === 'templates' && (
-          <TemplatePanel />
-        )}
-        {rightPanelTab === 'diff' && (
-          <DiffViewerPanel />
-        )}
-        {rightPanelTab === 'analytics' && (
-          <AnalyticsDashboard />
-        )}
-        {rightPanelTab === 'export' && (
-          <ExportImportPanel />
-        )}
-        {rightPanelTab === 'search' && (
-          <AdvancedSearchPanel />
-        )}
-        {rightPanelTab === 'workspace' && (
-          <WorkspaceManagerPanel />
-        )}
-        {rightPanelTab === 'workflows' && (
-          <WorkflowBuilderPanel />
-        )}
-        {rightPanelTab === 'canvas' && (
-          <WorkflowCanvas />
-        )}
-        {rightPanelTab === 'collab' && (
-          <CollabPanel />
-        )}
-        {rightPanelTab === 'benchmark' && (
-          <BenchmarkPanel />
-        )}
-        {rightPanelTab === 'benchchart' && (
-          <BenchmarkChartPanel />
-        )}
-        {rightPanelTab === 'sandbox' && (
-          <PluginSandboxPanel />
-        )}
-        {rightPanelTab === 'config' && (
-          <AgentConfigPanel />
-        )}
-        {rightPanelTab === 'settings' && (
-          <SettingsDialog onClose={() => setRightPanelTab('files')} />
-        )}
+        {renderContent()}
       </div>
     </aside>
   )

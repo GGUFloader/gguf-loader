@@ -133,10 +133,71 @@ body {
 @media (max-width: 1023px) and (min-width: 768px) {
   .panel-overlay {
     position: fixed;
-    top: 56px;
+    top: 48px;
     right: 0;
     bottom: 0;
     z-index: 30;
     box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
   }
+}
+
+/* Claude-like prose styling */
+.prose-chat p {
+  margin-bottom: 0.5em;
+  line-height: 1.7;
+}
+
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat code {
+  background: var(--color-elevated);
+  padding: 0.15em 0.3em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.prose-chat pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.prose-chat pre code {
+  background: none;
+  padding: 0;
+}
+
+.prose-chat ul, .prose-chat ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.prose-chat li {
+  margin: 0.25em 0;
+}
+
+.prose-chat h1, .prose-chat h2, .prose-chat h3 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+}
+
+.prose-chat h1 { font-size: 1.25em; }
+.prose-chat h2 { font-size: 1.1em; }
+.prose-chat h3 { font-size: 1em; }
+
+/* Smooth transitions for collapsible sections */
+.section-collapse {
+  transition: max-height 0.2s ease-out, opacity 0.15s ease-out;
+  overflow: hidden;
+}
+
+/* Claude-like input focus ring */
+.input-claude:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(232, 163, 61, 0.15);
 }
