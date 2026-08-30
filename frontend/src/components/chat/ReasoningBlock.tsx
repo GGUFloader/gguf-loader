@@ -20,8 +20,8 @@ export function ReasoningBlock({ content, isStreaming }: Props) {
 
   if (!cleanContent) return null
 
-  const preview = cleanContent.length > 80
-    ? cleanContent.slice(0, 80).replace(/\n/g, ' ') + '...'
+  const preview = cleanContent.length > 120
+    ? cleanContent.slice(0, 120).replace(/\n/g, ' ') + '...'
     : cleanContent
 
   return (

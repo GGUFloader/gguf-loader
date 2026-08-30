@@ -345,7 +345,12 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         loop = asyncio.get_event_loop()
 
         def on_status(msg: str):
-            """Send phase status events to the frontend."""
+            """Send phase status events to the frontend.
+
+            Now also emits progress_* events so the StepProgressPanel can
+            render a Codebuff-style step-by-step view instead of a wall of
+            'Thinking' blocks.
+            """
             phase = None
             if msg.startswith("🤔") or msg.startswith("🎯"):
                 phase = "goal"
@@ -370,6 +375,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                         "description": m.group(3),
                     }
 
+            # --- Legacy agent_phase event (kept for PlanTracker) ---
             event = {
                 "type": "agent_phase",
                 "message_id": message_id,
@@ -386,6 +392,94 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             asyncio.run_coroutine_threadsafe(
                 manager.send_event(websocket, event), loop,
             )
+
+            # --- Progress events for StepProgressPanel ---
+            stripped = msg.strip()
+            if not stripped:
+                return
+
+            # Announce what the agent is about to do (thinking/analysis/reasoning)
+            if stripped.startswith("🤔") or stripped.startswith("💡") or stripped.startswith("💭"):
+                # Clean emoji prefix for display
+                clean = stripped.lstrip("🤔💡💭📋🔍✅📝🎯▶►  \n")
+                if clean:
+                    asyncio.run_coroutine_threadsafe(
+                        manager.send_event(websocket, {
+                            "type": "progress_announce",
+                            "content": clean,
+                        }), loop,
+                    )
+
+            # Tool call being executed
+            elif re.match(r"^\[\d+/\d+\]", stripped) or stripped.startswith("→ "):
+                # e.g. "[1/3] list_directory ." or "→ List files in ."
+                tool_desc = re.sub(r"^\[\d+/\d+\]\s*", "", stripped)
+                tool_desc = tool_desc.lstrip("→ ")
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_tool_call",
+                        "name": tool_desc.split(" ")[0] if tool_desc else "tool",
+                        "content": tool_desc,
+                    }), loop,
+                )
+
+            # Tool result (success)
+            elif stripped.startswith("✓") or stripped.startswith("  ✓"):
+                result_text = stripped.lstrip("✓ ")
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_tool_result",
+                        "content": result_text,
+                        "success": True,
+                    }), loop,
+                )
+
+            # Tool result (failure)
+            elif stripped.startswith("✗") or stripped.startswith("  ✗"):
+                result_text = stripped.lstrip("✗ ")
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_tool_result",
+                        "content": result_text,
+                        "success": False,
+                    }), loop,
+                )
+
+            # Approval needed
+            elif stripped.startswith("🔐"):
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_announce",
+                        "content": stripped,
+                    }), loop,
+                )
+
+            # Step indicator (plan step)
+            elif stripped.startswith("▶ Step "):
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_step_complete",
+                        "content": stripped,
+                    }), loop,
+                )
+
+            # Other status messages (plan creation, verification, etc.)
+            elif stripped.startswith("Plan") or stripped.startswith("All plan") or stripped.startswith("Verif"):
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_step_complete",
+                        "content": stripped,
+                    }), loop,
+                )
+
+            # Generic status — still emit as announce so it shows up
+            else:
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "progress_announce",
+                        "content": stripped,
+                    }), loop,
+                )
 
         def on_tool(result: dict):
             """Send tool result events to the frontend."""

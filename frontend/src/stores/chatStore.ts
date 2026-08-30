@@ -342,7 +342,17 @@ export function connectWebSocket() {
           })
           break
         case 'progress_announce':
-          // Agent announces what it's about to do
+          // Agent announces what it's about to do.
+          // If there's already a pending announcement, commit it first.
+          {
+            const prev = useChatStore.getState().currentAnnouncement
+            if (prev) {
+              useChatStore.getState().addProgressStep({
+                type: 'announce',
+                content: prev,
+              })
+            }
+          }
           useChatStore.getState().setCurrentAnnouncement(data.content)
           break
         case 'progress_tool_call':
@@ -401,8 +411,18 @@ export function connectWebSocket() {
             undefined,
             data.plan_step || undefined,
           )
+          // Only add reasoning block for actual thinking content
+          // (💡, 🤔, 💭) — tool results and step indicators now go
+          // through progress_* events to the StepProgressPanel.
           if (data.status) {
-            useChatStore.getState().addReasoningBlock(data.status)
+            const s = data.status.trim()
+            if (s.startsWith('💡') || s.startsWith('🤔') || s.startsWith('💭')) {
+              // Strip emoji for cleaner display
+              const clean = s.replace(/^[🤔💡💭]\s*/, '')
+              if (clean) {
+                useChatStore.getState().addReasoningBlock(clean)
+              }
+            }
           }
           if (data.preset) {
             useChatStore.getState().updateAgentMetrics({ preset: data.preset })
