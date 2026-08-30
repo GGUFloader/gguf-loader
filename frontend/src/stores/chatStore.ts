@@ -304,7 +304,12 @@ export function connectWebSocket() {
           store.appendStreamingText(data.token)
           break
         case 'reasoning':
-          store.addReasoningBlock(data.content)
+          // Add as a thinking step in the progress timeline,
+          // not as a separate reasoning block (which would all pile up at top)
+          useChatStore.getState().addProgressStep({
+            type: 'thinking',
+            content: data.content,
+          })
           break
         case 'tool_call':
           // Add tool call to current streaming message
@@ -411,16 +416,17 @@ export function connectWebSocket() {
             undefined,
             data.plan_step || undefined,
           )
-          // Only add reasoning block for actual thinking content
-          // (💡, 🤔, 💭) — tool results and step indicators now go
-          // through progress_* events to the StepProgressPanel.
+          // Add thinking content as progress steps in the timeline
+          // instead of separate reasoning blocks (which pile up at top)
           if (data.status) {
             const s = data.status.trim()
             if (s.startsWith('💡') || s.startsWith('🤔') || s.startsWith('💭')) {
-              // Strip emoji for cleaner display
               const clean = s.replace(/^[🤔💡💭]\s*/, '')
               if (clean) {
-                useChatStore.getState().addReasoningBlock(clean)
+                useChatStore.getState().addProgressStep({
+                  type: 'thinking',
+                  content: clean,
+                })
               }
             }
           }

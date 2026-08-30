@@ -4,7 +4,6 @@ import { useUIStore } from '../../stores/uiStore'
 import { ChatBubble } from './ChatBubble'
 import { StreamingText } from './StreamingText'
 import { StepProgressPanel } from './StepProgressPanel'
-import { ReasoningBlock } from './ReasoningBlock'
 import { ToolCallCard } from '../agent/ToolCallCard'
 import { ToolApprovalDialog } from '../agent/ToolApprovalDialog'
 import { PlanTracker } from '../agent/PlanTracker'
@@ -157,11 +156,6 @@ export function ChatPanel() {
                   />
                 ))}
               </div>
-            ))}
-
-            {/* Reasoning blocks */}
-            {reasoningBlocks.map((block, i) => (
-              <ReasoningBlock key={i} content={block} />
             ))}
 
             {/* Step progress panel (Codebuff-style) */}
