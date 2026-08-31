@@ -54,7 +54,7 @@ export function ModelCatalogPanel() {
   async function handleLoadModel(m: CatalogModel) {
     setLoadingModel(true)
     try {
-      await modelApi.load(m.path, false, 4096)
+      await modelApi.load(m.path, null, 16384)
     } catch {}
     setLoadingModel(false)
   }
