@@ -39,7 +39,7 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
   const [modelPath, setModelPath] = useState('')
   const [useGpu, setUseGpu] = useState(true)
   const [gpuLayers, setGpuLayers] = useState(-1)
-  const [ctxLength, setCtxLength] = useState(32768)
+  const [ctxLength, setCtxLength] = useState(16384)
   const [loading, setLoading] = useState(false)
   const [estimating, setEstimating] = useState(false)
   const [estimate, setEstimate] = useState<MemoryEstimate | null>(null)

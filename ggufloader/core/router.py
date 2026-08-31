@@ -151,7 +151,7 @@ class ModelProfile:
 @dataclass
 class LoadStrategy:
     """Optimal loading parameters for a model on a given system."""
-    n_ctx: int = 32768
+    n_ctx: int = 16384
     n_gpu_layers: int = -1         # -1 = auto (all layers)
     use_gpu: bool = False
     batch_size: int = 512
@@ -195,6 +195,7 @@ class ModelRouter:
 
     def __init__(self, system: Optional[SystemProfile] = None) -> None:
         self._system = system or SystemProfile.detect()
+        self._profile_cache: Dict[str, ModelProfile] = {}  # path → cached profile
 
     @property
     def system(self) -> SystemProfile:
@@ -205,10 +206,18 @@ class ModelRouter:
     # ------------------------------------------------------------------
 
     def inspect(self, path: str) -> ModelProfile:
-        """Deep-inspect a GGUF file and return a multi-dimensional profile."""
+        """Deep-inspect a GGUF file and return a multi-dimensional profile.
+
+        Results are cached per path — the GGUF metadata only gets parsed once.
+        """
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"Model file not found: {path}")
+
+        # Return cached profile if available
+        cache_key = str(p.resolve())
+        if cache_key in self._profile_cache:
+            return self._profile_cache[cache_key]
 
         file_size_gb = p.stat().st_size / (1024 ** 3)
 
@@ -294,6 +303,7 @@ class ModelRouter:
             p.name, arch, profile.family, size_tier.value,
             quant, total_layers, max_ctx or 0, profile.total_memory_gb,
         )
+        self._profile_cache[cache_key] = profile
         return profile
 
     # ------------------------------------------------------------------

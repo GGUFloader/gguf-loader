@@ -275,51 +275,27 @@ def test_generate_agents_md_tool_executes(tmp_path):
 # GraphAgent wiring
 # ---------------------------------------------------------------------------
 
-def test_graph_agent_has_replay(tmp_path):
-    """GraphAgent should have a SessionReplay."""
+def test_graph_agent_has_lightweight_core(tmp_path):
+    """GraphAgent should have lightweight core attributes."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
 
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_replay')
-    assert isinstance(agent._replay, SessionReplay)
+    assert hasattr(agent, '_context_budget')
+    assert hasattr(agent, '_prefix_cache')
+    assert hasattr(agent, '_workspace_ctx')
+    agent.close()
     agent.close()
 
 
-def test_graph_agent_has_agents_md(tmp_path):
-    """GraphAgent should have an AgentsMdGenerator."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_agents_md')
-    assert isinstance(agent._agents_md, AgentsMdGenerator)
-    agent.close()
-
-
-def test_graph_agent_has_export(tmp_path):
-    """GraphAgent should have a SessionExport."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_export')
-    assert isinstance(agent._export, SessionExport)
-    agent.close()
-
-
-def test_graph_agent_saves_replay_after_process(tmp_path):
-    """Processing a message should save a replay session."""
+def test_graph_agent_process_returns_response(tmp_path):
+    """Processing a message should return a response."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "Hello!"}'
 
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2)
-    agent.process(user_message="Hi")
-
-    # Replay should have been saved
-    replays = agent._replay.list_sessions()
-    assert len(replays) >= 1
-    assert replays[0]["steps"] >= 2  # user_message + agent_response
+    result = agent.process(user_message="Hi")
+    assert result["response"] == "Hello!"
     agent.close()
 
 

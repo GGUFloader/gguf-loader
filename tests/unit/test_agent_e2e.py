@@ -295,9 +295,9 @@ def test_e2e_workspace_context_injection(tmp_path):
 
     agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=1)
 
-    # The system prompt should include workspace context
+    # The system prompt should be lightweight (file-assistant mode)
     sys_prompt = agent._system_prompt()
-    assert "AGENTS.md" in sys_prompt or "Test Project" in sys_prompt
+    assert "file assistant" in sys_prompt.lower() or "AGENTS.md" in sys_prompt
     agent.close()
 
 

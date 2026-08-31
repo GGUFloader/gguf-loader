@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List, Optional, Set
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from ggufloader.api.deps import get_workspace
 
@@ -13,43 +14,66 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+class ToolToggleRequest(BaseModel):
+    name: str
+    active: bool
+
+
+class ToolInfo(BaseModel):
+    name: str
+    label: str
+    category: str
+    risk: str
+    active: bool
+
+
 @router.get("")
-async def list_tools() -> List[dict]:
-    """List all available agent tools (built-in + MCP + plugin)."""
+async def list_tools() -> List[ToolInfo]:
+    """List all available agent tools with their active state."""
     from pathlib import Path
-    from ggufloader.core.agent.tool_registry import ToolRegistry
+    from ggufloader.core.agent.tool_manager import ToolManager
 
     workspace = Path(get_workspace()) if get_workspace() else Path(".")
-    registry = ToolRegistry(workspace)
+    manager = ToolManager(workspace)
+    tools = manager.get_all_tool_info()
+    return [ToolInfo(**t) for t in tools]
 
-    tools = []
-    for tool in registry._tools.values():
-        tools.append({
-            "name": tool.name,
-            "description": tool.description,
-            "source": "builtin",
-            "enabled": True,
-            "risk_level": _assess_risk(tool.name),
-        })
-    return tools
+
+@router.get("/active")
+async def active_tools() -> List[str]:
+    """Get list of active tool names."""
+    from pathlib import Path
+    from ggufloader.core.agent.tool_manager import ToolManager
+
+    workspace = Path(get_workspace()) if get_workspace() else Path(".")
+    manager = ToolManager(workspace)
+    return sorted(manager.get_active_tools())
+
+
+@router.post("/toggle")
+async def toggle_tool(req: ToolToggleRequest) -> dict:
+    """Enable or disable a tool."""
+    from pathlib import Path
+    from ggufloader.core.agent.tool_manager import ToolManager
+
+    workspace = Path(get_workspace()) if get_workspace() else Path(".")
+    manager = ToolManager(workspace)
+    changed = manager.set_tool_active(req.name, req.active)
+    return {"ok": changed, "active": sorted(manager.get_active_tools())}
 
 
 @router.get("/stats")
 async def tool_stats() -> dict:
     """Get tool usage statistics."""
+    from pathlib import Path
+    from ggufloader.core.agent.tool_manager import ToolManager
+
+    workspace = Path(get_workspace()) if get_workspace() else Path(".")
+    manager = ToolManager(workspace)
+    all_info = manager.get_all_tool_info()
+    active = sum(1 for t in all_info if t["active"])
     return {
-        "total_tools": 10,
-        "builtin_tools": 10,
-        "mcp_tools": 0,
-        "plugin_tools": 0,
+        "total_tools": len(all_info),
+        "active_tools": active,
+        "inactive_tools": len(all_info) - active,
     }
-
-
-def _assess_risk(tool_name: str) -> str:
-    low = {"list_directory", "read_file", "search_files"}
-    high = {"run_command", "run_python", "git"}
-    if tool_name in low:
-        return "low"
-    if tool_name in high:
-        return "high"
-    return "medium"

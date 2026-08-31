@@ -17,7 +17,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 // Model API
 export const modelApi = {
   info: () => request<any>('/model/info'),
-  load: (path: string, useGpu = false, nCtx = 32768) =>
+  load: (path: string, useGpu: boolean | null = null, nCtx = 16384) =>
     request<any>('/model/load', {
       method: 'POST',
       body: JSON.stringify({ path, use_gpu: useGpu, n_ctx: nCtx, n_gpu_layers: -1 }),

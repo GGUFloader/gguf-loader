@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class LoadRequest(BaseModel):
     path: str
-    use_gpu: bool = False
+    use_gpu: bool | None = None  # None = auto-detect via router
     n_ctx: int = 32768
     n_gpu_layers: int = -1
 
@@ -83,14 +83,34 @@ async def model_info() -> ModelInfo:
 
 @router.post("/load")
 async def load_model(req: LoadRequest) -> dict:
-    """Load a GGUF model file."""
+    """Load a GGUF model file. Uses router for GPU auto-detection when use_gpu not set."""
     if not os.path.exists(req.path):
         raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
 
     try:
+        # Use the router for auto GPU detection when use_gpu is not explicitly set
+        router = get_router()
+        if router is not None and req.use_gpu is None:
+            # Let the router decide n_gpu_layers — don't pass it unless user chose a specific value
+            backend, profile, strategy, config = router.load(
+                req.path,
+                n_ctx=req.n_ctx,
+            )
+            set_model_backend(backend)
+            return {
+                "status": "loaded",
+                "path": req.path,
+                "strategy": {
+                    "n_ctx": strategy.n_ctx,
+                    "n_gpu_layers": strategy.n_gpu_layers,
+                    "use_gpu": strategy.use_gpu,
+                    "reasoning": strategy.reasoning,
+                },
+            }
+        # Fallback: direct load without router
         backend = ModelBackend(
             req.path,
-            use_gpu=req.use_gpu,
+            use_gpu=req.use_gpu or False,
             n_ctx=req.n_ctx,
             n_gpu_layers=req.n_gpu_layers,
         )

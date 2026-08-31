@@ -79,7 +79,7 @@ class ModelBackend:
         self,
         model_path: str,
         use_gpu: bool = False,
-        n_ctx: int = 32768,
+        n_ctx: int = 16384,
         n_gpu_layers: int = -1,
     ) -> None:
         self.model_path = model_path
@@ -111,13 +111,17 @@ class ModelBackend:
             "Loading model %s (gpu_layers=%d, ctx=%d)",
             self.model_path, gpu_layers, self._n_ctx,
         )
+        llama_kwargs = dict(
+            model_path=self.model_path,
+            n_ctx=self._n_ctx,
+            n_gpu_layers=gpu_layers,
+            flash_attn=True,
+            n_gpu_layers_k=gpu_layers,
+            n_gpu_layers_v=gpu_layers,
+            verbose=True,
+        )
         try:
-            self._llama = Llama(
-                model_path=self.model_path,
-                n_ctx=self._n_ctx,
-                n_gpu_layers=gpu_layers,
-                verbose=True,
-            )
+            self._llama = Llama(**llama_kwargs)
             return self
         except Exception as e:
             # GPU retry ladder: full → half → CPU (GPT4All chatllm.cpp:627-658)
@@ -126,22 +130,12 @@ class ModelBackend:
                 logger.warning("GPU load failed (ngl=%d): %s — retrying at ngl=%d",
                                gpu_layers, e, half)
                 try:
-                    self._llama = Llama(
-                        model_path=self.model_path,
-                        n_ctx=self._n_ctx,
-                        n_gpu_layers=half,
-                        verbose=True,
-                    )
+                    self._llama = Llama(**{**llama_kwargs, 'n_gpu_layers': half})
                     return self
                 except Exception as e2:
                     logger.warning("Half-GL retry failed (ngl=%d): %s — falling back to CPU",
                                    half, e2)
-                    self._llama = Llama(
-                        model_path=self.model_path,
-                        n_ctx=self._n_ctx,
-                        n_gpu_layers=0,
-                        verbose=True,
-                    )
+                    self._llama = Llama(**{**llama_kwargs, 'n_gpu_layers': 0, 'flash_attn': False})
                     return self
             raise
 
@@ -226,16 +220,8 @@ class ModelBackend:
     def chat_stream(self, messages: List[Dict[str, str]], **kwargs: Any) -> Iterator[str]:
         """Stream assistant content for a chat *messages* list.
 
-        Uses ``llama.create_chat_completion``, which renders the messages
-        through the GGUF's own embedded chat template (Llama-3, Qwen,
-        Mistral, gpt-oss harmony, ...) - the same mechanism Ollama uses.
-        This matches the format the model was instruction-tuned on and is
-        strongly preferred over hand-built ``User:/Assistant:`` strings.
-
-        Yields content deltas (plain text chunks).
-
-        A3: When possible, reuses KV state from the previous turn by
-        feeding only the new suffix (longest-common-prefix optimization).
+        Uses ``llama.create_chat_completion`` with the model's embedded
+        chat template (Llama-3, Qwen, Gemma, etc.).
         """
         kwargs = dict(kwargs)
         kwargs["stream"] = True
@@ -243,47 +229,6 @@ class ModelBackend:
         stops = list(kwargs.get("stop") or [])
         with self._lock:
             llama = self._require_llama()
-
-            # A3: KV prefix caching — tokenize the rendered prompt and
-            # compare with the previous turn's token list. Feed only the
-            # suffix via n_prompt so llama.cpp reuses cached KV state.
-            use_n_prompt = False
-            n_prompt_val = 0
-            if self._kv_cache_tokens is not None and self._kv_cache_state is not None:
-                try:
-                    all_text = " ".join(m.get("content", "") for m in messages)
-                    tokens = llama.tokenize(all_text.encode("utf-8"), add_bos=True)
-                    # Find longest common prefix
-                    old = self._kv_cache_tokens
-                    lcp = 0
-                    while lcp < min(len(tokens), len(old)) and tokens[lcp] == old[lcp]:
-                        lcp += 1
-                    total_new = len(tokens)
-                    pct = (lcp / total_new * 100) if total_new > 0 else 0
-                    if lcp > 64:  # only cache if we save meaningful tokens
-                        use_n_prompt = True
-                        n_prompt_val = lcp
-                        try:
-                            llama.load_state(self._kv_cache_state)
-                            logger.info(
-                                "KV cache HIT: reused %d/%d tokens (%.0f%%) "
-                                "— skipping %d tokens",
-                                lcp, total_new, pct, lcp,
-                            )
-                        except Exception as e:  # noqa: BLE001
-                            logger.debug("KV cache load_state failed: %s", e)
-                            use_n_prompt = False
-                    else:
-                        logger.debug(
-                            "KV cache MISS (below threshold): lcp=%d/%d "
-                            "(%.0f%%) — threshold is 64",
-                            lcp, total_new, pct,
-                        )
-                except Exception as e:  # noqa: BLE001
-                    logger.debug("KV cache tokenization failed: %s", e)
-            else:
-                logger.debug("KV cache cold start (no previous state)")
-
             stream = llama.create_chat_completion(**kwargs)
 
             def _deltas() -> Iterator[str]:
@@ -294,22 +239,8 @@ class ModelBackend:
                     if text:
                         yield text
 
-            result_tokens = []
             for token in holdback_stream(_deltas(), stops):
-                result_tokens.append(token)
                 yield token
-
-            # Save state for next turn's cache
-            try:
-                all_text = " ".join(m.get("content", "") for m in messages)
-                new_tokens = llama.tokenize(all_text.encode("utf-8"), add_bos=True)
-                self._kv_cache_tokens = new_tokens
-                self._kv_cache_state = llama.save_state()
-                logger.debug("KV cache saved: %d tokens for next turn", len(new_tokens))
-            except Exception as e:  # noqa: BLE001
-                logger.debug("KV cache save_state failed: %s", e)
-                self._kv_cache_tokens = None
-                self._kv_cache_state = None
 
     def chat(self, messages: List[Dict[str, str]], **kwargs: Any) -> str:
         """Non-streaming :meth:`chat_stream`; returns the full reply."""

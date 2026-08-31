@@ -18,6 +18,7 @@ Sends typed events to the React frontend:
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import hashlib
 import logging
 import re
@@ -105,9 +106,9 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_json()
             event_type = data.get("type", "")
 
-            if event_type in ("chat", "chat_message"):
-                await handle_chat(websocket, data)
-            elif event_type == "agent_start":
+            if event_type in ("chat", "chat_message", "agent_start"):
+                # All messages go through the agent
+                data["type"] = "agent_start"
                 await handle_agent_start(websocket, data)
             elif event_type == "agent_stop":
                 await handle_agent_stop(websocket)
@@ -151,7 +152,7 @@ async def handle_chat(websocket: WebSocket, data: dict):
         return
 
     system_prompt = data.get("system_prompt")
-    temperature = data.get("temperature", 0.2)
+    temperature = data.get("temperature", 0.7)
     max_tokens = data.get("max_tokens", 4096)
 
     # Build messages
@@ -283,10 +284,11 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         pm = PresetManager()
         preset_obj = pm.get(preset_id) or pm.get("full_stack")
 
-        # --- 2. Get router-optimized agent params ---
+        # --- 2. Get router-optimized agent params (single call) ---
         agent_temperature = preset_obj.temperature
         agent_max_tokens = preset_obj.max_tokens
         router_info = {}
+        router_system_prompt = None
 
         if model_path:
             try:
@@ -294,9 +296,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 router = ModelRouter()
                 profile = router.inspect(model_path)
                 role_config = router.route(profile, ModelRole.AGENT)
-                # Use router's agent params but respect preset overrides
                 agent_temperature = role_config.temperature
                 agent_max_tokens = role_config.max_tokens
+                router_system_prompt = role_config.system_prompt
                 router_info = {
                     "family": profile.family,
                     "size_tier": profile.size_tier.value,
@@ -305,31 +307,26 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             except Exception as e:
                 logger.debug("Router inspection failed, using preset defaults: %s", e)
 
-        # --- 3. Build LLM callable with preset system prompt ---
         def llm_call(prompt, max_tokens=None, temperature=None):
-            """Synchronous LLM call for the graph agent."""
-            full_sys = preset_obj.get_system_prompt(_SYSTEM_PROMPT)
-            if system_prompt:
-                full_sys = system_prompt + "\n\n" + full_sys
-            msgs = [
-                {"role": "system", "content": full_sys},
-                {"role": "user", "content": prompt},
-            ]
-            return backend.chat(
-                messages=msgs,
-                temperature=temperature or agent_temperature,
+            """Synchronous LLM call for the graph agent.
+
+            The GraphAgent builds a complete raw prompt (system + tools +
+            conversation + 'Assistant:'). We call the LLM directly with
+            this raw prompt — NOT through chat() which would double-wrap
+            with chat template turn markers.
+            """
+            return backend(
+                prompt,
                 max_tokens=max_tokens or agent_max_tokens,
+                temperature=temperature or agent_temperature,
             )
 
         # --- 4. Create GraphAgent (with checkpointing + cancellation) ---
         from ggufloader.core.agent.graph_agent import GraphAgent
 
-        # Checkpoint path for session persistence across restarts
-        import os as _os
-        checkpoint_dir = _os.path.join(_os.path.expanduser("~"), ".ggufloader", "agent_checkpoints")
-        _os.makedirs(checkpoint_dir, exist_ok=True)
-        workspace_hash = hashlib.sha256(_os.path.abspath(workspace).encode()).hexdigest()[:16]
-        checkpoint_path = _os.path.join(checkpoint_dir, f"{workspace_hash}.db")
+        # Each session gets a unique thread_id — no history carryover.
+        # This keeps the prompt small and fast.
+        unique_thread_id = f"session_{int(time.time() * 1000)}"
 
         agent = GraphAgent(
             llm=llm_call,
@@ -337,7 +334,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             max_steps=preset_obj.max_steps,
             max_tokens=agent_max_tokens,
             json_retries=2,
-            checkpoint_path=checkpoint_path,
+            thread_id=unique_thread_id,
         )
         _agent_graph = agent
 

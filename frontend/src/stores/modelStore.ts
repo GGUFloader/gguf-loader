@@ -6,7 +6,7 @@ interface ModelState {
   info: ModelInfo
   loading: boolean
   error: string | null
-  loadModel: (path: string, useGpu?: boolean, nCtx?: number) => Promise<void>
+  loadModel: (path: string, useGpu?: boolean | null, nCtx?: number) => Promise<void>
   unloadModel: () => Promise<void>
   refreshInfo: () => Promise<void>
 }
@@ -16,7 +16,7 @@ export const useModelStore = create<ModelState>((set) => ({
   loading: false,
   error: null,
 
-  loadModel: async (path, useGpu = false, nCtx = 32768) => {
+  loadModel: async (path, useGpu = null, nCtx = 16384) => {
     set({ loading: true, error: null })
     try {
       await modelApi.load(path, useGpu, nCtx)

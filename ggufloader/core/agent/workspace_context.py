@@ -179,8 +179,8 @@ class WorkspaceContext:
                 try:
                     content = path.read_text(encoding="utf-8", errors="replace")
                     # Cap at 3000 chars to avoid prompt bloat
-                    if len(content) > 3000:
-                        content = content[:3000] + "\n... (truncated)"
+                    if len(content) > 500:
+                        content = content[:500] + "\n... (truncated)"
                     return f"## Project Instructions ({filename})\n{content}"
                 except OSError:
                     continue

@@ -654,7 +654,7 @@ def _decode_bytes(raw_data: bytes, encoding: str) -> tuple[str, str]:
     return raw_data.decode("utf-8", errors="replace"), "utf-8"
 
 
-def tool_content_for_context(result: Dict[str, Any], max_chars: int = 4000) -> Optional[str]:
+def tool_content_for_context(result: Dict[str, Any], max_chars: int = 1000) -> Optional[str]:
     """Model-visible payload text for contentful tools, else None.
 
     ``read_file``/``list_directory``/``search_files`` carry the actual

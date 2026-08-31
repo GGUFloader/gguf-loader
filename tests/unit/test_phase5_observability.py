@@ -207,93 +207,27 @@ def test_rate_limiter_stats():
 # GraphAgent wiring
 # ---------------------------------------------------------------------------
 
-def test_graph_agent_has_audit(tmp_path):
-    """GraphAgent should have an AuditLog."""
+def test_graph_agent_has_lightweight_core(tmp_path):
+    """GraphAgent should have lightweight core attributes."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
 
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_audit')
-    assert isinstance(agent._audit, AuditLog)
+    assert hasattr(agent, '_context_budget')
+    assert hasattr(agent, '_prefix_cache')
+    assert hasattr(agent, '_workspace_ctx')
     agent.close()
 
 
-def test_graph_agent_has_cost_estimator(tmp_path):
-    """GraphAgent should have a CostEstimator."""
+def test_graph_agent_processes_lightweight(tmp_path):
+    """GraphAgent should process messages in lightweight mode."""
     def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_cost')
-    assert isinstance(agent._cost, CostEstimator)
-    agent.close()
-
-
-def test_graph_agent_has_health_monitor(tmp_path):
-    """GraphAgent should have a HealthMonitor."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_health')
-    assert isinstance(agent._health, HealthMonitor)
-    agent.close()
-
-
-def test_graph_agent_has_rate_limiter(tmp_path):
-    """GraphAgent should have a RateLimiter."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_rate_limiter')
-    assert isinstance(agent._rate_limiter, RateLimiter)
-    agent.close()
-
-
-def test_graph_agent_records_audit_on_process(tmp_path):
-    """Processing a message should generate audit entries."""
-    responses = [
-        '{"reasoning": "done", "tool_calls": [], "answer": "Hello!"}',
-    ]
-    call_count = [0]
-    def fake_llm(prompt, **kwargs):
-        idx = call_count[0]
-        call_count[0] += 1
-        return responses[min(idx, len(responses) - 1)]
+        return '{"tool_calls": [], "answer": "Hello!"}'
 
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2)
-    agent.process(user_message="Hi")
+    result = agent.process(user_message="Hi")
 
-    # Should have at least one LLM request audit entry
-    llm_entries = agent._audit.query(event_type=EventType.LLM_REQUEST)
-    assert len(llm_entries) >= 1
-    agent.close()
-
-
-def test_graph_agent_records_cost_on_process(tmp_path):
-    """Processing a message should track token costs."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "Short answer"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2)
-    agent.process(user_message="Test")
-
-    summary = agent._cost.summary()
-    assert summary["total_calls"] >= 1
-    assert summary["total_tokens"] > 0
-    agent.close()
-
-
-def test_graph_agent_records_health_on_process(tmp_path):
-    """Processing a message should record health metrics."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2)
-    agent.process(user_message="Test")
-
-    assert agent._health.get_counter("llm_calls") >= 1
+    assert result["response"] == "Hello!"
     agent.close()
 
 

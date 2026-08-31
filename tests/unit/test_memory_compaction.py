@@ -222,17 +222,6 @@ def test_memory_tools_in_registry(tmp_path):
 # GraphAgent with memory
 # ---------------------------------------------------------------------------
 
-def test_graph_agent_has_memory_store(tmp_path):
-    """GraphAgent should have a MemoryPersistence instance."""
-    def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "ok"}'
-    
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_memory_store')
-    assert isinstance(agent._memory_store, MemoryPersistence)
-    agent.close()
-
-
 def test_graph_agent_has_context_budget(tmp_path):
     """GraphAgent should have a ContextBudget instance."""
     def fake_llm(prompt, **kwargs):
@@ -244,18 +233,14 @@ def test_graph_agent_has_context_budget(tmp_path):
     agent.close()
 
 
-def test_graph_agent_system_prompt_includes_memory(tmp_path):
-    """System prompt should include memories from the store."""
+def test_graph_agent_system_prompt_is_lightweight(tmp_path):
+    """System prompt should use lightweight file-assistant mode."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    # Pre-populate memory
-    mem = MemoryPersistence(tmp_path)
-    mem.remember("project", "FastAPI web app", category="context")
-    
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
     prompt = agent._system_prompt()
-    assert "FastAPI" in prompt
+    assert "file assistant" in prompt.lower()
     agent.close()
 
 

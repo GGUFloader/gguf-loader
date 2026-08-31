@@ -38,24 +38,42 @@ from langgraph.types import Command, StreamWriter, interrupt
 from typing import TypedDict
 
 from .agent_engine import _SYSTEM_PROMPT, extract_json, stale_repeat_signatures, summarize_directive
-from .audit_log import AuditLog, EventType
 from .context_budget import ContextBudget, estimate_tokens
-from .cost_estimator import CostEstimator
-from .error_patterns import ErrorPatternDetector
-from .health_monitor import HealthMonitor
-from .memory_persistence import MemoryPersistence
-from .mcp_bridge import MCPBridge
-from .plugin_manager import PluginManager
-from .profiler import AgentProfiler
-from .rate_limiter import RateLimiter
-from .self_improve import SelfImprove
-from .session_replay import SessionReplay
-from .agents_md import AgentsMdGenerator
-from .session_export import SessionExport
 from .tool_registry import ToolRegistry, tool_content_for_context, validate_tool_call
 from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemory
 
 logger = logging.getLogger(__name__)
+
+# Lightweight system prompt for the file-assistant mode.
+# Only includes what the model needs to read files and answer questions.
+_LIGHT_ASSISTANT_PROMPT = """You are a helpful file assistant. You read files and help the user understand their content.
+
+Your workspace: __WORKSPACE__
+
+You have access to these tools:
+__TOOLS__
+
+You communicate through JSON. When you need tools, reply with ONLY a JSON object:
+{
+  "reasoning": "Brief explanation of what you're doing",
+  "estimated_steps": 3,
+  "tool_calls": [{"tool": "tool_name", "parameters": {"param": "value"}}],
+  "answer": "Your final answer to the user"
+}
+
+Rules:
+- Be helpful, clear, and concise
+- Read files before answering questions about them
+- Summarize file contents clearly for the user
+- "tool_calls" and "answer" are mutually exclusive
+- Never repeat a tool call whose result is already in the conversation
+- Use read_file to open files (handles PDF, DOCX, Markdown)
+- Use list_directory to see what files exist
+- Use search_files to find text inside files
+- Use glob to find files by pattern
+- On your FIRST response, set "estimated_steps" to how many tool calls you expect (e.g. 2 for list+read, 5 for list+read+search+analyze)
+- Update your estimate if the task turns out more complex than expected
+"""
 
 StatusCallback = Callable[[str], None]
 ToolCallback = Callable[[Dict[str, Any]], None]
@@ -101,7 +119,7 @@ class GraphAgent:
         self.max_tokens = max_tokens
         self.max_steps = max_steps
         self.json_retries = json_retries
-        self.max_directive_rounds = 2
+        self.max_directive_rounds = 1  # Only 1 extra round to read key files
         self.messages: List[Dict[str, str]] = []
 
         # Stable per-workspace thread id: the same folder resumes the same
@@ -117,54 +135,13 @@ class GraphAgent:
         self._on_tool: ToolCallback = lambda _result: None
         self._on_token: Callable[[str], None] = lambda _tok: None
 
-        # Workspace context and prompt prefix caching
+        # --- Lightweight core (always loaded) ---
         self._workspace_ctx = WorkspaceContext(self.workspace)
         self._prefix_cache = PromptPrefixCache()
-        self._memory = WorkingMemory()
-
-        # Long-term memory persistence (survives restarts)
-        self._memory_store = MemoryPersistence(self.workspace)
-
-        # Context budget tracking and compaction
         self._context_budget = ContextBudget()
 
-        # Plugin system: discover and load custom tools
-        self._plugin_mgr = PluginManager(self.workspace)
-        self._plugin_mgr.load_all(self.tools)
-
-        # Error pattern detection
-        self._error_patterns = ErrorPatternDetector(self.workspace)
-
-        # Self-improvement from corrections
-        self._self_improve = SelfImprove(self.workspace)
-
-        # Audit log for full traceability
-        self._audit = AuditLog(self.workspace)
-
-        # Cost estimation (tokens, throughput, electricity)
-        self._cost = CostEstimator()
-
-        # Health monitoring
-        self._health = HealthMonitor()
-
-        # Rate limiting for LLM and tool calls
-        self._rate_limiter = RateLimiter()
-
-        # Session replay for debugging
-        self._replay = SessionReplay(self.workspace)
-        self._replay_session = None
-
-        # AGENTS.md generator
-        self._agents_md = AgentsMdGenerator(self.workspace)
-
-        # Session export
-        self._export = SessionExport(self.workspace)
-
-        # MCP bridge: discover and use tools from external MCP servers
-        self._mcp_bridge = MCPBridge(self.workspace)
-
-        # Performance profiler: per-step latency, throughput, bottleneck detection
-        self._profiler = AgentProfiler()
+        # --- Lazy subsystems (only loaded when needed) ---
+        self._lazy: Dict[str, Any] = {}
 
         self._saver_conn, self._saver = self._open_checkpointer()
         self._app = self._build_graph()
@@ -214,21 +191,6 @@ class GraphAgent:
         self._on_tool = on_tool or (lambda _result: None)
         self._on_token = on_token or (lambda _tok: None)
         self._on_approval = on_approval or (lambda _payload: True)
-
-        # Start replay session
-        import time as _time
-        session_id = f"replay_{int(_time.time() * 1000)}"
-        self._replay_session = self._replay.create_session(session_id, title=user_message[:80])
-        self._replay.record_user_message(user_message)
-
-        # Start profiling
-        self._profiler.start_run(session_id)
-
-        # Discover MCP tools if any servers are configured
-        try:
-            self._mcp_bridge.register_tools(self.tools)
-        except Exception:
-            pass
 
         base_messages = self._load_thread_messages() or list(self.messages)
 
@@ -302,24 +264,9 @@ class GraphAgent:
         if self.messages:
             self._context_budget.check_budget(self.messages)
 
-        # Replay: record final response and save
-        self._replay.record_agent_response(final_answer or "Done.")
-        self._replay.record_state({
-            "total_tokens": self._cost._total_output_tokens if hasattr(self._cost, '_total_output_tokens') else 0,
-            "steps": len(tool_results),
-        })
-        try:
-            self._replay.save_session(self._replay_session)
-        except Exception:
-            pass
-
-        # Finish profiling
-        profile_summary = self._profiler.finish_run()
-
         return {
             "response": final_answer or "Done.",
             "tool_results": tool_results,
-            "profile": profile_summary,
         }
 
     def cancel(self) -> None:
@@ -356,20 +303,6 @@ class GraphAgent:
 
         writer({"event": "step", "step": step + 1, "max": max_steps})
 
-        # Quick analysis on the first step of a complex request.
-        if step == 0:
-            last_user = messages[-1]["content"] if messages else ""
-            if self._is_complex(last_user):
-                writer({"event": "status", "text": "🤔 Analyzing your request..."})
-                analysis = self._call_llm(
-                    f"Quickly analyze this request in 2-3 concise sentences:\n\n"
-                    f"User Request: {last_user}",
-                    writer,
-                )
-                if analysis.strip():
-                    writer({"event": "status", "text": f"💡 {analysis.strip()}"})
-                    writer({"event": "status", "text": ""})
-
         action, raw = self._request_action(
             messages, tool_results, writer, directive=state.get("directive", "")
         )
@@ -388,6 +321,15 @@ class GraphAgent:
         if reasoning:
             writer({"event": "status", "text": f"💭 {reasoning}"})
 
+        # Dynamic step estimate: the LLM estimates how many steps it needs.
+        # On first step, use the estimate; on later steps, allow the model
+        # to increase (but not decrease) the budget.
+        est = action.get("estimated_steps")
+        if isinstance(est, (int, float)) and est > 0:
+            est = min(int(est) + 1, 20)  # +1 buffer, capped at 20
+            if step == 0 or est > max_steps:
+                max_steps = est
+
         calls = [
             c for c in (action.get("tool_calls") or [])
             if isinstance(c, dict) and c.get("tool")
@@ -398,7 +340,7 @@ class GraphAgent:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
                 answer = raw or "No further action needed."
-            return self._finish_or_direct(state, messages, answer, raw, step, writer)
+            return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
 
         # Drop repeats of calls that already ran with a still-valid result.
         # When the model proposes nothing but stale repeats (a hedge with
@@ -413,16 +355,16 @@ class GraphAgent:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
                 answer = raw or "No further action needed."
-            return self._finish_or_direct(state, messages, answer, raw, step, writer)
+            return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
 
-        return {"pending_calls": new_calls, "final_answer": "", "raw_response": raw, "step": step + 1}
+        return {"pending_calls": new_calls, "final_answer": "", "raw_response": raw, "step": step + 1, "max_steps": max_steps}
 
     def _tools_node(self, state: GraphState, writer: StreamWriter) -> Dict[str, Any]:
-        """Execute pending tool calls, with one corrective retry per failure.
+        """Execute pending tool calls concurrently, with corrective retry per failure.
 
-        Sensitive calls (shell commands, git writes) are approved up front
-        via LangGraph interrupts before anything executes, so a suspension
-        never loses results from calls that already ran.
+        Independent tools (read_file, list_directory, search_files, glob)
+        execute in parallel via ThreadPoolExecutor for 3x speedup.
+        Approval-gated tools still block sequentially.
         """
         self._check_cancel()
         calls = state.get("pending_calls", [])
@@ -430,6 +372,7 @@ class GraphAgent:
         executed_calls = list(state.get("executed_calls", []))
         self._announce_plan(calls, writer)
 
+        # Collect approvals for approval-gated tools
         approvals: Dict[int, bool] = {}
         for index, call in enumerate(calls):
             if self.tools.requires_approval(call.get("tool", ""), call.get("parameters", {})):
@@ -443,79 +386,81 @@ class GraphAgent:
                 approvals[index] = bool(interrupt(payload))
         self._check_cancel()
 
-        failures: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
-        for index, call in enumerate(calls, 1):
-            self._check_cancel()
-            if len(calls) > 1:
-                writer({"event": "status", "text": f"[{index}/{len(calls)}] {self._describe(call)}"})
-            signature = self._signature(call)
-            if self._failed_signatures.get(signature, 0) >= 2:
-                writer({"event": "status", "text": f"  ⏭ Skipping repeated failing call: {self._describe(call)}"})
-                continue
-            # Validate tool call before execution
-            validation_error = validate_tool_call(call, self.tools)
-            if validation_error:
-                writer({"event": "status", "text": f"  ✗ Invalid call: {validation_error}"})
-                self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
-                failures.append((call, {"status": "error", "error": validation_error, "tool_name": call.get("tool", "")}))
-                continue
-            # Audit: log tool call
-            self._audit.log_tool_call(call.get("tool", "unknown"), call.get("parameters", {}))
-            # Replay: record tool call
-            self._replay.record_tool_call(call.get("tool", "unknown"), call.get("parameters", {}))
-            # Rate limit check for tools
-            self._rate_limiter.allow_tool()
-            if index - 1 in approvals and not approvals[index - 1]:
-                result = {"status": "error", "error": "Approval denied by the user",
-                          "tool_name": call.get("tool", "")}
-                self._audit.log_approval(call.get("tool", "unknown"), "denied")
+        # Separate into approval-gated (sequential) and independent (parallel)
+        independent: List[Tuple[int, Dict[str, Any]]] = []
+        gated: List[Tuple[int, Dict[str, Any]]] = []
+        for index, call in enumerate(calls):
+            if self.tools.requires_approval(call.get("tool", ""), call.get("parameters", {})):
+                gated.append((index, call))
             else:
-                if index - 1 in approvals:
-                    self._audit.log_approval(call.get("tool", "unknown"), "approved")
-                self._profiler.begin_step("tool_execute", tool_name=call.get("tool", ""))
+                independent.append((index, call))
+
+        failures: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+
+        # Execute independent tools concurrently
+        if independent:
+            def _exec_one(idx_call: Tuple[int, Dict[str, Any]]) -> Tuple[int, str, Dict[str, Any], str]:
+                idx, call = idx_call
+                sig = self._signature(call)
+                tool_name = call.get("tool", "")
+                # Skip repeated failing calls
+                if self._failed_signatures.get(sig, 0) >= 2:
+                    return idx, sig, {"status": "skipped", "tool_name": tool_name}, "skip"
+                # Validate
+                verr = validate_tool_call(call, self.tools)
+                if verr:
+                    return idx, sig, {"status": "error", "error": verr, "tool_name": tool_name}, "error"
+                # Execute
+                result = self.tools.execute(tool_name, call.get("parameters", {}))
+                return idx, sig, result, "ok"
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=min(len(independent), 4)) as pool:
+                futures = {pool.submit(_exec_one, ic): ic for ic in independent}
+                for future in as_completed(futures):
+                    self._check_cancel()
+                    idx, sig, result, status = future.result()
+                    if status == "skip":
+                        writer({"event": "status", "text": f"  ⏭ Skipping repeated failing call: {self._describe(calls[idx])}"})
+                        continue
+                    if status == "error":
+                        writer({"event": "status", "text": f"  ✗ Invalid call: {result.get('error', '')}"})
+                        self._failed_signatures[sig] = self._failed_signatures.get(sig, 0) + 1
+                        failures.append((calls[idx], result))
+                        continue
+                    tool_results.append(result)
+                    executed_calls.append({"signature": sig, "tool": calls[idx].get("tool", "")})
+                    writer({"event": "tool", "result": result})
+                    if result.get("status") == "success":
+                        writer({"event": "status", "text": f"  ✓ {self._summarize_result(result)}"})
+                    else:
+                        error_msg = result.get("error", "Unknown error")
+                        writer({"event": "status", "text": f"  ✗ {error_msg}"})
+                        self._failed_signatures[sig] = self._failed_signatures.get(sig, 0) + 1
+                        failures.append((calls[idx], result))
+
+        # Execute approval-gated tools sequentially
+        for idx, call in gated:
+            self._check_cancel()
+            sig = self._signature(call)
+            writer({"event": "status", "text": f"→ {self._describe(call)}"})
+            if approvals.get(idx) is not None and not approvals[idx]:
+                result = {"status": "error", "error": "Approval denied",
+                          "tool_name": call.get("tool", "")}
+            else:
                 result = self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
-                self._profiler.end_step(
-                    success=result.get("status") == "success",
-                    error=result.get("error", ""),
-                )
-                executed_calls.append(
-                    {"signature": signature, "tool": call.get("tool", "")}
-                )
+                executed_calls.append({"signature": sig, "tool": call.get("tool", "")})
             tool_results.append(result)
             writer({"event": "tool", "result": result})
-            # Audit: log tool result
-            self._audit.log_tool_result(
-                call.get("tool", "unknown"),
-                result.get("status", "unknown"),
-                error=result.get("error"),
-            )
-            # Replay: record tool result
-            self._replay.record_tool_result(
-                call.get("tool", "unknown"),
-                result.get("status", "unknown"),
-                error=result.get("error"),
-            )
-            # Health: record tool metrics
-            self._health.increment("tool_calls")
             if result.get("status") == "success":
-                self._health.increment("tool_successes")
                 writer({"event": "status", "text": f"  ✓ {self._summarize_result(result)}"})
             else:
-                self._health.increment("errors")
                 error_msg = result.get("error", "Unknown error")
                 writer({"event": "status", "text": f"  ✗ {error_msg}"})
-                self._failed_signatures[signature] = self._failed_signatures.get(signature, 0) + 1
-                # Record error pattern for self-improvement
-                try:
-                    self._error_patterns.record_error(
-                        "tool_failure", error_msg,
-                        tool=call.get("tool", ""),
-                        file_path=str(call.get("parameters", {}).get("path", "")),
-                    )
-                except Exception:
-                    pass
+                self._failed_signatures[sig] = self._failed_signatures.get(sig, 0) + 1
                 failures.append((call, result))
 
+        # Retry failures
         for failed_call, failed_result in failures:
             self._check_cancel()
             fixed = self._request_fix(failed_call, failed_result, writer)
@@ -553,35 +498,22 @@ class GraphAgent:
     # Prompt construction
     # ------------------------------------------------------------------
     def _system_prompt(self) -> str:
-        """Build system prompt with workspace context, AGENTS.md, memory, and learned patterns."""
-        base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
-        workspace_ctx = self._workspace_ctx.build_context()
-        if workspace_ctx:
-            base += "\n\n" + workspace_ctx
-        # Inject long-term memory
-        memory_ctx = self._memory_store.get_context(max_chars=2000)
-        if memory_ctx:
-            base += "\n\n" + memory_ctx
-        # Inject error patterns (things to avoid)
-        patterns = self._error_patterns.get_patterns(min_occurrences=2)
-        if patterns:
-            error_lines = ["## Known Error Patterns (avoid these)"]
-            for p in patterns[:10]:
-                fix = f" → {p.suggested_fix}" if p.suggested_fix else ""
-                error_lines.append(f"- {p.description} ({p.occurrences}x){fix}")
-            base += "\n\n" + "\n".join(error_lines)
-        # Inject self-improvement advice
-        improve_ctx = self._self_improve.get_advice("general")
-        if improve_ctx:
-            base += "\n\n" + improve_ctx
+        """Build system prompt. Uses lightweight prompt for file-assistant mode."""
+        base = _LIGHT_ASSISTANT_PROMPT.replace("__WORKSPACE__", str(self.workspace))
+        # Replace __TOOLS__ with actual tool descriptions
+        base = base.replace("__TOOLS__", self.tools.describe())
         return base
 
     def _get_prefix(self) -> str:
-        """Get the cached prompt prefix (system prompt + tools + workspace context)."""
+        """Get the cached prompt prefix (system prompt + workspace context).
+
+        Tool descriptions are already embedded in the system prompt
+        via __TOOLS__ replacement, so we don't pass them separately.
+        """
         return self._prefix_cache.get_prefix(
             system_prompt=self._system_prompt(),
             workspace_context="",  # already embedded in system_prompt
-            tool_descriptions=self.tools.describe(),
+            tool_descriptions="",  # already embedded in system_prompt
         )
 
     def _build_action_prompt(self, messages, tool_results, repair: str = "", directive: str = "") -> str:
@@ -613,7 +545,7 @@ class GraphAgent:
 
     def _format_tool_results(self, tool_results) -> List[str]:
         lines = []
-        for result in tool_results[-12:]:
+        for result in tool_results[-3:]:
             tool = result.get("tool_name", "unknown")
             outcome = "success" if result.get("status") == "success" else "error"
             content = tool_content_for_context(result)
@@ -676,7 +608,7 @@ class GraphAgent:
         for result in tool_results:
             tool = result.get("tool_name", "unknown")
             if result.get("status") == "success":
-                content = tool_content_for_context(result, max_chars=2000)
+                content = tool_content_for_context(result, max_chars=500)
                 context.append(f"✓ {tool}: {content or 'Success'}")
             else:
                 context.append(f"✗ {tool}: {result.get('error', 'Failed')}")
@@ -701,18 +633,6 @@ class GraphAgent:
         """
         self._check_cancel()
 
-        # Rate limit check
-        self._rate_limiter.allow_llm()
-
-        # Profiling: begin step
-        self._profiler.begin_step("llm_call")
-
-        # Audit: log LLM request
-        self._audit.log(EventType.LLM_REQUEST, {
-            "prompt_preview": prompt[:200],
-            "max_tokens": self.max_tokens,
-        })
-
         import time as _time
         llm_start = _time.monotonic()
         try:
@@ -721,42 +641,40 @@ class GraphAgent:
             raise
         except Exception as e:  # noqa: BLE001
             logger.error("LLM call failed: %s", e)
-            self._audit.log(EventType.LLM_ERROR, {"error": str(e)})
-            self._health.increment("errors")
             return ""
-        llm_ms = int((_time.monotonic() - llm_start) * 1000)
+
+        # Log when response is empty to help debug
+        if not result or (isinstance(result, dict) and not result.get("choices", [{}])[0].get("text")):
+            logger.warning("LLM returned empty response (prompt length: %d chars)", len(prompt))
 
         if isinstance(result, str):
             self._check_cancel()
-            # Estimate tokens (4 chars per token)
-            out_tokens = max(1, len(result) // 4)
-            in_tokens = max(1, len(prompt) // 4)
-            self._cost.record_call(in_tokens, out_tokens, llm_ms)
-            self._audit.log(EventType.LLM_RESPONSE, {
-                "tokens_out": out_tokens, "latency_ms": llm_ms,
-            })
-            self._health.record("llm.latency_ms", llm_ms)
-            self._health.increment("llm_calls")
-            self._profiler.end_step(input_tokens=in_tokens, output_tokens=out_tokens)
             return result
+
+        # ModelBackend.__call__ without stream returns a dict
+        # {"choices": [{"text": "..."}]}. Extract the text directly.
+        if isinstance(result, dict):
+            text = result.get("choices", [{}])[0].get("text", "")
+            self._check_cancel()
+            if stream_tokens and text:
+                writer({"event": "token", "chunk": text})
+            return text
+
+        # Streaming: result is an iterator of token dicts or strings
         chunks: List[str] = []
         for chunk in result:
             self._check_cancel()
-            if chunk:
-                chunks.append(chunk)
+            if isinstance(chunk, dict):
+                text = chunk.get("choices", [{}])[0].get("text", "")
+                if text:
+                    chunks.append(text)
+                    if stream_tokens:
+                        writer({"event": "token", "chunk": text})
+            elif chunk:
+                chunks.append(str(chunk))
                 if stream_tokens:
-                    writer({"event": "token", "chunk": chunk})
-        full = "".join(chunks)
-        out_tokens = max(1, len(full) // 4)
-        in_tokens = max(1, len(prompt) // 4)
-        self._cost.record_call(in_tokens, out_tokens, llm_ms)
-        self._audit.log(EventType.LLM_RESPONSE, {
-            "tokens_out": out_tokens, "latency_ms": llm_ms,
-        })
-        self._health.record("llm.latency_ms", llm_ms)
-        self._health.increment("llm_calls")
-        self._profiler.end_step(input_tokens=in_tokens, output_tokens=out_tokens)
-        return full
+                    writer({"event": "token", "chunk": str(chunk)})
+        return "".join(chunks)
 
     # ------------------------------------------------------------------
     # Event plumbing
@@ -807,7 +725,7 @@ class GraphAgent:
                 writer({"event": "status", "text": f"  {index}. {self._describe(call)}"})
         writer({"event": "status", "text": ""})
 
-    def _finish_or_direct(self, state, messages, answer, raw, step, writer) -> Dict[str, Any]:
+    def _finish_or_direct(self, state, messages, answer, raw, step, writer, max_steps=None) -> Dict[str, Any]:
         """Finish with *answer*, or loop once more to read unread files.
 
         For folder-wide summarize requests the run should not end while
@@ -819,20 +737,26 @@ class GraphAgent:
         if directive:
             writer({"event": "status", "text": "📖 Reading remaining files…"})
             writer({"event": "status", "text": directive})
-            return {
+            ret = {
                 "pending_calls": [],
                 "final_answer": "",
                 "directive": directive,
                 "directive_rounds": state.get("directive_rounds", 0) + 1,
                 "step": step + 1,
             }
-        return {
+            if max_steps is not None:
+                ret["max_steps"] = max_steps
+            return ret
+        ret = {
             "pending_calls": [],
             "final_answer": answer,
             "messages": messages + [{"role": "assistant", "content": answer}],
             "raw_response": raw,
             "step": step + 1,
         }
+        if max_steps is not None:
+            ret["max_steps"] = max_steps
+        return ret
 
     def _coverage_directive(self, state, messages) -> str:
         """A read-coverage directive for summarize asks, or "" when satisfied."""

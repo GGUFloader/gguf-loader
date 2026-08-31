@@ -168,75 +168,56 @@ def test_record_correction_tool_in_registry(tmp_path):
 # GraphAgent wiring
 # ---------------------------------------------------------------------------
 
-def test_graph_agent_has_plugin_manager(tmp_path):
-    """GraphAgent should have a PluginManager."""
+def test_graph_agent_has_workspace_ctx(tmp_path):
+    """GraphAgent should have a WorkspaceContext."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_plugin_mgr')
-    assert isinstance(agent._plugin_mgr, PluginManager)
+    assert hasattr(agent, '_workspace_ctx')
     agent.close()
 
 
-def test_graph_agent_has_error_patterns(tmp_path):
-    """GraphAgent should have an ErrorPatternDetector."""
+def test_graph_agent_has_context_budget(tmp_path):
+    """GraphAgent should have a ContextBudget."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_error_patterns')
-    assert isinstance(agent._error_patterns, ErrorPatternDetector)
+    assert hasattr(agent, '_context_budget')
     agent.close()
 
 
-def test_graph_agent_has_self_improve(tmp_path):
-    """GraphAgent should have a SelfImprove."""
+def test_graph_agent_has_prefix_cache(tmp_path):
+    """GraphAgent should have a PromptPrefixCache."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
-    assert hasattr(agent, '_self_improve')
-    assert isinstance(agent._self_improve, SelfImprove)
+    assert hasattr(agent, '_prefix_cache')
     agent.close()
 
 
-def test_graph_agent_system_prompt_includes_error_patterns(tmp_path):
-    """System prompt should include error patterns after repeated failures."""
+def test_graph_agent_system_prompt_is_lightweight(tmp_path):
+    """System prompt should use the lightweight file-assistant prompt."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
-    
-    # Pre-populate error patterns
-    detector = ErrorPatternDetector(tmp_path)
-    for _ in range(3):
-        detector.record_error("syntax", "missing colon", tool="edit_file")
     
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
     prompt = agent._system_prompt()
-    # Error patterns with 2+ occurrences should be in the prompt
-    assert "Error Patterns" in prompt or "missing colon" in prompt
+    # Should be the lightweight prompt
+    assert "file assistant" in prompt.lower()
     agent.close()
 
 
-def test_graph_agent_system_prompt_includes_self_improve(tmp_path):
-    """System prompt should include self-improvement advice."""
+def test_graph_agent_system_prompt_has_workspace(tmp_path):
+    """System prompt should include the workspace path."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    # Pre-populate corrections with context that matches "general"
-    improve = SelfImprove(tmp_path)
-    improve.record_correction(
-        context="general editing",
-        agent_action="Used os.path",
-        correct_action="Used pathlib",
-        category="style",
-        explanation="This project uses pathlib exclusively",
-    )
-    
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
     prompt = agent._system_prompt()
-    # Advice about pathlib should be in the prompt
-    assert "pathlib" in prompt
+    assert str(tmp_path) in prompt
     agent.close()
 
 

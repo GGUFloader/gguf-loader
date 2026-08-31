@@ -252,12 +252,37 @@ def summarize_directive(
             unread.append(rel_text)
     if not unread:
         return None
-    shown = ", ".join(unread[:20])
-    tail = f" (and {len(unread) - 20} more)" if len(unread) > 20 else ""
+
+    # Only suggest reading the most important files (max 5).
+    # Priority: README/docs, entry points, config, then by path depth.
+    PRIORITY_NAMES = {
+        "readme.md", "readme.txt", "readme",
+        "setup.py", "setup.cfg", "pyproject.toml",
+        "package.json", "cargo.toml", "go.mod",
+        "main.py", "app.py", "index.py", "index.ts", "index.js",
+        "__init__.py", "__main__.py",
+        "dockerfile", "docker-compose.yml", "makefile",
+        "requirements.txt", "requirements-dev.txt",
+        "tox.ini", "pytest.ini", "conftest.py",
+    }
+
+    def _priority(path_str: str) -> int:
+        name = Path(path_str).name.lower()
+        depth = len(Path(path_str).parts)
+        if name in PRIORITY_NAMES:
+            return 0
+        if any(name.endswith(ext) for ext in ('.md', '.rst', '.txt')):
+            return 1
+        return depth  # shallower = higher priority
+
+    unread.sort(key=_priority)
+    shown = [Path(p).name for p in unread[:5]]
+    tail = f" (and {len(unread) - 5} more)" if len(unread) > 5 else ""
     return (
-        "The user asked to summarize the workspace, but you have not read "
-        f"these files yet: {shown}{tail}. Read each one with read_file before "
-        "you give your final answer."
+        "The user asked to summarize the workspace. Read these key files to "
+        f"understand the project: {', '.join(shown)}{tail}. "
+        "Use read_file for each one. Do NOT try to read every file — just "
+        "these key ones, then give your summary answer."
     )
 
 
