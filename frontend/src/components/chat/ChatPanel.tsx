@@ -6,7 +6,6 @@ import { StreamingText } from './StreamingText'
 import { StepProgressPanel } from './StepProgressPanel'
 import { ToolCallCard } from '../agent/ToolCallCard'
 import { ToolApprovalDialog } from '../agent/ToolApprovalDialog'
-import { PlanTracker } from '../agent/PlanTracker'
 import { MessageInput } from './MessageInput'
 import { Loader2 } from 'lucide-react'
 import type { ToolApprovalRequest } from '../../stores/chatStore'
@@ -83,7 +82,6 @@ export function ChatPanel() {
 
       {/* Messages — centered column */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <PlanTracker />
         <div className="max-w-[720px] mx-auto px-4 py-6 space-y-4">
           {messages.length === 0 && !isStreaming ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
@@ -100,51 +98,54 @@ export function ChatPanel() {
             </div>
           ) : (
             <>
-              {messages.map((msg, i) => (
-                <div key={msg.id} className="space-y-2">
-                  <ChatBubble
-                    message={msg}
-                    isStreaming={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
-                    onRetry={msg.role === 'assistant' ? () => {
-                      const lastUser = [...messages].reverse().find(m => m.role === 'user')
-                      if (lastUser) useChatStore.getState().sendMessage(lastUser.content)
-                    } : undefined}
-                  />
-                  {/* Inline tool calls */}
-                  {msg.toolCalls && msg.toolCalls.map((tc, j) => (
-                    <ToolCallCard
-                      key={j}
-                      tool={tc}
-                      onApprove={handleApprove}
+              {messages.map((msg, i) => {
+                const isLast = i === messages.length - 1
+                // Show progress right after the last user message (while agent works)
+                // or after the last assistant message (while streaming)
+                const showProgressHere = (msg.role === 'user' && isLast) ||
+                  (msg.role === 'assistant' && isLast && isStreaming)
+
+                return (
+                  <div key={msg.id} className="space-y-2">
+                    <ChatBubble
+                      message={msg}
+                      isStreaming={isStreaming && isLast && msg.role === 'assistant'}
+                      onRetry={msg.role === 'assistant' ? () => {
+                        const lastUser = [...messages].reverse().find(m => m.role === 'user')
+                        if (lastUser) useChatStore.getState().sendMessage(lastUser.content)
+                      } : undefined}
                     />
-                  ))}
-                </div>
-              ))}
-
-              {/* Step progress panel (Codebuff-style) */}
-              {progressSteps.length > 0 || currentAnnouncement ? (
-                <div className="py-2">
-                  <StepProgressPanel
-                    steps={progressSteps}
-                    isStreaming={isStreaming}
-                    currentAnnouncement={currentAnnouncement}
-                  />
-                </div>
-              ) : (
-                /* Live streaming text (fallback when no progress steps) */
-                isStreaming && streamingText && (
-                  <StreamingText content={streamingText} isStreaming={isStreaming} />
+                    {/* Inline tool calls */}
+                    {msg.toolCalls && msg.toolCalls.map((tc, j) => (
+                      <ToolCallCard
+                        key={j}
+                        tool={tc}
+                        onApprove={handleApprove}
+                      />
+                    ))}
+                    {/* Progress steps inline with conversation */}
+                    {showProgressHere && (
+                      progressSteps.length > 0 || currentAnnouncement ? (
+                        <div className="py-1">
+                          <StepProgressPanel
+                            steps={progressSteps}
+                            isStreaming={isStreaming}
+                            currentAnnouncement={currentAnnouncement}
+                          />
+                        </div>
+                      ) : isStreaming && streamingText ? (
+                        <StreamingText content={streamingText} isStreaming={isStreaming} />
+                      ) : isStreaming ? (
+                        <div className="flex items-center gap-2 py-1">
+                          <Loader2 size={14} className="text-accent animate-spin" />
+                          <span className="text-sm text-text-muted">Thinking...</span>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
                 )
-              )}
+              })}
             </>
-          )}
-
-          {/* Agent thinking indicator */}
-          {isStreaming && !streamingText && progressSteps.length === 0 && (
-            <div className="flex items-center gap-2 py-2">
-              <Loader2 size={14} className="text-accent animate-spin" />
-              <span className="text-sm text-text-muted">Thinking...</span>
-            </div>
           )}
         </div>
       </div>
