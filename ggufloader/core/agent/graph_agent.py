@@ -115,7 +115,10 @@ class GraphAgent:
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
-        self.tools = tools or ToolRegistry(self.workspace)
+        # Only expose read-only tools by default — keeps prompt small
+        # and prevents the model from trying write/edit operations.
+        READONLY_TOOLS = ["list_directory", "read_file", "search_files", "glob"]
+        self.tools = tools or ToolRegistry(self.workspace, only=READONLY_TOOLS)
         self.max_tokens = max_tokens
         self.max_steps = max_steps
         self.json_retries = json_retries

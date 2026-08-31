@@ -13,6 +13,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
+from ggufloader.core.agent.tool_registry import ToolRegistry
+
+
+def _full_tools(ws: Path) -> ToolRegistry:
+    """Full tool registry for tests that need write_file, edit_file, etc."""
+    return ToolRegistry(ws)
+
 import pytest
 
 from ggufloader.core.agent.graph_agent import GraphAgent
@@ -103,7 +110,7 @@ def test_e2e_write_and_read_file(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=5)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=5, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -132,7 +139,7 @@ def test_e2e_search_files(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -222,7 +229,7 @@ def test_e2e_approval_flow(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
     approvals = []
 
     def on_approval(payload):
@@ -256,7 +263,7 @@ def test_e2e_session_persistence(tmp_path):
     llm1 = ScriptedLLM(responses1)
     agent1 = GraphAgent(
         llm=llm1, workspace=tmp_path, max_steps=3,
-        checkpoint_path=checkpoint,
+        checkpoint_path=checkpoint, tools=_full_tools(tmp_path),
     )
     result1 = agent1.process(user_message="Create a notes file")
     assert "notes" in result1["response"].lower()
@@ -321,7 +328,7 @@ def test_e2e_multi_step_plan(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=6)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=6, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -394,7 +401,7 @@ def test_e2e_edit_file(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -421,7 +428,7 @@ def test_e2e_run_command(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(

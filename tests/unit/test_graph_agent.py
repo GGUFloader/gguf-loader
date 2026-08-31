@@ -5,6 +5,12 @@ import time
 from pathlib import Path
 
 from ggufloader.core.agent import GraphAgent
+from ggufloader.core.agent.tool_registry import ToolRegistry
+
+
+# Full tool registry for tests that need write_file, edit_file, etc.
+def _full_tools(ws: Path) -> ToolRegistry:
+    return ToolRegistry(ws)  # all tools
 
 WRITE = '{"reasoning": "writing", "tool_calls": [{"tool": "write_file", "parameters": {"path": "notes.md", "content": "Hello"}}]}'
 DONE = '{"reasoning": "done", "tool_calls": [], "answer": "All done."}'
@@ -29,7 +35,7 @@ class FakeLLM:
 
 def test_happy_path(tmp_path: Path) -> None:
     llm = FakeLLM([WRITE, DONE])
-    engine = GraphAgent(llm, tmp_path)
+    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path))
     out = engine.process("Create notes.md saying Hello")
     assert (tmp_path / "notes.md").read_text() == "Hello"
     assert out["response"] == "All done."
@@ -41,7 +47,7 @@ def test_happy_path(tmp_path: Path) -> None:
 
 def test_json_repair(tmp_path: Path) -> None:
     llm = FakeLLM(["not json at all!!!", WRITE, DONE])
-    GraphAgent(llm, tmp_path).process("Create notes.md saying Hello")
+    GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path)).process("Create notes.md saying Hello")
     assert "not valid JSON" in llm.calls[1]
     assert (tmp_path / "notes.md").read_text() == "Hello"
 
@@ -59,7 +65,7 @@ def test_failure_driven_retry(tmp_path: Path) -> None:
 
 def test_step_budget(tmp_path: Path) -> None:
     llm = FakeLLM([WRITE] * 10)
-    out = GraphAgent(llm, tmp_path, max_steps=3).process("Do many things")
+    out = GraphAgent(llm, tmp_path, max_steps=3, tools=_full_tools(tmp_path)).process("Do many things")
     # Repeating the identical call is a stale repeat: it runs once, then the
     # run wraps up instead of burning the whole budget on the same write.
     assert len(out["tool_results"]) == 1
@@ -81,7 +87,7 @@ def test_streaming_final_answer_tokens(tmp_path: Path) -> None:
             return '{"tool_calls": [], "answer": ""}'
         return (c for c in chunks)  # final synthesis streams
 
-    engine = GraphAgent(llm, tmp_path, max_steps=3)
+    engine = GraphAgent(llm, tmp_path, max_steps=3, tools=_full_tools(tmp_path))
     out = engine.process("Create notes.md saying Hello", on_token=tokens.append)
     assert "".join(tokens) == chunks
     assert out["response"] == chunks
@@ -280,7 +286,7 @@ def test_legitimate_reread_after_mutation_allowed(tmp_path: Path) -> None:
             return '{"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}'
         return DONE
 
-    out = GraphAgent(llm, tmp_path).process("List, write a file, then list again")
+    out = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path)).process("List, write a file, then list again")
     tools = [r["tool_name"] for r in out["tool_results"]]
     assert tools.count("list_directory") == 2  # second list ran: a write happened between
 
@@ -292,14 +298,14 @@ def test_checkpoint_resume_across_instances(tmp_path: Path) -> None:
     ckpt = tmp_path / "ckpt.sqlite"
     llm = FakeLLM([WRITE, DONE, DONE])
 
-    e1 = GraphAgent(llm, ws, checkpoint_path=ckpt)
+    e1 = GraphAgent(llm, ws, checkpoint_path=ckpt, tools=_full_tools(ws))
     out1 = e1.process("Create notes.md saying Hello")
     assert out1["response"] == "All done."
     e1.close()
 
     # Fresh instance, same workspace + checkpoint file: the conversation
     # (including the assistant reply) is loaded from SQLite.
-    e2 = GraphAgent(llm, ws, checkpoint_path=ckpt)
+    e2 = GraphAgent(llm, ws, checkpoint_path=ckpt, tools=_full_tools(ws))
     out2 = e2.process("What did you just do?")
     assert out2["response"] == "All done."
     assert "notes.md" in llm.calls[2]

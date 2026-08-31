@@ -304,7 +304,8 @@ def test_graph_agent_total_tool_count(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
 
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    from ggufloader.core.agent.tool_registry import ToolRegistry as TR
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path))
     names = agent.tools.names()
     # Phase 2 tools
     assert "glob" in names

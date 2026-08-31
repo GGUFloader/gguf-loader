@@ -287,7 +287,8 @@ def test_graph_agent_uses_remember_tool(tmp_path):
         call_count[0] += 1
         return responses[min(idx, len(responses) - 1)]
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=3)
+    from ggufloader.core.agent.tool_registry import ToolRegistry as TR
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=3, tools=TR(tmp_path))
     result = agent.process(user_message="Remember that the API runs on port 8080")
     
     assert "8080" in result["response"]
