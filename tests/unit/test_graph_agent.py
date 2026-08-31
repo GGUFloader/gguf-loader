@@ -63,7 +63,8 @@ def test_step_budget(tmp_path: Path) -> None:
     # Repeating the identical call is a stale repeat: it runs once, then the
     # run wraps up instead of burning the whole budget on the same write.
     assert len(out["tool_results"]) == 1
-    assert len(llm.calls) == 3  # action + stale-repeat round + synthesized final
+    # 3 LLM calls: action + stale-repeat round + final synthesis.
+    assert len(llm.calls) == 3
 
 
 def test_streaming_final_answer_tokens(tmp_path: Path) -> None:

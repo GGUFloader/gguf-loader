@@ -551,11 +551,12 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         phase_log_data = result.get("phase_log", [])
         was_cancelled = result.get("cancelled", False)
 
+        response_content = result.get("response", "") or "Done."
         await manager.send_event(websocket, {
             "type": "message_complete",
             "message_id": message_id,
-            "content": result.get("response", ""),
-            "tokens_used": len(result.get("response", "").split()),
+            "content": response_content,
+            "tokens_used": len(response_content.split()),
             "duration_ms": int((time.time() - start_time) * 1000),
             "plan": plan_data,
             "phase_log": phase_log_data,

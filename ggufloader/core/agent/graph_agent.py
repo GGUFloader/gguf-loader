@@ -599,16 +599,24 @@ class GraphAgent:
         return self.tools.execute(call.get("tool", ""), call.get("parameters", {}))
 
     def _final_response(self, messages, tool_results, writer) -> str:
-        """Synthesize a natural-language wrap-up; streams tokens when possible."""
+        """Synthesize a natural-language wrap-up from tool results.
+
+        Always returns a non-empty string. Tries LLM synthesis first;
+        falls back to a structured summary of tool results so the user
+        always gets an answer.
+        """
+        user_q = messages[-1]['content'] if messages else ''
+
+        # Build context for LLM
         context = [
-            f"User asked: {messages[-1]['content'] if messages else ''}",
+            f"User asked: {user_q}",
             "",
             "I completed these operations:",
         ]
         for result in tool_results:
             tool = result.get("tool_name", "unknown")
             if result.get("status") == "success":
-                content = tool_content_for_context(result, max_chars=500)
+                content = tool_content_for_context(result, max_chars=800)
                 context.append(f"✓ {tool}: {content or 'Success'}")
             else:
                 context.append(f"✗ {tool}: {result.get('error', 'Failed')}")
@@ -616,15 +624,32 @@ class GraphAgent:
             "\nProvide a brief, natural response to the user. Don't repeat what they saw "
             "in the status updates - just give the key takeaway or next steps."
         )
+
+        # Try LLM synthesis (streams tokens)
         response = self._call_llm("\n".join(context), writer, stream_tokens=True)
         if response.strip():
-            return response
-        success = sum(1 for r in tool_results if r.get("status") == "success")
-        if success == len(tool_results) and tool_results:
-            return "Done! All operations completed successfully."
-        if success > 0:
-            return f"Completed {success} out of {len(tool_results)} operations. Some had issues."
-        return "Ran into some issues completing those operations. Check the errors above."
+            import json as _json
+            try:
+                parsed = _json.loads(response.strip())
+                # LLM returned JSON tool calls — ignore, fall back
+                if isinstance(parsed, dict) and parsed.get("tool_calls"):
+                    pass
+                else:
+                    return response
+            except (ValueError, TypeError):
+                return response
+
+        # LLM failed — build answer from tool summaries
+        summaries = []
+        for result in tool_results:
+            tool = result.get("tool_name", "unknown")
+            status = "succeeded" if result.get("status") == "success" else "failed"
+            summaries.append(f"• {tool}: {status}")
+        if summaries:
+            return f"I completed these operations for your request:\n" + "\n".join(summaries)
+
+        return f"I was unable to complete: {user_q}"
+
 
     def _call_llm(self, prompt: str, writer: StreamWriter, stream_tokens: bool = False) -> str:
         """Call the LLM; streams token events when the callable yields chunks.
