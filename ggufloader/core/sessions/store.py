@@ -187,7 +187,9 @@ class SessionStore:
                     "id": data["id"],
                     "title": data.get("title"),
                     "updated": data.get("updated", ""),
+                    "created": data.get("created", ""),
                     "mode": data.get("mode", "chat"),
+                    "message_count": len(data.get("messages", [])),
                 })
             except Exception as e:  # noqa: BLE001 - corrupt file, keep listing
                 out.append({

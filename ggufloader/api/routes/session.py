@@ -42,7 +42,7 @@ async def list_sessions() -> List[SessionInfo]:
                 created=s.get("created", ""),
                 updated=s.get("updated", ""),
                 mode=s.get("mode", "chat"),
-                message_count=len(s.get("messages", [])),
+                message_count=s.get("message_count", 0),
             )
             for s in sessions
         ]
@@ -62,6 +62,29 @@ async def create_session(req: SessionCreate) -> dict:
             session["title"] = req.title
         store.save(session)
         return {"id": session["id"], "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MessageAppend(BaseModel):
+    role: str
+    content: str
+
+
+@router.post("/{session_id}/messages")
+async def append_message(session_id: str, req: MessageAppend) -> dict:
+    """Append a message to a session."""
+    try:
+        from ggufloader.core.sessions.store import SessionStore
+        store = SessionStore(get_paths()["chats"])
+        session = store.load(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        store.append_message(session, req.role, req.content)
+        store.save(session)
+        return {"status": "appended", "title": session.get("title")}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

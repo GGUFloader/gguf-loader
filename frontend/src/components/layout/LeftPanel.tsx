@@ -36,7 +36,7 @@ export function LeftPanel() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
-  const { clearMessages } = useChatStore()
+  const { clearMessages, setActiveSessionId } = useChatStore()
   const [showLoadDialog, setShowLoadDialog] = useState(false)
   const [workspace, setWorkspace] = useState('')
   const [modelFolder, setModelFolder] = useState('')
@@ -74,9 +74,10 @@ export function LeftPanel() {
 
   async function handleNewChat() {
     try {
-      const session = await sessionApi.create('New Chat')
+      const session = await sessionApi.create()
       setSessions((prev) => [session, ...prev])
       setActiveSession(session.id)
+      setActiveSessionId(session.id)
       clearMessages()
     } catch {}
   }
@@ -343,9 +344,27 @@ export function LeftPanel() {
                 </div>
               ) : (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setActiveSession(session.id)
-                    // Load session messages would go here
+                    setActiveSessionId(session.id)
+                    // Load session messages into chat
+                    try {
+                      const full = await sessionApi.get(session.id)
+                      clearMessages()
+                      if (full && full.messages) {
+                        const chatStore = useChatStore.getState()
+                        for (const msg of full.messages) {
+                          if (msg.role === 'user' || msg.role === 'assistant') {
+                            chatStore.addMessage({
+                              id: `${msg.role}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                              role: msg.role,
+                              content: msg.content || '',
+                              timestamp: Date.now(),
+                            })
+                          }
+                        }
+                      }
+                    } catch {}
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault()

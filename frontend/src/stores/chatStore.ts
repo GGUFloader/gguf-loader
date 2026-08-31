@@ -71,6 +71,8 @@ interface ChatState {
   agentMetrics: AgentMetrics
   progressSteps: ProgressStep[]
   currentAnnouncement: string
+  activeSessionId: string | null
+  setActiveSessionId: (id: string | null) => void
   addMessage: (msg: ChatMessage) => void
   appendToMessage: (id: string, content: string) => void
   setThinking: (id: string, thinking: string) => void
@@ -117,8 +119,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   agentMetrics: { ...DEFAULT_METRICS },
   progressSteps: [],
   currentAnnouncement: '',
+  activeSessionId: null,
 
-  addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+  setActiveSessionId: (id) => set({ activeSessionId: id }),
+
+  addMessage: (msg) => {
+    set((s) => ({ messages: [...s.messages, msg] }))
+    // Auto-save to active session
+    const state = get()
+    if (state.activeSessionId && (msg.role === 'user' || msg.role === 'assistant') && msg.content) {
+      import('../api/client').then(({ sessionApi }) => {
+        sessionApi.appendMessage(state.activeSessionId!, msg.role, msg.content).catch(() => {})
+      })
+    }
+  },
 
   appendToMessage: (id, content) =>
     set((s) => ({
