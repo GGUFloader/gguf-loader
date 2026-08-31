@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import { Send, Square, Plus, ChevronDown, Loader2, HardDrive, Zap } from 'lucide-react'
+import { Send, Square, Plus, ChevronDown, Loader2, HardDrive, Zap, FolderOpen } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
 import { modelApi } from '../../api/client'
 import { FileMentionPopup } from './FileMentionPopup'
@@ -34,6 +34,19 @@ export function MessageInput() {
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
+
+  // Workspace state
+  const [workspace, setWorkspace] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('ggufloader_settings')
+      if (saved) {
+        const s = JSON.parse(saved)
+        return s.workspace || '.'
+      }
+    } catch {}
+    return '.'
+  })
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
 
   // Load model folder from localStorage on mount
   useEffect(() => {
@@ -83,6 +96,35 @@ export function MessageInput() {
     } catch {}
     setLoadingModel(null)
     setShowModelPicker(false)
+  }
+
+  function handleWorkspaceChange(newWorkspace: string) {
+    if (newWorkspace === workspace) {
+      setShowWorkspacePicker(false)
+      return
+    }
+    setWorkspace(newWorkspace)
+    // Save to settings
+    try {
+      const saved = localStorage.getItem('ggufloader_settings')
+      const settings = saved ? JSON.parse(saved) : {}
+      settings.workspace = newWorkspace
+      localStorage.setItem('ggufloader_settings', JSON.stringify(settings))
+    } catch {}
+    // Clear chat for fresh start
+    useChatStore.getState().clearMessages()
+    setShowWorkspacePicker(false)
+  }
+
+  async function handleBrowseWorkspace() {
+    if ((window as any).electronAPI?.openFolderDialog) {
+      const path = await (window as any).electronAPI.openFolderDialog()
+      if (path) handleWorkspaceChange(path)
+    } else {
+      const path = prompt('Enter workspace folder path:')
+      if (path) handleWorkspaceChange(path)
+    }
+    setShowWorkspacePicker(false)
   }
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -164,6 +206,9 @@ export function MessageInput() {
     ? folderModels.find(m => m.path === selectedModel)?.filename || 'Local Model'
     : 'Local Model'
 
+  // Get short workspace name for display
+  const workspaceShort = workspace.split(/[/\\]/).pop() || workspace
+
   return (
     <div className="px-4 pb-4 pt-2 relative">
       {showMentions && (
@@ -205,6 +250,49 @@ export function MessageInput() {
           className="flex-1 bg-transparent text-text placeholder-text-muted outline-none resize-none text-sm"
           style={{ minHeight: '24px', maxHeight: '120px' }}
         />
+
+        {/* Workspace selector */}
+        <div className="relative mb-0.5">
+          <button
+            onClick={() => setShowWorkspacePicker(!showWorkspacePicker)}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] text-text-muted hover:text-text-sec rounded-lg hover:bg-bg/50 transition-colors"
+            title={`Workspace: ${workspace}`}
+          >
+            <FolderOpen size={10} />
+            <span>{workspaceShort}</span>
+            <ChevronDown size={10} />
+          </button>
+
+          {showWorkspacePicker && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowWorkspacePicker(false)} />
+              <div className="absolute bottom-full right-0 mb-1 w-64 bg-elevated border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-border bg-bg/50">
+                  <div className="text-[10px] text-text-muted font-medium">Workspace</div>
+                  <div className="text-[10px] text-text truncate mt-0.5" title={workspace}>{workspace}</div>
+                </div>
+
+                <button
+                  onClick={handleBrowseWorkspace}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-bg/50 transition-colors text-xs text-text"
+                >
+                  <FolderOpen size={12} className="text-accent" />
+                  <span>Browse for workspace...</span>
+                </button>
+
+                <button
+                  onClick={() => handleWorkspaceChange('.')}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-bg/50 transition-colors text-xs ${
+                    workspace === '.' ? 'text-accent' : 'text-text'
+                  }`}
+                >
+                  <HardDrive size={12} />
+                  <span>App directory (default)</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Model selector */}
         <div className="relative mb-0.5">
