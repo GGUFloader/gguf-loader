@@ -287,6 +287,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         # --- 2. Get router-optimized agent params (single call) ---
         agent_temperature = preset_obj.temperature
         agent_max_tokens = preset_obj.max_tokens
+        agent_top_k = 40
+        agent_top_p = 0.9
+        agent_repeat_penalty = 1.05
         router_info = {}
         router_system_prompt = None
 
@@ -298,6 +301,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 role_config = router.route(profile, ModelRole.AGENT)
                 agent_temperature = role_config.temperature
                 agent_max_tokens = role_config.max_tokens
+                agent_top_k = role_config.top_k
+                agent_top_p = role_config.top_p
+                agent_repeat_penalty = role_config.repeat_penalty
                 router_system_prompt = role_config.system_prompt
                 router_info = {
                     "family": profile.family,
@@ -308,17 +314,14 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 logger.debug("Router inspection failed, using preset defaults: %s", e)
 
         def llm_call(prompt, max_tokens=None, temperature=None):
-            """Synchronous LLM call for the graph agent.
-
-            The GraphAgent builds a complete raw prompt (system + tools +
-            conversation + 'Assistant:'). We call the LLM directly with
-            this raw prompt — NOT through chat() which would double-wrap
-            with chat template turn markers.
-            """
+            """Synchronous LLM call for the graph agent."""
             return backend(
                 prompt,
                 max_tokens=max_tokens or agent_max_tokens,
                 temperature=temperature or agent_temperature,
+                top_k=agent_top_k,
+                top_p=agent_top_p,
+                repeat_penalty=agent_repeat_penalty,
             )
 
         # --- 4. Create GraphAgent (with checkpointing + cancellation) ---
