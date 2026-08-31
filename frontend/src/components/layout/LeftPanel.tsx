@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { sessionApi, modelApi } from '../../api/client'
 import { useChatStore } from '../../stores/chatStore'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { ModelLoadDialog } from '../model/ModelLoadDialog'
 import type { SessionInfo, ModelInfo } from '../../api/types'
 import { FileExplorer } from '../workbench/FileExplorer'
@@ -38,7 +39,7 @@ export function LeftPanel() {
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
   const { clearMessages, setActiveSessionId } = useChatStore()
   const [showLoadDialog, setShowLoadDialog] = useState(false)
-  const [workspace, setWorkspace] = useState('')
+  const workspace = useWorkspaceStore((s) => s.workspace)
   const [modelFolder, setModelFolder] = useState('')
   const [folderModels, setFolderModels] = useState<any[]>([])
   const [folderLoading, setFolderLoading] = useState(false)
@@ -62,14 +63,6 @@ export function LeftPanel() {
   useEffect(() => {
     loadSessions()
     loadModelInfo()
-    // Load saved workspace
-    try {
-      const saved = localStorage.getItem('ggufloader_settings')
-      if (saved) {
-        const s = JSON.parse(saved)
-        if (s.workspace) setWorkspace(s.workspace)
-      }
-    } catch {}
   }, [loadSessions, loadModelInfo])
 
   async function handleNewChat() {

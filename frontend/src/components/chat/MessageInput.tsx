@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
 import { Send, Square, Plus, ChevronDown, Loader2, HardDrive, Zap, FolderOpen } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { modelApi } from '../../api/client'
 import { FileMentionPopup } from './FileMentionPopup'
 import { ChatAutocomplete, detectTrigger } from './ChatAutocomplete'
@@ -35,17 +36,9 @@ export function MessageInput() {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
 
-  // Workspace state
-  const [workspace, setWorkspace] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('ggufloader_settings')
-      if (saved) {
-        const s = JSON.parse(saved)
-        return s.workspace || '.'
-      }
-    } catch {}
-    return '.'
-  })
+  // Workspace state (shared with LeftPanel)
+  const workspace = useWorkspaceStore((s) => s.workspace)
+  const setWorkspace = useWorkspaceStore((s) => s.setWorkspace)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
 
   // Load model folder from localStorage on mount
@@ -104,13 +97,6 @@ export function MessageInput() {
       return
     }
     setWorkspace(newWorkspace)
-    // Save to settings
-    try {
-      const saved = localStorage.getItem('ggufloader_settings')
-      const settings = saved ? JSON.parse(saved) : {}
-      settings.workspace = newWorkspace
-      localStorage.setItem('ggufloader_settings', JSON.stringify(settings))
-    } catch {}
     // Clear chat for fresh start
     useChatStore.getState().clearMessages()
     setShowWorkspacePicker(false)
