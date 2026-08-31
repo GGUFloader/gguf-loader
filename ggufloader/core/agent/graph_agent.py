@@ -82,6 +82,23 @@ ApprovalCallback = Callable[[Dict[str, Any]], bool]  # (payload) -> approved?
 LLMCallable = Callable[..., Any]
 
 
+def _clean_model_output(text: str) -> str:
+    """Strip special tokens and thinking markers from model output.
+
+    Some models (Gemma, Qwen, etc.) emit channel markers for internal
+    thinking that should not appear in the final response.
+    """
+    import re
+    # Remove <|channel|> thinking markers and their content
+    text = re.sub(r"<\|channel\|>\s*thinking\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<\|channel\|>\s*", "", text)
+    # Remove other common special tokens
+    text = re.sub(r"<\|[a-z_]+\|>", "", text)
+    # Clean up extra whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 class AgentCancelled(Exception):
     """Raised inside graph nodes when the user cancels the current run."""
 
@@ -669,7 +686,9 @@ class GraphAgent:
                 # Not JSON — natural language, use it
                 direct_answer = response.strip()
 
-        # --- Step 3: Stream the final answer to the user ---
+        # --- Step 3: Clean and stream the final answer ---
+        direct_answer = _clean_model_output(direct_answer)
+
         # Send as token events so the UI shows streaming
         for i in range(0, len(direct_answer), 20):
             chunk = direct_answer[i:i+20]
