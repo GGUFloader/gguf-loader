@@ -465,17 +465,60 @@ export function LeftPanel() {
       {leftTab === 'cowork' && (
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           <div className="text-xs font-medium text-text-muted uppercase tracking-wider">Workspace</div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-elevated rounded-xl border border-border">
+          <button
+            onClick={() => setLeftTab('chat')}
+            className="w-full flex items-center gap-2 px-3 py-2 bg-elevated rounded-xl border border-border hover:border-accent transition-colors text-left"
+          >
             <FolderOpen size={14} className="text-accent flex-shrink-0" />
             <span className="text-sm text-text truncate">{workspace || 'No workspace set'}</span>
-          </div>
+          </button>
+
           <div className="text-xs font-medium text-text-muted uppercase tracking-wider mt-4">Recent Sessions</div>
-          {sessions.slice(0, 5).map(s => (
-            <div key={s.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-sec">
-              <MessageSquare size={11} className="text-text-muted" />
-              <span className="truncate">{s.title || 'Untitled'}</span>
+          <div className="space-y-0.5">
+            {sessions.slice(0, 8).map(s => (
+              <button
+                key={s.id}
+                onClick={async () => {
+                  setLeftTab('chat')
+                  setActiveSession(s.id)
+                  setActiveSessionId(s.id)
+                  try {
+                    const full = await sessionApi.get(s.id)
+                    clearMessages()
+                    if (full && full.messages) {
+                      const chatStore = useChatStore.getState()
+                      for (const msg of full.messages) {
+                        if (msg.role === 'user' || msg.role === 'assistant') {
+                          chatStore.addMessage({
+                            id: `${msg.role}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                            role: msg.role,
+                            content: msg.content || '',
+                            timestamp: Date.now(),
+                          })
+                        }
+                      }
+                    }
+                  } catch {}
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-elevated transition-colors text-left group"
+              >
+                <MessageSquare size={11} className="text-text-muted group-hover:text-accent flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-text-sec truncate">{s.title || 'Untitled'}</div>
+                  <div className="flex items-center gap-2 text-[10px] text-text-muted">
+                    <span>{s.message_count || 0} msgs</span>
+                    <span>{formatDate(s.updated)}</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {sessions.length === 0 && (
+            <div className="text-xs text-text-muted py-4 text-center">
+              No sessions yet. Start a conversation in the Chat tab.
             </div>
-          ))}
+          )}
         </div>
       )}
 
