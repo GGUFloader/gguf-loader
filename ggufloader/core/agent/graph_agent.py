@@ -803,7 +803,21 @@ class GraphAgent:
         readable files remain unread - the model gets a directive to read
         them (capped) instead of the premature answer. The directive is
         surfaced to the UI as a status line.
+
+        If the model already provided a substantial answer (>30 chars),
+        skip the directive and return it directly.
         """
+        # If the model gave a substantial answer, don't override it
+        if answer and len(answer) > 30:
+            answer = _clean_model_output(answer)
+            return {
+                "pending_calls": [],
+                "final_answer": answer,
+                "messages": messages + [{"role": "assistant", "content": answer}],
+                "raw_response": raw,
+                "step": step + 1,
+                **({"max_steps": max_steps} if max_steps else {}),
+            }
         directive = self._coverage_directive(state, messages)
         if directive:
             writer({"event": "status", "text": "📖 Reading remaining files…"})
