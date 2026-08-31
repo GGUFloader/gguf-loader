@@ -604,54 +604,78 @@ class GraphAgent:
     def _final_response(self, messages, tool_results, writer) -> str:
         """Synthesize a natural-language wrap-up from tool results.
 
-        Always returns a non-empty string. Tries LLM synthesis first;
-        falls back to a structured summary of tool results so the user
-        always gets an answer.
+        Always returns a non-empty string. Builds a direct answer from
+        tool results first (fast, no LLM call). Then optionally tries
+        LLM polish — but only streams the result if it's a valid answer.
         """
+        import json as _json
         user_q = messages[-1]['content'] if messages else ''
 
-        # Build context for LLM
-        context = [
-            f"User asked: {user_q}",
-            "",
-            "I completed these operations:",
-        ]
+        # --- Step 1: Build direct answer from tool results (no LLM) ---
+        direct_parts = []
         for result in tool_results:
             tool = result.get("tool_name", "unknown")
-            if result.get("status") == "success":
-                content = tool_content_for_context(result, max_chars=800)
-                context.append(f"✓ {tool}: {content or 'Success'}")
-            else:
-                context.append(f"✗ {tool}: {result.get('error', 'Failed')}")
-        context.append(
-            "\nProvide a brief, natural response to the user. Don't repeat what they saw "
-            "in the status updates - just give the key takeaway or next steps."
-        )
+            if result.get("status") != "success":
+                continue
+            content = tool_content_for_context(result, max_chars=1500)
+            if content:
+                if tool == "list_directory":
+                    direct_parts.append(f"The workspace contains these files and folders:\n{content}")
+                elif tool == "read_file":
+                    # Trim very long file content for the answer
+                    if len(content) > 1200:
+                        content = content[:1200] + "..."
+                    direct_parts.append(content)
+                elif tool == "search_files":
+                    direct_parts.append(f"Search results:\n{content}")
+                else:
+                    direct_parts.append(content)
 
-        # Try LLM synthesis (streams tokens)
-        response = self._call_llm("\n".join(context), writer, stream_tokens=True)
+        if not direct_parts:
+            # No useful content from tools — try LLM with the raw question
+            response = self._call_llm(
+                f"Answer this question briefly: {user_q}\n\nAssistant:",
+                writer, stream_tokens=True,
+            )
+            if response.strip():
+                return response
+            return f"I was unable to find information about: {user_q}"
+
+        direct_answer = "\n\n".join(direct_parts)
+
+        # --- Step 2: Try LLM polish (no streaming first, to validate) ---
+        context = (
+            f"User asked: {user_q}\n\n"
+            f"Here is what I found:\n{direct_answer}\n\n"
+            f"IMPORTANT: Write a clear, natural-language answer for the user. "
+            f"Do NOT call any tools. Do NOT return JSON. Just write text."
+        )
+        # Call WITHOUT streaming first to check the response
+        response = self._call_llm(context, writer, stream_tokens=False)
+
         if response.strip():
-            import json as _json
             try:
                 parsed = _json.loads(response.strip())
-                # LLM returned JSON tool calls — ignore, fall back
-                if isinstance(parsed, dict) and parsed.get("tool_calls"):
+                if isinstance(parsed, dict) and (parsed.get("tool_calls") or parsed.get("answer") is None):
+                    # LLM returned tool calls or invalid JSON — use direct answer
                     pass
+                elif isinstance(parsed, dict) and parsed.get("answer"):
+                    # LLM returned structured answer — use it
+                    direct_answer = parsed["answer"]
                 else:
-                    return response
+                    # Raw text — use it
+                    direct_answer = response.strip()
             except (ValueError, TypeError):
-                return response
+                # Not JSON — natural language, use it
+                direct_answer = response.strip()
 
-        # LLM failed — build answer from tool summaries
-        summaries = []
-        for result in tool_results:
-            tool = result.get("tool_name", "unknown")
-            status = "succeeded" if result.get("status") == "success" else "failed"
-            summaries.append(f"• {tool}: {status}")
-        if summaries:
-            return f"I completed these operations for your request:\n" + "\n".join(summaries)
+        # --- Step 3: Stream the final answer to the user ---
+        # Send as token events so the UI shows streaming
+        for i in range(0, len(direct_answer), 20):
+            chunk = direct_answer[i:i+20]
+            writer({"event": "token", "chunk": chunk})
 
-        return f"I was unable to complete: {user_q}"
+        return direct_answer
 
 
     def _call_llm(self, prompt: str, writer: StreamWriter, stream_tokens: bool = False) -> str:
