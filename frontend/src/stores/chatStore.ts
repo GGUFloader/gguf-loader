@@ -239,6 +239,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   sendMessage: async (text: string) => {
     const store = get()
+    // Clear progress steps from previous turn
+    store.clearProgressSteps()
     store.addMessage({ id: `user_${Date.now()}`, role: 'user', content: text, timestamp: Date.now() })
 
     // Load settings from localStorage

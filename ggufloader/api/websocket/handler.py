@@ -9,7 +9,7 @@ Sends typed events to the React frontend:
 - message_complete: Full message done
 - agent_complete: Agent run finished
 - agent_started / agent_stopped: Lifecycle events
-- agent_phase: Phase transitions (goal → plan → execute → verify → finish)
+- agent_phase: Phase transitions (goal -> plan -> execute -> verify -> finish)
 - agent_plan_update: Real-time plan step status
 - heartbeat: Keepalive
 - error: Error occurred
@@ -83,7 +83,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ---------------------------------------------------------------------------
-# Approval flow: bridges agent thread ↔ async WebSocket
+# Approval flow: bridges agent thread <-> async WebSocket
 # ---------------------------------------------------------------------------
 
 # GraphAgent approval: agent thread blocks on an asyncio.Event, frontend
@@ -327,15 +327,23 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         # --- 4. Create GraphAgent (with checkpointing + cancellation) ---
         from ggufloader.core.agent.graph_agent import GraphAgent
 
-        # Each session gets a unique thread_id — no history carryover.
+        # Each session gets a unique thread_id -- no history carryover.
         # This keeps the prompt small and fast.
         unique_thread_id = f"session_{int(time.time() * 1000)}"
+
+        # Get actual context size from model backend
+        try:
+            backend_ref = get_model_backend()
+            actual_n_ctx = backend_ref.n_ctx if backend_ref else agent_max_tokens
+        except Exception:
+            actual_n_ctx = agent_max_tokens
 
         agent = GraphAgent(
             llm=llm_call,
             workspace=workspace,
             max_steps=preset_obj.max_steps,
             max_tokens=agent_max_tokens,
+            n_ctx=actual_n_ctx,
             json_retries=2,
             thread_id=unique_thread_id,
         )
@@ -352,22 +360,22 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             'Thinking' blocks.
             """
             phase = None
-            if msg.startswith("🤔") or msg.startswith("🎯"):
+            if msg.startswith("...") or msg.startswith("[target]"):
                 phase = "goal"
-            elif msg.startswith("📋"):
+            elif msg.startswith("[checklist]"):
                 phase = "plan"
-            elif msg.startswith("▶") or msg.startswith("→"):
+            elif msg.startswith(">") or msg.startswith("->"):
                 phase = "execute"
-            elif msg.startswith("🔍"):
+            elif msg.startswith("[search]"):
                 phase = "verify"
-            elif msg.startswith("✅") or msg.startswith("📖"):
+            elif msg.startswith("[ok]") or msg.startswith("[reading]"):
                 phase = "continue"
-            elif msg.startswith("📝"):
+            elif msg.startswith("[note]"):
                 phase = "finish"
 
             plan_step = None
-            if msg.startswith("▶ Step "):
-                m = re.match(r"▶ Step (\d+)/(\d+): (.+)", msg)
+            if msg.startswith("> Step "):
+                m = re.match(r"> Step (\d+)/(\d+): (.+)", msg)
                 if m:
                     plan_step = {
                         "current": int(m.group(1)),
@@ -399,9 +407,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 return
 
             # Announce what the agent is about to do (thinking/analysis/reasoning)
-            if stripped.startswith("🤔") or stripped.startswith("💡") or stripped.startswith("💭"):
+            if stripped.startswith("...") or stripped.startswith("[!]") or stripped.startswith("..."):
                 # Clean emoji prefix for display
-                clean = stripped.lstrip("🤔💡💭📋🔍✅📝🎯▶►  \n")
+                clean = stripped.lstrip("...[!]...[checklist][search][ok][note][target]>>  \n")
                 if clean:
                     asyncio.run_coroutine_threadsafe(
                         manager.send_event(websocket, {
@@ -411,10 +419,10 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                     )
 
             # Tool call being executed
-            elif re.match(r"^\[\d+/\d+\]", stripped) or stripped.startswith("→ "):
-                # e.g. "[1/3] list_directory ." or "→ List files in ."
+            elif re.match(r"^\[\d+/\d+\]", stripped) or stripped.startswith("-> "):
+                # e.g. "[1/3] list_directory ." or "-> List files in ."
                 tool_desc = re.sub(r"^\[\d+/\d+\]\s*", "", stripped)
-                tool_desc = tool_desc.lstrip("→ ")
+                tool_desc = tool_desc.lstrip("-> ")
                 asyncio.run_coroutine_threadsafe(
                     manager.send_event(websocket, {
                         "type": "progress_tool_call",
@@ -424,8 +432,8 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 )
 
             # Tool result (success)
-            elif stripped.startswith("✓") or stripped.startswith("  ✓"):
-                result_text = stripped.lstrip("✓ ")
+            elif stripped.startswith("[ok]") or stripped.startswith("  [ok]"):
+                result_text = stripped.lstrip("[ok] ")
                 asyncio.run_coroutine_threadsafe(
                     manager.send_event(websocket, {
                         "type": "progress_tool_result",
@@ -435,8 +443,8 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 )
 
             # Tool result (failure)
-            elif stripped.startswith("✗") or stripped.startswith("  ✗"):
-                result_text = stripped.lstrip("✗ ")
+            elif stripped.startswith("[FAIL]") or stripped.startswith("  [FAIL]"):
+                result_text = stripped.lstrip("[FAIL] ")
                 asyncio.run_coroutine_threadsafe(
                     manager.send_event(websocket, {
                         "type": "progress_tool_result",
@@ -446,7 +454,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 )
 
             # Approval needed
-            elif stripped.startswith("🔐"):
+            elif stripped.startswith("[lock]"):
                 asyncio.run_coroutine_threadsafe(
                     manager.send_event(websocket, {
                         "type": "progress_announce",
@@ -455,7 +463,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 )
 
             # Step indicator (plan step)
-            elif stripped.startswith("▶ Step "):
+            elif stripped.startswith("> Step "):
                 asyncio.run_coroutine_threadsafe(
                     manager.send_event(websocket, {
                         "type": "progress_step_complete",
@@ -472,7 +480,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                     }), loop,
                 )
 
-            # Generic status — still emit as announce so it shows up
+            # Generic status -- still emit as announce so it shows up
             else:
                 asyncio.run_coroutine_threadsafe(
                     manager.send_event(websocket, {

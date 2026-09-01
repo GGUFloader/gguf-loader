@@ -136,10 +136,11 @@ class GraphAgent:
         json_retries: int = 2,
         checkpoint_path: Optional[str | Path] = None,
         thread_id: Optional[str] = None,
+        n_ctx: Optional[int] = None,
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
-        # Only expose read-only tools by default — keeps prompt small
+        # Only expose read-only tools by default -- keeps prompt small
         # and prevents the model from trying write/edit operations.
         READONLY_TOOLS = ["list_directory", "read_file", "search_files", "glob"]
         self.tools = tools or ToolRegistry(self.workspace, only=READONLY_TOOLS)
@@ -165,7 +166,7 @@ class GraphAgent:
         # --- Lightweight core (always loaded) ---
         self._workspace_ctx = WorkspaceContext(self.workspace)
         self._prefix_cache = PromptPrefixCache()
-        self._context_budget = ContextBudget()
+        self._context_budget = ContextBudget(total_budget=n_ctx or max_tokens)
 
         # --- Lazy subsystems (only loaded when needed) ---
         self._lazy: Dict[str, Any] = {}
@@ -225,7 +226,7 @@ class GraphAgent:
         if base_messages:
             strategy = self._context_budget.check_budget(base_messages)
             if strategy != "ok":
-                on_status(f"📦 Compacting context ({strategy})...")
+                on_status(f"[compact] Compacting context ({strategy})...")
                 base_messages = self._context_budget.compact(base_messages)
 
         inputs: GraphState = {
@@ -346,7 +347,7 @@ class GraphAgent:
 
         reasoning = _clean_model_output((action.get("reasoning") or "").strip())
         if reasoning:
-            writer({"event": "status", "text": f"💭 {reasoning}"})
+            writer({"event": "status", "text": f"... {reasoning}"})
 
         # Dynamic step estimate: the LLM estimates how many steps it needs.
         # On first step, use the estimate; on later steps, allow the model
@@ -409,7 +410,7 @@ class GraphAgent:
                     "description": self._describe(call),
                     "workspace": str(self.workspace),
                 }
-                writer({"event": "status", "text": f"🔐 Approval needed: {self._describe(call)}"})
+                writer({"event": "status", "text": f"[approve] Approval needed: {self._describe(call)}"})
                 approvals[index] = bool(interrupt(payload))
         self._check_cancel()
 
@@ -448,10 +449,10 @@ class GraphAgent:
                     self._check_cancel()
                     idx, sig, result, status = future.result()
                     if status == "skip":
-                        writer({"event": "status", "text": f"  ⏭ Skipping repeated failing call: {self._describe(calls[idx])}"})
+                        writer({"event": "status", "text": f"  [skip] Skipping repeated failing call: {self._describe(calls[idx])}"})
                         continue
                     if status == "error":
-                        writer({"event": "status", "text": f"  ✗ Invalid call: {result.get('error', '')}"})
+                        writer({"event": "status", "text": f"  [FAIL] Invalid call: {result.get('error', '')}"})
                         self._failed_signatures[sig] = self._failed_signatures.get(sig, 0) + 1
                         failures.append((calls[idx], result))
                         continue
@@ -459,10 +460,10 @@ class GraphAgent:
                     executed_calls.append({"signature": sig, "tool": calls[idx].get("tool", "")})
                     writer({"event": "tool", "result": result})
                     if result.get("status") == "success":
-                        writer({"event": "status", "text": f"  ✓ {self._summarize_result(result)}"})
+                        writer({"event": "status", "text": f"  [OK] {self._summarize_result(result)}"})
                     else:
                         error_msg = result.get("error", "Unknown error")
-                        writer({"event": "status", "text": f"  ✗ {error_msg}"})
+                        writer({"event": "status", "text": f"  [FAIL] {error_msg}"})
                         self._failed_signatures[sig] = self._failed_signatures.get(sig, 0) + 1
                         failures.append((calls[idx], result))
 
@@ -470,7 +471,7 @@ class GraphAgent:
         for idx, call in gated:
             self._check_cancel()
             sig = self._signature(call)
-            writer({"event": "status", "text": f"→ {self._describe(call)}"})
+            writer({"event": "status", "text": f"-> {self._describe(call)}"})
             if approvals.get(idx) is not None and not approvals[idx]:
                 result = {"status": "error", "error": "Approval denied",
                           "tool_name": call.get("tool", "")}
@@ -480,10 +481,10 @@ class GraphAgent:
             tool_results.append(result)
             writer({"event": "tool", "result": result})
             if result.get("status") == "success":
-                writer({"event": "status", "text": f"  ✓ {self._summarize_result(result)}"})
+                writer({"event": "status", "text": f"  [OK] {self._summarize_result(result)}"})
             else:
                 error_msg = result.get("error", "Unknown error")
-                writer({"event": "status", "text": f"  ✗ {error_msg}"})
+                writer({"event": "status", "text": f"  [FAIL] {error_msg}"})
                 self._failed_signatures[sig] = self._failed_signatures.get(sig, 0) + 1
                 failures.append((call, result))
 
@@ -499,9 +500,9 @@ class GraphAgent:
             tool_results.append(fixed)
             writer({"event": "tool", "result": fixed})
             if fixed.get("status") == "success":
-                writer({"event": "status", "text": f"  ✓ retry succeeded: {self._summarize_result(fixed)}"})
+                writer({"event": "status", "text": f"  [OK] retry succeeded: {self._summarize_result(fixed)}"})
             else:
-                writer({"event": "status", "text": f"  ✗ retry failed: {fixed.get('error', 'Unknown error')}"})
+                writer({"event": "status", "text": f"  [FAIL] retry failed: {fixed.get('error', 'Unknown error')}"})
 
         return {"tool_results": tool_results, "executed_calls": executed_calls, "pending_calls": []}
 
@@ -630,7 +631,7 @@ class GraphAgent:
 
         Always returns a non-empty string. Builds a direct answer from
         tool results first (fast, no LLM call). Then optionally tries
-        LLM polish — but only streams the result if it's a valid answer.
+        LLM polish -- but only streams the result if it's a valid answer.
         """
         import json as _json
         user_q = messages[-1]['content'] if messages else ''
@@ -656,7 +657,7 @@ class GraphAgent:
                     direct_parts.append(content)
 
         if not direct_parts:
-            # No useful content from tools — try LLM with the raw question
+            # No useful content from tools -- try LLM with the raw question
             response = self._call_llm(
                 f"Answer this question briefly: {user_q}\n\nAssistant:",
                 writer, stream_tokens=True,
@@ -681,16 +682,16 @@ class GraphAgent:
             try:
                 parsed = _json.loads(response.strip())
                 if isinstance(parsed, dict) and (parsed.get("tool_calls") or parsed.get("answer") is None):
-                    # LLM returned tool calls or invalid JSON — use direct answer
+                    # LLM returned tool calls or invalid JSON -- use direct answer
                     pass
                 elif isinstance(parsed, dict) and parsed.get("answer"):
-                    # LLM returned structured answer — use it
+                    # LLM returned structured answer -- use it
                     direct_answer = parsed["answer"]
                 else:
-                    # Raw text — use it
+                    # Raw text -- use it
                     direct_answer = response.strip()
             except (ValueError, TypeError):
-                # Not JSON — natural language, use it
+                # Not JSON -- natural language, use it
                 direct_answer = response.strip()
 
         # --- Step 3: Clean and stream the final answer ---
@@ -772,8 +773,7 @@ class GraphAgent:
         elif event == "step":
             step = payload.get("step", 0)
             maximum = payload.get("max", self.max_steps)
-            if step > 1:
-                self._on_status(f"▶ Step {step}/{maximum}")
+            self._on_status(f"Step {step}/{maximum}")
 
     def _load_thread_messages(self) -> List[Dict[str, str]]:
         """Load the conversation from the latest checkpoint of this thread."""
@@ -796,9 +796,9 @@ class GraphAgent:
         if not calls:
             return
         if len(calls) == 1:
-            writer({"event": "status", "text": f"→ {self._describe(calls[0])}"})
+            writer({"event": "status", "text": f"-> {self._describe(calls[0])}"})
         else:
-            writer({"event": "status", "text": f"→ {len(calls)} tasks to complete:"})
+            writer({"event": "status", "text": f"-> {len(calls)} tasks to complete:"})
             for index, call in enumerate(calls, 1):
                 writer({"event": "status", "text": f"  {index}. {self._describe(call)}"})
         writer({"event": "status", "text": ""})
@@ -827,7 +827,7 @@ class GraphAgent:
             }
         directive = self._coverage_directive(state, messages)
         if directive:
-            writer({"event": "status", "text": "📖 Reading remaining files…"})
+            writer({"event": "status", "text": "[reading] Reading remaining files..."})
             writer({"event": "status", "text": directive})
             ret = {
                 "pending_calls": [],
