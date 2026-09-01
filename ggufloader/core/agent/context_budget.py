@@ -7,12 +7,15 @@ Prevents context overflow without losing important information.
 
 Pattern from: Pydantic AI Harness SlidingWindowCompaction +
 Aider's auto-compaction.
+
+Now includes a Tokenizer protocol so the budget can use the model's
+actual tokenizer instead of rough char-based estimation.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,7 @@ CHARS_PER_TOKEN = 4
 
 
 def estimate_tokens(text: str) -> int:
-    """Rough token count estimation."""
+    """Rough token count estimation (fallback when no tokenizer available)."""
     return max(1, len(text) // CHARS_PER_TOKEN)
 
 
@@ -40,6 +43,29 @@ def estimate_message_tokens(message: Dict[str, Any]) -> int:
     return estimate_tokens(str(content))
 
 
+@runtime_checkable
+class Tokenizer(Protocol):
+    """Protocol for model-specific token counting.
+
+    The model backend can implement this to provide accurate token counts.
+    Falls back to char-based estimation if not available.
+    """
+
+    def count_tokens(self, text: str) -> int:
+        """Return the number of tokens in *text*."""
+        ...
+
+
+class _FallbackTokenizer:
+    """Char-based tokenizer used when the model doesn't provide one."""
+
+    def count_tokens(self, text: str) -> int:
+        return estimate_tokens(text)
+
+
+_FALLBACK = _FallbackTokenizer()
+
+
 class ContextBudget:
     """Track token usage and trigger compaction when needed.
 
@@ -54,10 +80,16 @@ class ContextBudget:
     3. Trim: Shorten long tool results
     """
 
-    def __init__(self, total_budget: int = 8192, system_prompt_tokens: int = 500) -> None:
+    def __init__(
+        self,
+        total_budget: int = 8192,
+        system_prompt_tokens: int = 500,
+        tokenizer: Optional[Tokenizer] = None,
+    ) -> None:
         self.total_budget = total_budget
         self.system_prompt_tokens = system_prompt_tokens
         self.available = total_budget - system_prompt_tokens
+        self._tokenizer: Tokenizer = tokenizer or _FALLBACK
         self._used = 0
         self._step_history: List[Dict[str, Any]] = []
         self._compaction_count = 0
@@ -79,13 +111,27 @@ class ContextBudget:
         """Set callback for when compaction happens."""
         self._on_compact = callback
 
+    def set_tokenizer(self, tokenizer: Tokenizer) -> None:
+        """Inject a model-specific tokenizer for accurate counting."""
+        self._tokenizer = tokenizer
+        logger.info("Tokenizer injected: %s", type(tokenizer).__name__)
+
     def set_budget(self, total: int, system_tokens: int = 500) -> None:
         """Update the total budget (e.g., after model load reveals n_ctx)."""
         self.total_budget = total
         self.system_prompt_tokens = system_tokens
         self.available = total - system_tokens
-        logger.info("Context budget set: %d tokens (system: %d, available: %d)",
-                     total, system_tokens, self.available)
+        logger.info(
+            "Context budget set: %d tokens (system: %d, available: %d)",
+            total, system_tokens, self.available,
+        )
+
+    def _count_tokens(self, text: str) -> int:
+        """Count tokens using the injected tokenizer."""
+        try:
+            return self._tokenizer.count_tokens(text)
+        except Exception:  # noqa: BLE001
+            return estimate_tokens(text)
 
     def check_budget(self, history: List[Dict[str, Any]]) -> str:
         """Check if compaction is needed. Returns compaction strategy or 'ok'.
@@ -96,7 +142,18 @@ class ContextBudget:
         - 'trim': tool results are too long
         - 'drop': must drop oldest messages
         """
-        self._used = sum(estimate_message_tokens(m) for m in history)
+        self._used = 0
+        for msg in history:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict):
+                        self._used += self._count_tokens(part.get("text", ""))
+                    else:
+                        self._used += self._count_tokens(str(part))
+            else:
+                self._used += self._count_tokens(str(content))
+
         ratio = self.usage_ratio
 
         if ratio < 0.80:
@@ -108,8 +165,11 @@ class ContextBudget:
         else:
             return "drop"
 
-    def compact(self, history: List[Dict[str, Any]],
-                summarize_fn: Optional[Callable[[str], str]] = None) -> List[Dict[str, Any]]:
+    def compact(
+        self,
+        history: List[Dict[str, Any]],
+        summarize_fn: Optional[Callable[[str], str]] = None,
+    ) -> List[Dict[str, Any]]:
         """Compact the conversation history to fit within budget.
 
         Returns the compacted history (modifies in place too).
@@ -119,8 +179,10 @@ class ContextBudget:
             return history
 
         self._compaction_count += 1
-        logger.info("Context compaction #%d: strategy=%s, used=%d/%d",
-                     self._compaction_count, strategy, self._used, self.available)
+        logger.info(
+            "Context compaction #%d: strategy=%s, used=%d/%d",
+            self._compaction_count, strategy, self._used, self.available,
+        )
 
         if strategy == "summarize":
             history = self._summarize_compact(history, summarize_fn)
@@ -130,15 +192,17 @@ class ContextBudget:
             history = self._drop_compact(history)
 
         # Re-check after compaction
-        self._used = sum(estimate_message_tokens(m) for m in history)
+        self._used = sum(
+            self._count_tokens(str(m.get("content", "")))
+            for m in history
+        )
         if self._used > self.available and history:
             # Last resort: drop oldest messages until we fit
             while history and self._used > self.available:
-                # Never drop the system message (index 0) or the last 2 messages
                 if len(history) <= 3:
                     break
-                dropped = history.pop(1)  # drop second message (first user msg)
-                self._used -= estimate_message_tokens(dropped)
+                dropped = history.pop(1)
+                self._used -= self._count_tokens(str(dropped.get("content", "")))
 
         if self._on_compact:
             self._on_compact(
@@ -148,9 +212,11 @@ class ContextBudget:
 
         return history
 
-    def _summarize_compact(self, history: List[Dict[str, Any]],
-                           summarize_fn: Optional[Callable[[str], str]] = None,
-                           ) -> List[Dict[str, Any]]:
+    def _summarize_compact(
+        self,
+        history: List[Dict[str, Any]],
+        summarize_fn: Optional[Callable[[str], str]] = None,
+    ) -> List[Dict[str, Any]]:
         """Summarize old messages to reduce token count.
 
         Keeps: system prompt, last 4 messages, and any summary.
@@ -159,11 +225,9 @@ class ContextBudget:
         if len(history) <= 5:
             return history
 
-        # Extract messages to summarize (everything except system + last 4)
-        old_messages = history[1:-4]  # skip system, keep last 4
-        kept = [history[0]] + history[-4:]  # system + last 4
+        old_messages = history[1:-4]
+        kept = [history[0]] + history[-4:]
 
-        # Build summary text
         summary_parts = []
         for msg in old_messages:
             role = msg.get("role", "unknown")
@@ -176,10 +240,9 @@ class ContextBudget:
         if summarize_fn:
             summary_text = summarize_fn(summary_text)
 
-        # Insert summary as a system message
         summary_msg = {
             "role": "system",
-            "content": f"[Conversation summary — {len(old_messages)} messages condensed]\n{summary_text}"
+            "content": f"[Conversation summary - {len(old_messages)} messages condensed]\n{summary_text}",
         }
         return [summary_msg] + kept
 
@@ -196,7 +259,6 @@ class ContextBudget:
         if len(history) <= 3:
             return history
 
-        # Keep system message + last 3 messages
         dropped_count = len(history) - 4
         if dropped_count > 0 and self._on_compact:
             self._on_compact(f"Dropped {dropped_count} oldest messages to fit context")

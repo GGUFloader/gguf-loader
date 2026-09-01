@@ -145,29 +145,29 @@ def test_graph_agent_has_checkpoint():
 
 def test_approval_event_blocking():
     """Approval should block via asyncio.Event until resolved."""
-    from ggufloader.api.websocket.handler import _approval_events, _approval_results
+    from ggufloader.core.agent.approval_manager import ApprovalManager
 
+    mgr = ApprovalManager()
     call_id = f"test_approval_{int(time.time() * 1000)}"
     event = asyncio.Event()
-    _approval_events[call_id] = event
+    mgr.register(call_id, event)
 
     # Simulate frontend approval
-    _approval_results[call_id] = True
-    event.set()
+    mgr.resolve(call_id, approved=True)
 
     # Verify the event resolves
     assert event.is_set()
-    assert _approval_results.pop(call_id, False) is True
-    _approval_events.pop(call_id, None)
+    assert mgr.get_result(call_id, default=False) is True
 
 
 def test_approval_timeout():
     """Approval should not hang forever if frontend doesn't respond."""
-    from ggufloader.api.websocket.handler import _approval_events
+    from ggufloader.core.agent.approval_manager import ApprovalManager
 
+    mgr = ApprovalManager()
     call_id = f"test_timeout_{int(time.time() * 1000)}"
     event = asyncio.Event()
-    _approval_events[call_id] = event
+    mgr.register(call_id, event)
 
     # Simulate timeout - event never set
     start = time.time()
@@ -178,7 +178,7 @@ def test_approval_timeout():
     elapsed = time.time() - start
 
     assert elapsed < 1.0  # should not hang
-    _approval_events.pop(call_id, None)
+    mgr.cancel_all()
 
 
 # ---------------------------------------------------------------------------

@@ -86,10 +86,13 @@ manager = ConnectionManager()
 # Approval flow: bridges agent thread <-> async WebSocket
 # ---------------------------------------------------------------------------
 
-# GraphAgent approval: agent thread blocks on an asyncio.Event, frontend
-# resolves it via handle_approval_response.
-_approval_events: dict[str, asyncio.Event] = {}
-_approval_results: dict[str, bool] = {}
+# Approval manager (instance-based, replaces global mutable state)
+from ggufloader.core.agent.approval_manager import ApprovalManager
+_approval_mgr = ApprovalManager()
+
+def get_approval_manager() -> ApprovalManager:
+    """Return the global approval manager (used by AgentTransport)."""
+    return _approval_mgr
 
 # Legacy REST approval (kept for backward compat with addons)
 _pending_approvals: dict[str, asyncio.Future] = {}
@@ -520,7 +523,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             """
             call_id = f"approval_{int(time.time() * 1000)}"
             event = asyncio.Event()
-            _approval_events[call_id] = event
+            _approval_mgr.register(call_id, event)
 
             # Send approval request to frontend
             call = payload.get("call", {})
@@ -541,8 +544,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             except Exception:
                 pass
 
-            approved = _approval_results.pop(call_id, False)
-            _approval_events.pop(call_id, None)
+            approved = _approval_mgr.resolve(call_id, False)
             return approved
 
         # --- 6. Run the graph agent in a thread ---
@@ -623,10 +625,7 @@ async def handle_approval_response(data: dict):
     approved = data.get("approved", False)
 
     # 1. Resolve GraphAgent approval (event-based)
-    event = _approval_events.pop(call_id, None)
-    _approval_results[call_id] = approved
-    if event:
-        event.set()
+    _approval_mgr.resolve(call_id, approved)
 
     # 2. Resolve legacy REST approval (future-based)
     future = _pending_approvals.pop(call_id, None)
