@@ -325,6 +325,8 @@ class GraphAgent:
         # Budget exhausted - synthesize a final answer from what already ran.
         if step >= max_steps:
             answer = self._final_response(messages, tool_results, writer)
+            if not answer.strip():
+                answer = "Done."
             return {
                 "pending_calls": [],
                 "final_answer": answer,
@@ -371,6 +373,8 @@ class GraphAgent:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
                 answer = _clean_model_output(raw or "No further action needed.")
+            if not answer.strip():
+                answer = "Done."
             return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
 
         # Drop repeats of calls that already ran with a still-valid result.
@@ -665,8 +669,9 @@ class GraphAgent:
                 f"Answer this question briefly: {user_q}\n\nAssistant:",
                 writer, stream_tokens=True,
             )
-            if response.strip():
-                return _clean_model_output(response)
+            cleaned = _clean_model_output(response)
+            if cleaned.strip():
+                return cleaned
             return f"I was unable to find information about: {user_q}"
 
         direct_answer = "\n\n".join(direct_parts)
@@ -699,6 +704,11 @@ class GraphAgent:
 
         # --- Step 3: Clean and stream the final answer ---
         direct_answer = _clean_model_output(direct_answer)
+
+        # Safety: if cleanup stripped everything (e.g. only thinking tokens),
+        # use the raw tool result summary as fallback
+        if not direct_answer.strip():
+            direct_answer = "\n\n".join(direct_parts)
 
         # Send as token events so the UI shows streaming
         for i in range(0, len(direct_answer), 20):
