@@ -96,10 +96,13 @@ def _clean_model_output(text: str) -> str:
     text = re.sub(r"<think>[\s\S]*$", "", text)
     # Remove <|begin_of_thought|> ... <|end_of_thought|>
     text = re.sub(r"<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>", "", text)
-    # Remove <|channel|> thinking markers and their content
-    text = re.sub(r"<\|channel\|>\s*(?:thinking|thought)\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"<\|channel\|>\s*", "", text)
+    # Remove <|channel|>thinking, <|channel|>thought, <|channel|>answer etc.
+    # These appear as repeated markers like <|channel|>thought <|channel|>thought
+    text = re.sub(r"(<\|channel\|>\s*(?:thinking|thought|answer|reasoning)\s*)+", "", text, flags=re.IGNORECASE)
+    # Remove bare <|channel|> markers
+    text = re.sub(r"(<\|channel\|>\s*)+", "", text)
     # Remove other common special tokens like <|name|>, <|assistant|>, etc.
+    # But NOT common HTML/XML-like tags that the user might legitimately type
     text = re.sub(r"<\|[a-z_]+\|>", "", text)
     # Clean up extra whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -663,7 +666,7 @@ class GraphAgent:
                 writer, stream_tokens=True,
             )
             if response.strip():
-                return response
+                return _clean_model_output(response)
             return f"I was unable to find information about: {user_q}"
 
         direct_answer = "\n\n".join(direct_parts)
