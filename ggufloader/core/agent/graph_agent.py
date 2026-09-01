@@ -85,14 +85,21 @@ LLMCallable = Callable[..., Any]
 def _clean_model_output(text: str) -> str:
     """Strip special tokens and thinking markers from model output.
 
-    Some models (Gemma, Qwen, etc.) emit channel markers for internal
-    thinking that should not appear in the final response.
+    Some models (Gemma, Qwen, DeepSeek, etc.) emit channel markers,
+    <think> tags, or other thinking tokens that should not appear in the
+    final response.
     """
     import re
+    # Remove <think> ... </think> blocks (streaming token)
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    # Remove partial <think> blocks (e.g. <think>some text without closing)
+    text = re.sub(r"<think>[\s\S]*$", "", text)
+    # Remove <|begin_of_thought|> ... <|end_of_thought|>
+    text = re.sub(r"<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>", "", text)
     # Remove <|channel|> thinking markers and their content
-    text = re.sub(r"<\|channel\|>\s*thinking\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<\|channel\|>\s*(?:thinking|thought)\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"<\|channel\|>\s*", "", text)
-    # Remove other common special tokens
+    # Remove other common special tokens like <|name|>, <|assistant|>, etc.
     text = re.sub(r"<\|[a-z_]+\|>", "", text)
     # Clean up extra whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -328,7 +335,7 @@ class GraphAgent:
         )
         if action is None:
             # Model could not produce valid JSON at all - fall back to plain chat.
-            answer = raw or "I couldn't produce a valid response."
+            answer = _clean_model_output(raw or "I couldn't produce a valid response.")
             return {
                 "pending_calls": [],
                 "final_answer": answer,
@@ -337,7 +344,7 @@ class GraphAgent:
                 "step": step + 1,
             }
 
-        reasoning = (action.get("reasoning") or "").strip()
+        reasoning = _clean_model_output((action.get("reasoning") or "").strip())
         if reasoning:
             writer({"event": "status", "text": f"💭 {reasoning}"})
 
@@ -355,11 +362,11 @@ class GraphAgent:
             if isinstance(c, dict) and c.get("tool")
         ]
         if not calls:
-            answer = (action.get("answer") or "").strip()
+            answer = _clean_model_output((action.get("answer") or "").strip())
             if not answer and tool_results:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
-                answer = raw or "No further action needed."
+                answer = _clean_model_output(raw or "No further action needed.")
             return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
 
         # Drop repeats of calls that already ran with a still-valid result.
@@ -370,11 +377,11 @@ class GraphAgent:
         stale = stale_repeat_signatures(calls, state.get("executed_calls", []))
         new_calls = [c for c in calls if self._signature(c) not in stale]
         if not new_calls:
-            answer = (action.get("answer") or "").strip()
+            answer = _clean_model_output((action.get("answer") or "").strip())
             if not answer:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
-                answer = raw or "No further action needed."
+                answer = _clean_model_output(raw or "No further action needed.")
             return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
 
         return {"pending_calls": new_calls, "final_answer": "", "raw_response": raw, "step": step + 1, "max_steps": max_steps}
