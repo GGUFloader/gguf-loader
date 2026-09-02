@@ -247,12 +247,23 @@ class GraphAgent:
             self._context_budget.check_budget(self.messages)
 
         return {
-            "response": final_answer or "Done.",
+            "response": final_answer or self._diagnostic(
+                "loop ended with no answer", self.max_steps, self.max_steps, tool_results
+            ),
             "tool_results": tool_results,
         }
 
     def cancel(self) -> None:
         self._cancel.set()
+
+    @staticmethod
+    def _diagnostic(reason: str, step: int, max_steps: int, tool_results) -> str:
+        tools = len(tool_results) if tool_results else 0
+        return (
+            f"I couldn't complete the full task ({reason}). "
+            f"Reached step {step}/{max_steps} after {tools} tool call(s). "
+            "Try a more specific request or a smaller workspace scope."
+        )
 
     def close(self) -> None:
         try:
@@ -275,7 +286,7 @@ class GraphAgent:
         if step >= max_steps:
             answer = self._final_response(messages, tool_results, writer)
             if not answer.strip():
-                answer = "Done."
+                answer = self._diagnostic("step budget exhausted", step, max_steps, tool_results)
             return {
                 "pending_calls": [],
                 "final_answer": answer,
@@ -320,7 +331,7 @@ class GraphAgent:
             if not answer:
                 answer = self._clean(raw or "No further action needed.")
             if not answer.strip():
-                answer = "Done."
+                answer = self._diagnostic("model returned no answer", step + 1, max_steps, tool_results)
             return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
 
         # Drop stale repeats
