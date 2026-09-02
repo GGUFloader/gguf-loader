@@ -365,6 +365,37 @@ class GraphAgent:
             c for c in (action.get("tool_calls") or [])
             if isinstance(c, dict) and c.get("tool")
         ]
+
+        # --- Stuck-in-search detection ---
+        # If the agent has done 2+ steps of only search/list with no useful
+        # results and no state-changing tool ran, force it to answer from
+        # knowledge.  A write/edit between searches makes re-reading legitimate
+        # so we only trigger when the searches are truly futile.
+        if step >= 2 and calls:
+            search_only = all(
+                c.get("tool") in ("search_files", "list_directory", "glob")
+                for c in calls
+            )
+            has_read_result = any(
+                r.get("tool_name") == "read_file" and r.get("status") == "success"
+                for r in tool_results
+            )
+            state_changing = any(
+                e.get("tool") in ("write_file", "edit_file", "run_command", "git")
+                for e in state.get("executed_calls", [])
+            )
+            if search_only and not has_read_result and not state_changing:
+                logger.info(
+                    "Agent step %d: stuck in search loop (no useful results after %d steps). "
+                    "Forcing answer from knowledge.",
+                    step + 1, step,
+                )
+                writer({"event": "status", "text": "[short-circuit] No relevant files found — answering from knowledge"})
+                answer = self._reask_for_answer(messages, tool_results, writer)
+                if not answer:
+                    answer = self._clean(raw or "I couldn't find relevant files. Let me answer from my knowledge.")
+                return self._finish_or_direct(state, messages, answer, raw, step, writer, max_steps=max_steps)
+
         if not calls:
             answer = self._clean((action.get("answer") or "").strip())
             # No answer key AND no tool calls AND we have evidence: the model

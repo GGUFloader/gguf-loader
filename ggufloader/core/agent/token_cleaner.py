@@ -29,18 +29,21 @@ class GemmaCleaner:
 
     Gemma emits patterns like:
         <|channel|>thought <|channel|>thought <|channel|>The answer is...
+        <|channel>thought <|channel|>AI (Artificial Intelligence)...
         <|channel|>analysis<|message|>...<|channel|>final<|message|>answer<|end|>
     """
 
-    # Strip "<|channel|>NAME<|message|>" (channel-name + message marker) so
-    # words like "analysis", "final", "thought", "reasoning" don't leak into
-    # the visible output, and "<|message|>" doesn't survive as "|message|>".
+    # Strip "<|channel|>NAME" or "<|channel>NAME" (channel-name marker).
+    # The closing pipe may be missing in some quantized builds.
+    # Match any word after channel marker (not just specific keywords)
+    # to catch things like <|channel|>AI, <|channel>thought, etc.
     _CHANNEL_NAMED = re.compile(
-        r"<\|channel\|>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model)\b[^|<]*\|?",
+        r"<\|?channel\|?>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model|plan|step)\b[^|<]*",
         re.IGNORECASE,
     )
-    _CHANNEL_BARE = re.compile(r"<\|channel\|>\s*")
-    _MESSAGE = re.compile(r"<\|message\|>\s*")
+    # Bare channel marker with non-keyword after it (e.g. <|channel|>AI)
+    _CHANNEL_BARE = re.compile(r"<\|?channel\|?>\s*")
+    _MESSAGE = re.compile(r"<\|?message\|?>\s*")
     _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
     _END_TURN = re.compile(r"<\|end\|>\s*")
     _CONSTRAIN = re.compile(r"<\|constrain\|>\s*[^|]*?\|>", re.IGNORECASE)
@@ -76,10 +79,10 @@ class DeepSeekCleaner:
         r"<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>"
     )
     _CHANNEL_NAMED = re.compile(
-        r"<\|channel\|>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model)\b[^\n|]*",
+        r"<\|?channel\|?>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model|plan|step)\b[^\n|]*",
         re.IGNORECASE,
     )
-    _CHANNEL_BARE = re.compile(r"<\|channel\|>\s*")
+    _CHANNEL_BARE = re.compile(r"<\|?channel\|?>\s*")
     _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
     _END_TURN = re.compile(r"<\|end\|>\s*")
     _NAMED_TOKEN = re.compile(r"<\|[a-z_]+\|>")
@@ -106,10 +109,10 @@ class GenericCleaner:
         r"<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>"
     )
     _CHANNEL_NAMED = re.compile(
-        r"<\|channel\|>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model)\b[^\n|]*",
+        r"<\|?channel\|?>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model|plan|step)\b[^\n|]*",
         re.IGNORECASE,
     )
-    _CHANNEL_BARE = re.compile(r"<\|channel\|>\s*")
+    _CHANNEL_BARE = re.compile(r"<\|?channel\|?>\s*")
     _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
     _END_TURN = re.compile(r"<\|end\|>\s*")
     _NAMED_TOKEN = re.compile(r"<\|[a-z_]+\|>")
