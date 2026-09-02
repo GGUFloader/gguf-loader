@@ -132,6 +132,8 @@ class AgentService(QObject):
         The LLM callable streams tokens (``backend.generate_stream``); the
         graph consumes the chunk iterable and emits them as custom events.
         """
+        from ggufloader.core.agent.model_profiles import get_profile
+
         self.stop()
         if self._engine is not None:
             self._engine.close()
@@ -153,8 +155,26 @@ class AgentService(QObject):
                 stop=CHAT_STOP_TOKENS,
             )
 
+        profile = get_profile(
+            getattr(backend, "model_path", ""),
+            n_ctx_train=getattr(backend, "n_ctx_train", 0) or 0,
+        )
+        n_ctx_val = getattr(backend, "n_ctx", None) or profile.n_ctx_target
         tools = ToolRegistry(Path(workspace))
-        self._engine = GraphAgent(llm, Path(workspace), tools=tools)
+        self._engine = GraphAgent(
+            llm,
+            Path(workspace),
+            tools=tools,
+            max_tokens=profile.max_tokens,
+            max_steps=profile.max_steps,
+            json_retries=profile.json_retries,
+            n_ctx=n_ctx_val,
+            max_directive_rounds=3,
+        )
+        if n_ctx_val:
+            self._engine._context_budget.set_budget(n_ctx_val)
+        if hasattr(backend, "count_tokens"):
+            self._engine._context_budget.set_tokenizer(backend.count_tokens)
         return self._engine
 
     @property

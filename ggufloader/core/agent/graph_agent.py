@@ -78,13 +78,14 @@ class GraphAgent:
         llm: LLMCallable,
         workspace: str | Path,
         tools: Optional[ToolRegistry] = None,
-        max_tokens: int = 16384,
-        max_steps: int = 8,
+        max_tokens: int = 4096,
+        max_steps: int = 16,
         json_retries: int = 2,
         checkpoint_path: Optional[str | Path] = None,
         thread_id: Optional[str] = None,
         n_ctx: Optional[int] = None,
         cleaner: Optional[TokenCleaner] = None,
+        max_directive_rounds: int = 3,
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
@@ -93,7 +94,7 @@ class GraphAgent:
         self.max_tokens = max_tokens
         self.max_steps = max_steps
         self.json_retries = json_retries
-        self.max_directive_rounds = 1
+        self.max_directive_rounds = max_directive_rounds
         self.messages: List[Dict[str, str]] = []
 
         self.thread_id = thread_id or (
