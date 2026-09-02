@@ -36,3 +36,27 @@ def test_answer_field_present_detection():
     assert agent._answer_field_present({"tool_calls": [], "answer": ""}) is False
     assert agent._answer_field_present({"tool_calls": []}) is False
     assert agent._answer_field_present({"answer": "   "}) is False
+
+
+class _ReaskReturnsJsonLLM:
+    """Reask still returns JSON-thinking wrapped in a fence."""
+    def __init__(self):
+        self.called = 0
+
+    def __call__(self, prompt, **kwargs):
+        self.called += 1
+        if self.called == 1:
+            return '```json\n{"reasoning":"thinking","answer":"Photosynthesis is how plants make food from sunlight.","tool_calls":[]}\n```'
+
+
+def test_reask_recovers_answer_from_json_wrapped_response():
+    llm = _ReaskReturnsJsonLLM()
+    agent = GraphAgent(llm=llm, workspace="/tmp/ws", max_steps=10)
+    answer = agent._reask_for_answer(
+        [{"role": "user", "content": "what is photosynthesis"}],
+        [{"tool_name": "list_directory", "status": "success", "content": "a.txt"}],
+        writer=lambda _e: None,
+    )
+    assert "Photosynthesis" in answer
+    assert "{" not in answer
+    assert "tool_calls" not in answer

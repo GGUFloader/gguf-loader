@@ -86,6 +86,7 @@ class GraphAgent:
         n_ctx: Optional[int] = None,
         cleaner: Optional[TokenCleaner] = None,
         max_directive_rounds: int = 3,
+        system_prompt: Optional[str] = None,
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
@@ -109,7 +110,11 @@ class GraphAgent:
         self._on_token: Callable[[str], None] = lambda _tok: None
 
         # --- Extracted modules (delegated responsibilities) ---
-        self._prompt_builder = PromptBuilder(self.workspace, self.tools)
+        self._prompt_builder = PromptBuilder(
+            self.workspace,
+            self.tools,
+            system_prompt_override=system_prompt,
+        )
         self._cleaner: TokenCleaner = cleaner or get_cleaner()
         self._tool_orch: Optional[ToolOrchestrator] = None  # created per turn
 
@@ -354,11 +359,22 @@ class GraphAgent:
             # rambled in reasoning instead of using the answer field. Ask it
             # once to produce a clean natural-language answer based on the
             # evidence (or its own knowledge when no relevant file exists).
+            reasked = False
             if not answer and tool_results and not self._answer_field_present(action):
                 answer = self._reask_for_answer(messages, tool_results, writer)
+                reasked = True
+            # Last-resort fallback: if the reask also returned nothing useful,
+            # surface the model's own reasoning as the answer so the user sees
+            # something instead of a silent "Done." or empty bubble.
+            if not answer and reasoning:
+                answer = reasoning
+                logger.info(
+                    "Agent step %d: using reasoning as answer (no answer key, reask empty)",
+                    step + 1,
+                )
             logger.info(
-                "Agent step %d: model proposed 0 tool calls; answer_len=%d tool_results=%d",
-                step + 1, len(answer), len(tool_results),
+                "Agent step %d: model proposed 0 tool calls; answer_len=%d tool_results=%d reasked=%s",
+                step + 1, len(answer), len(tool_results), reasked,
             )
             if not answer and tool_results:
                 answer = self._final_response(messages, tool_results, writer)
@@ -477,12 +493,32 @@ class GraphAgent:
             "Do NOT call any tools. Do NOT return JSON. Just write the answer text.\n\n"
             "Answer:"
         )
+        writer({"event": "status", "text": "[reask] Asking model for a plain-text answer..."})
         try:
             response = self._call_llm(prompt, writer, stream_tokens=True)
         except Exception as e:  # noqa: BLE001 - best-effort re-ask
             logger.warning("_reask_for_answer LLM call failed: %s", e)
             return ""
+
         cleaned = self._clean(response or "")
+
+        # The reask sometimes returns more JSON-thinking instead of plain text.
+        # Detect that (with or without markdown fences) and strip out reasoning/
+        # tool_calls artifacts so the user sees the actual prose.
+        import re as _re
+        fence_stripped = _re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned.strip(), flags=_re.IGNORECASE).strip()
+        if fence_stripped.startswith("{") and '"answer"' in fence_stripped:
+            try:
+                parsed = _json.loads(fence_stripped)
+                if isinstance(parsed, dict):
+                    inner = (parsed.get("answer") or "").strip()
+                    if inner:
+                        cleaned = inner
+                    else:
+                        cleaned = (parsed.get("reasoning") or "").strip()
+            except (ValueError, TypeError):
+                pass
+
         logger.info(
             "_reask_for_answer: LLM returned len=%d cleaned_len=%d raw_preview=%r",
             len(response or ""), len(cleaned), (response or "")[:300],
