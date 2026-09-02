@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FolderOpen, HardDrive, Brain, Search, RefreshCw, Download, ChevronRight, ChevronDown } from 'lucide-react'
 import { modelApi } from '../../api/client'
+import { useModelStore } from '../../stores/modelStore'
 
 interface CatalogModel {
   path: string
@@ -54,7 +55,7 @@ export function ModelCatalogPanel() {
   async function handleLoadModel(m: CatalogModel) {
     setLoadingModel(true)
     try {
-      await modelApi.load(m.path, null, 16384)
+      await useModelStore.getState().loadModel(m.path)
     } catch {}
     setLoadingModel(false)
   }

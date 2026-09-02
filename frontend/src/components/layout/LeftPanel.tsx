@@ -19,6 +19,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { sessionApi, modelApi } from '../../api/client'
+import { useModelStore } from '../../stores/modelStore'
 import { useChatStore } from '../../stores/chatStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { ModelLoadDialog } from '../model/ModelLoadDialog'
@@ -145,8 +146,9 @@ export function LeftPanel() {
     setLoadingModel(modelPath)
     try {
       if (modelInfo?.loaded) await modelApi.unload()
-      const result = await modelApi.load(modelPath)
-      setModelInfo(result)
+      await useModelStore.getState().loadModel(modelPath)
+      const refreshedInfo = await modelApi.info()
+      setModelInfo(refreshedInfo)
       setLoadingModel(null)
     } catch {}
     setLoadingModel(null)

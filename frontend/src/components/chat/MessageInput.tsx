@@ -3,6 +3,7 @@ import { Send, Square, Plus, ChevronDown, Loader2, HardDrive, Zap, FolderOpen } 
 import { useChatStore } from '../../stores/chatStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { modelApi } from '../../api/client'
+import { useModelStore } from '../../stores/modelStore'
 import { FileMentionPopup } from './FileMentionPopup'
 import { ChatAutocomplete, detectTrigger } from './ChatAutocomplete'
 
@@ -85,7 +86,7 @@ export function MessageInput() {
     setLoadingModel(model.path)
     setSelectedModel(model.path)
     try {
-      await modelApi.load(model.path)
+      await useModelStore.getState().loadModel(model.path)
     } catch {}
     setLoadingModel(null)
     setShowModelPicker(false)
