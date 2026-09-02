@@ -15,8 +15,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QMenu, QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QMenu, QProgressBar, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from ggufloader.config import DEFAULT_CONTEXT_SIZES, FONT_FAMILY
@@ -120,6 +120,30 @@ class SettingsSidebar(QFrame):
         self.context_combo.setCurrentIndex(6)  # Default 32768
         self.context_combo.setMinimumHeight(35)
         layout.addWidget(self.context_combo)
+
+        layout.addWidget(self._section_label("Performance"))
+
+        self.n_batch_spin = QSpinBox()
+        self.n_batch_spin.setRange(128, 2048)
+        self.n_batch_spin.setSingleStep(64)
+        self.n_batch_spin.setValue(512)
+        layout.addWidget(self._labeled("Batch size (n_batch)", self.n_batch_spin))
+
+        self.n_threads_spin = QSpinBox()
+        self.n_threads_spin.setRange(0, 32)
+        self.n_threads_spin.setValue(0)
+        self.n_threads_spin.setSpecialValueText("auto")
+        layout.addWidget(self._labeled("CPU threads (0=auto)", self.n_threads_spin))
+
+        self.n_keep_spin = QSpinBox()
+        self.n_keep_spin.setRange(64, 2048)
+        self.n_keep_spin.setSingleStep(64)
+        self.n_keep_spin.setValue(512)
+        layout.addWidget(self._labeled("Keep tokens (n_keep)", self.n_keep_spin))
+
+        self.flash_attn_check = QCheckBox("Flash Attention")
+        self.flash_attn_check.setChecked(True)
+        layout.addWidget(self.flash_attn_check)
 
         # Advanced Settings button
         self.advanced_btn = QPushButton("⚙ Advanced Settings")
@@ -231,6 +255,18 @@ class SettingsSidebar(QFrame):
         label.setObjectName("sectionEyebrow")
         label.setFont(QFont(FONT_FAMILY, 9, QFont.Bold))
         return label
+
+    def _labeled(self, text: str, widget: QWidget) -> QWidget:
+        """Wrap *widget* with a small caption label above it."""
+        container = QWidget()
+        v = QVBoxLayout(container)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(2)
+        cap = QLabel(text)
+        cap.setObjectName("mutedLabel")
+        v.addWidget(cap)
+        v.addWidget(widget)
+        return container
 
     def _update_gpu_label(self, enabled: bool) -> None:
         state = "ON" if enabled else "OFF"
@@ -413,6 +449,21 @@ class SettingsSidebar(QFrame):
             return int(self.context_combo.currentText())
         except ValueError:
             return 32768
+
+    def get_performance_params(self) -> dict:
+        """Return n_batch / n_threads / n_keep / flash_attn from the sidebar."""
+        return {
+            "n_batch": self.n_batch_spin.value(),
+            "n_threads": self.n_threads_spin.value() or None,
+            "n_keep": self.n_keep_spin.value(),
+            "flash_attn": self.flash_attn_check.isChecked(),
+        }
+
+    def apply_profile_defaults(self, profile) -> None:
+        """Prefill performance knobs from a ModelProfile (only if user hasn't touched them)."""
+        self.n_batch_spin.setValue(getattr(profile, "n_batch", 512))
+        self.n_keep_spin.setValue(getattr(profile, "n_keep", 512))
+        self.flash_attn_check.setChecked(getattr(profile, "flash_attn", True))
 
     # ------------------------------------------------------------------
     # Chat sessions (called by the main window)

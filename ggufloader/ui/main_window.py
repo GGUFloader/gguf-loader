@@ -586,12 +586,16 @@ class MainWindow(QMainWindow, ThemeMixin):
         use_gpu = self.sidebar.get_processing_mode() == "GPU Accelerated"
         n_ctx = self.sidebar.get_context_size()
         n_gpu_layers = self.sidebar.get_gpu_layers() if use_gpu else 0
+        perf = self.sidebar.get_performance_params()
 
         self.sidebar.set_loading(True)
         self.sidebar.set_model_info("")
         self.sidebar.set_status("Loading model...")
-        self._model_service.load(path, use_gpu=use_gpu, n_ctx=n_ctx,
-                                 n_gpu_layers=n_gpu_layers)
+        self._model_service.load(
+            path, use_gpu=use_gpu, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
+            n_batch=perf["n_batch"], n_threads=perf["n_threads"],
+            n_keep=perf["n_keep"], flash_attn=perf["flash_attn"],
+        )
 
     def _on_context_changed(self, _index: int) -> None:
         """Context changes only take effect when the model is reloaded."""
@@ -620,6 +624,14 @@ class MainWindow(QMainWindow, ThemeMixin):
             config.get("supports_system_prompt", True),
             config.get("chat_template", ""),
         )
+
+        # Prefill sidebar performance knobs from the agent profile for this model family.
+        try:
+            from ggufloader.core.agent.model_profiles import get_profile
+            profile = get_profile(backend.model_path, n_ctx_train=backend.n_ctx_train or 0)
+            self.sidebar.apply_profile_defaults(profile)
+        except Exception as e:  # noqa: BLE001 - profile lookup must never block UI
+            logger.debug("Profile prefill skipped: %s", e)
 
         # ---- M3: embedding models are not chat models ----
         extra = ""
