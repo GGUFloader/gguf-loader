@@ -92,7 +92,7 @@ def test_requires_approval_defaults(tmp_path: Path) -> None:
 def test_approval_approved_runs_command(tmp_path: Path) -> None:
     approvals: list[dict] = []
     llm = FakeLLM([RUN_CMD, DONE])
-    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path))
+    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path))
     out = engine.process(
         "Create marker.txt via shell",
         on_approval=lambda payload: (approvals.append(payload), True)[1],
@@ -110,7 +110,7 @@ def test_approval_approved_runs_command(tmp_path: Path) -> None:
 def test_approval_denied_skips_command(tmp_path: Path) -> None:
     approvals: list[dict] = []
     llm = FakeLLM([RUN_CMD, DONE])
-    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path))
+    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path))
     out = engine.process(
         "Create marker.txt via shell",
         on_approval=lambda payload: (approvals.append(payload), False)[1],
@@ -134,7 +134,7 @@ def test_approval_git_write_is_gated(tmp_path: Path) -> None:
 
     approvals: list[dict] = []
     llm = FakeLLM([GIT_COMMIT, DONE])
-    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path))
+    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path))
     engine.process("Commit the changes", on_approval=lambda p: (approvals.append(p), True)[1])
     assert len(approvals) == 1
     assert approvals[0]["call"]["tool"] == "git"
@@ -144,7 +144,7 @@ def test_interrupt_does_not_run_untouched(tmp_path: Path) -> None:
     """Non-sensitive runs never suspend for approval."""
     llm = FakeLLM(['{"tool_calls": [{"tool": "write_file", "parameters": {"path": "n.txt", "content": "hi"}}]}', DONE])
     approvals: list[dict] = []
-    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path))
+    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path))
     out = engine.process(
         "Write n.txt",
         on_approval=lambda p: (approvals.append(p), True)[1],

@@ -97,6 +97,7 @@ class GraphAgent:
         system_prompt: Optional[str] = None,
         allowed_tools: Optional[List[str]] = None,
         blocked_tools: Optional[List[str]] = None,
+        plan: bool = True,
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
@@ -142,6 +143,7 @@ class GraphAgent:
         self._workspace_ctx = WorkspaceContext(self.workspace)
         self._prefix_cache = PromptPrefixCache()
         self._context_budget = ContextBudget(total_budget=n_ctx or max_tokens)
+        self._plan_enabled = plan
 
         # --- Lazy subsystems (only loaded when needed) ---
         self._lazy: Dict[str, Any] = {}
@@ -185,42 +187,28 @@ class GraphAgent:
     def _create_plan(self, user_message: str, on_status: StatusCallback) -> List[Dict[str, Any]]:
         """Ask the LLM to create a step-by-step plan before executing.
 
-        For simple questions (short, no tool keywords), returns an empty
-        list so the agent skips planning and answers directly.
+        Always plans — the planning step is important for dividing and
+        scheduling tasks. Simple questions get a 1-step plan (answer
+        directly), complex requests get 2-5 steps.
+        Skipped when plan=False (e.g. in tests).
         """
-        # Detect simple questions that don't need a plan
-        words = user_message.split()
-        tool_keywords = (
-            "file", "folder", "directory", "read", "write", "edit",
-            "search", "find", "create", "build", "refactor", "fix",
-            "debug", "test", "deploy", "git", "code", "project",
-            "list", "show", "open", "check", "run", "install",
-        )
-        # Skip planning for short requests (<=8 words) — they're usually
-        # direct tool calls or simple questions that don't benefit from a plan.
-        is_simple = (
-            len(words) <= 8
-            or (
-                len(words) <= 20
-                and not any(w in user_message.lower() for w in tool_keywords)
-            )
-        )
-        if is_simple:
+        if not self._plan_enabled:
             return []
-
-        # Ask LLM for a plan
         tools_list = self.tools.names()
         prompt = (
             f"User request: {user_message}\n\n"
             f"Available tools: {tools_list}\n\n"
             "Create a step-by-step plan. Reply with ONLY a JSON array:\n"
             '[{"step": 1, "description": "..."}]\n\n'
-            "Each step should be a brief description of what to do.\n"
-            "Keep it concise — 2-5 steps for most tasks.\n\n"
+            "Rules:\n"
+            "- For simple questions (general knowledge, no tools needed): 1 step (answer directly)\n"
+            "- For file/workspace tasks: 2-5 steps (search, read, analyze, answer)\n"
+            "- For complex requests: 3-5 steps (break into clear subtasks)\n"
+            "- Each step description should be brief and actionable\n\n"
             "Plan:"
         )
 
-        on_status("Creating plan...")
+        (on_status or (lambda _msg: None))("Creating plan...")
         try:
             raw = self._call_llm(prompt, _NoopWriter())
         except Exception as e:  # noqa: BLE001
@@ -248,9 +236,10 @@ class GraphAgent:
             pass
 
         if plan:
-            on_status(f"Plan ({len(plan)} steps):")
+            _status = on_status or (lambda _msg: None)
+            _status(f"Plan ({len(plan)} steps):")
             for item in plan:
-                on_status(f"  {item['step']}. {item['description']}")
+                _status(f"  {item['step']}. {item['description']}")
             logger.info("Agent plan: %d steps for %r", len(plan), user_message[:80])
 
         return plan

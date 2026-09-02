@@ -227,7 +227,7 @@ def test_graph_agent_has_context_budget(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False)
     assert hasattr(agent, '_context_budget')
     assert isinstance(agent._context_budget, ContextBudget)
     agent.close()
@@ -238,7 +238,7 @@ def test_graph_agent_system_prompt_is_lightweight(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False)
     prompt = agent._system_prompt()
     assert "file assistant" in prompt.lower()
     agent.close()
@@ -249,7 +249,7 @@ def test_graph_agent_compacts_on_long_history(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False)
     # Set a very small budget
     agent._context_budget.set_budget(total=500, system_tokens=50)
     
@@ -288,7 +288,7 @@ def test_graph_agent_uses_remember_tool(tmp_path):
         return responses[min(idx, len(responses) - 1)]
     
     from ggufloader.core.agent.tool_registry import ToolRegistry as TR
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=3, tools=TR(tmp_path))
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=3, tools=TR(tmp_path), plan=False)
     result = agent.process(user_message="Remember that the API runs on port 8080")
     
     assert "8080" in result["response"]

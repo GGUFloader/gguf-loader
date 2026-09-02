@@ -84,7 +84,7 @@ def test_e2e_list_directory(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3)
     status_log = []
     tool_results = []
 
@@ -110,7 +110,7 @@ def test_e2e_write_and_read_file(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=5, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=5, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -139,7 +139,7 @@ def test_e2e_search_files(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -169,7 +169,7 @@ def test_e2e_glob_tool(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3)
     tool_results = []
 
     result = agent.process(
@@ -200,7 +200,7 @@ def test_e2e_tool_failure_retry(tmp_path):
 
     (tmp_path / "real.txt").write_text("hello")
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=5)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=5)
     tool_results = []
 
     result = agent.process(
@@ -229,7 +229,7 @@ def test_e2e_approval_flow(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
     approvals = []
 
     def on_approval(payload):
@@ -300,7 +300,7 @@ def test_e2e_workspace_context_injection(tmp_path):
     responses = [_make_answer("Context received")]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=1)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=1)
 
     # The system prompt should be lightweight (file-assistant mode)
     sys_prompt = agent._system_prompt()
@@ -328,7 +328,7 @@ def test_e2e_multi_step_plan(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=6, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=6, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -352,7 +352,7 @@ def test_e2e_cancel_mechanism(tmp_path):
     responses = [_make_answer("ok")]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3)
     assert not agent._cancel.is_set()
 
     agent.cancel()
@@ -401,7 +401,7 @@ def test_e2e_edit_file(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(
@@ -428,7 +428,7 @@ def test_e2e_run_command(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
     tool_results = []
 
     result = agent.process(

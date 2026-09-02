@@ -35,7 +35,7 @@ class FakeLLM:
 
 def test_happy_path(tmp_path: Path) -> None:
     llm = FakeLLM([WRITE, DONE])
-    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path))
+    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path))
     out = engine.process("Create notes.md saying Hello")
     assert (tmp_path / "notes.md").read_text() == "Hello"
     assert out["response"] == "All done."
@@ -47,7 +47,7 @@ def test_happy_path(tmp_path: Path) -> None:
 
 def test_json_repair(tmp_path: Path) -> None:
     llm = FakeLLM(["not json at all!!!", WRITE, DONE])
-    GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path)).process("Create notes.md saying Hello")
+    GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path)).process("Create notes.md saying Hello")
     assert "not valid JSON" in llm.calls[1]
     assert (tmp_path / "notes.md").read_text() == "Hello"
 
@@ -55,7 +55,7 @@ def test_json_repair(tmp_path: Path) -> None:
 def test_failure_driven_retry(tmp_path: Path) -> None:
     (tmp_path / "present.txt").write_text("hello world", encoding="utf-8")
     llm = FakeLLM([READ_MISSING, READ_EXISTS, DONE])
-    out = GraphAgent(llm, tmp_path).process("Read the file")
+    out = GraphAgent(llm, tmp_path, plan=False).process("Read the file")
     results = out["tool_results"]
     assert len(results) == 2
     assert results[0]["status"] == "error"
@@ -65,7 +65,7 @@ def test_failure_driven_retry(tmp_path: Path) -> None:
 
 def test_step_budget(tmp_path: Path) -> None:
     llm = FakeLLM([WRITE] * 10)
-    out = GraphAgent(llm, tmp_path, max_steps=3, tools=_full_tools(tmp_path)).process("Do many things")
+    out = GraphAgent(llm, tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path)).process("Do many things")
     # Repeating the identical call is a stale repeat: it runs once, then the
     # run wraps up instead of burning the whole budget on the same write.
     assert len(out["tool_results"]) == 1
@@ -87,7 +87,7 @@ def test_streaming_final_answer_tokens(tmp_path: Path) -> None:
             return '{"tool_calls": [], "answer": ""}'
         return (c for c in chunks)  # final synthesis streams
 
-    engine = GraphAgent(llm, tmp_path, max_steps=3, tools=_full_tools(tmp_path))
+    engine = GraphAgent(llm, tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
     out = engine.process("Create notes.md saying Hello", on_token=tokens.append)
     assert "".join(tokens) == chunks
     assert out["response"] == chunks
@@ -104,7 +104,7 @@ def test_cancel_stops_run(tmp_path: Path) -> None:
         gate.wait(5)
         return DONE
 
-    engine = GraphAgent(llm, tmp_path, max_steps=4)
+    engine = GraphAgent(llm, tmp_path, plan=False, max_steps=4)
     result: dict = {}
 
     def run() -> None:
@@ -132,7 +132,7 @@ def test_read_content_reaches_model_context(tmp_path: Path) -> None:
         prompts.append(prompt)
         return read if len(prompts) == 1 else DONE
 
-    GraphAgent(llm, tmp_path).process("Read vault.txt and tell me the code")
+    GraphAgent(llm, tmp_path, plan=False).process("Read vault.txt and tell me the code")
     assert "7319-AQUA" in prompts[1]
     assert "content:" in prompts[1]
 
@@ -148,7 +148,7 @@ def test_list_names_reach_model_context(tmp_path: Path) -> None:
         prompts.append(prompt)
         return list_dir if len(prompts) == 1 else DONE
 
-    GraphAgent(llm, tmp_path).process("What files exist?")
+    GraphAgent(llm, tmp_path, plan=False).process("What files exist?")
     assert "alpha.txt" in prompts[1]
     assert "beta.py" in prompts[1]
 
@@ -162,7 +162,7 @@ def test_hedged_repeat_terminates_with_answer(tmp_path: Path) -> None:
         '"answer": "The folder contains notes.txt."}'
     )
     llm = FakeLLM([LIST_DIR, hedged])
-    out = GraphAgent(llm, tmp_path).process("What files are here?")
+    out = GraphAgent(llm, tmp_path, plan=False).process("What files are here?")
     assert out["response"] == "The folder contains notes.txt."
     assert len(out["tool_results"]) == 1  # listed once, never re-executed
     assert len(llm.calls) == 2  # no third round
@@ -181,7 +181,7 @@ def test_all_stale_repeats_wrap_up_early(tmp_path: Path) -> None:
             return '{"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}'
         return "The workspace contains notes.txt."
 
-    out = GraphAgent(llm, tmp_path, max_steps=8).process("What files are here?")
+    out = GraphAgent(llm, tmp_path, plan=False, max_steps=8).process("What files are here?")
     assert len(out["tool_results"]) == 1
     assert len(calls) == 3  # action + repeat + one synthesis (not 9)
     assert "notes.txt" in out["response"]
@@ -204,7 +204,7 @@ def test_mixed_repeat_and_new_runs_only_new(tmp_path: Path) -> None:
             )
         return DONE
 
-    out = GraphAgent(llm, tmp_path).process("What files are here?")
+    out = GraphAgent(llm, tmp_path, plan=False).process("What files are here?")
     assert [r["tool_name"] for r in out["tool_results"]] == ["list_directory", "read_file"]
     assert len(calls) == 3
 
@@ -218,7 +218,7 @@ def test_hedged_repeat_with_unescaped_path(tmp_path: Path) -> None:
         '"answer": "Found day4\\practice.md"}'
     )
     llm = FakeLLM([LIST_DIR, raw])
-    out = GraphAgent(llm, tmp_path).process("What files are here?")
+    out = GraphAgent(llm, tmp_path, plan=False).process("What files are here?")
     assert out["response"] == "Found day4\\practice.md"
     assert len(out["tool_results"]) == 1  # listed once, never re-executed
 
@@ -243,7 +243,7 @@ def test_summarize_directive_forces_full_read(tmp_path: Path) -> None:
         return DONE
 
     statuses: list[str] = []
-    out = GraphAgent(llm, tmp_path).process("summarize the workspace", on_status=statuses.append)
+    out = GraphAgent(llm, tmp_path, plan=False).process("summarize the workspace", on_status=statuses.append)
     assert out["response"] == "All done."
     reads = [r for r in out["tool_results"] if r.get("tool_name") == "read_file"]
     assert len(reads) == 2
@@ -266,7 +266,7 @@ def test_non_summarize_ask_gets_no_directive(tmp_path: Path) -> None:
             return READ_A
         return DONE
 
-    out = GraphAgent(llm, tmp_path).process("what does a.md say")
+    out = GraphAgent(llm, tmp_path, plan=False).process("what does a.md say")
     assert out["response"] == "All done."
     assert len(calls) == 3  # no directive round
 
@@ -286,7 +286,7 @@ def test_legitimate_reread_after_mutation_allowed(tmp_path: Path) -> None:
             return '{"tool_calls": [{"tool": "list_directory", "parameters": {"path": "."}}]}'
         return DONE
 
-    out = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path)).process("List, write a file, then list again")
+    out = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path)).process("List, write a file, then list again")
     tools = [r["tool_name"] for r in out["tool_results"]]
     assert tools.count("list_directory") == 2  # second list ran: a write happened between
 
@@ -298,14 +298,14 @@ def test_checkpoint_resume_across_instances(tmp_path: Path) -> None:
     ckpt = tmp_path / "ckpt.sqlite"
     llm = FakeLLM([WRITE, DONE, DONE])
 
-    e1 = GraphAgent(llm, ws, checkpoint_path=ckpt, tools=_full_tools(ws))
+    e1 = GraphAgent(llm, ws, checkpoint_path=ckpt, tools=_full_tools(ws), plan=False)
     out1 = e1.process("Create notes.md saying Hello")
     assert out1["response"] == "All done."
     e1.close()
 
     # Fresh instance, same workspace + checkpoint file: the conversation
     # (including the assistant reply) is loaded from SQLite.
-    e2 = GraphAgent(llm, ws, checkpoint_path=ckpt, tools=_full_tools(ws))
+    e2 = GraphAgent(llm, ws, checkpoint_path=ckpt, tools=_full_tools(ws), plan=False)
     out2 = e2.process("What did you just do?")
     assert out2["response"] == "All done."
     assert "notes.md" in llm.calls[2]
