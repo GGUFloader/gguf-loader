@@ -389,6 +389,22 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         transport = AgentTransport(ws_transport, loop, message_id, preset_id)
 
         # --- 6. Run the graph agent in a thread ---
+        def on_plan_update(phase: str, plan: list):
+            """Send plan to frontend when created."""
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_event(websocket, {
+                        "type": "agent_plan_update",
+                        "message_id": message_id,
+                        "phase": phase,
+                        "plan": plan,
+                        "goal": plan[0].get("description", "") if plan else "",
+                    }),
+                    loop,
+                )
+            except Exception:
+                pass
+
         result = await loop.run_in_executor(
             None,
             lambda: agent.process(
@@ -397,6 +413,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 on_tool=transport.make_tool_callback(),
                 on_token=transport.make_token_callback(),
                 on_approval=transport.make_approval_callback(workspace),
+                on_plan=on_plan_update,
             ),
         )
 

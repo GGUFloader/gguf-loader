@@ -47,6 +47,13 @@ from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemor
 
 logger = logging.getLogger(__name__)
 
+
+class _NoopWriter:
+    """No-op StreamWriter for calls outside the graph runtime."""
+    def __call__(self, data):
+        pass
+
+
 StatusCallback = Callable[[str], None]
 ToolCallback = Callable[[Dict[str, Any]], None]
 ApprovalCallback = Callable[[Dict[str, Any]], bool]
@@ -68,6 +75,7 @@ class GraphState(TypedDict, total=False):
     pending_calls: List[Dict[str, Any]]  # tool calls waiting to execute
     final_answer: str                    # set when the run is done
     raw_response: str                    # last raw LLM output (fallback answer)
+    plan: List[Dict[str, Any]]           # step plan from _create_plan
 
 
 class GraphAgent:
@@ -170,6 +178,84 @@ class GraphAgent:
         return graph.compile(checkpointer=self._saver)
 
     # ------------------------------------------------------------------
+    # Planning phase
+    # ------------------------------------------------------------------
+    # StreamWriter can't be instantiated outside the graph runtime,
+    # so we use a no-op writer for calls outside the graph.
+    def _create_plan(self, user_message: str, on_status: StatusCallback) -> List[Dict[str, Any]]:
+        """Ask the LLM to create a step-by-step plan before executing.
+
+        For simple questions (short, no tool keywords), returns an empty
+        list so the agent skips planning and answers directly.
+        """
+        # Detect simple questions that don't need a plan
+        words = user_message.split()
+        tool_keywords = (
+            "file", "folder", "directory", "read", "write", "edit",
+            "search", "find", "create", "build", "refactor", "fix",
+            "debug", "test", "deploy", "git", "code", "project",
+            "list", "show", "open", "check", "run", "install",
+        )
+        # Skip planning for short requests (<=8 words) — they're usually
+        # direct tool calls or simple questions that don't benefit from a plan.
+        is_simple = (
+            len(words) <= 8
+            or (
+                len(words) <= 20
+                and not any(w in user_message.lower() for w in tool_keywords)
+            )
+        )
+        if is_simple:
+            return []
+
+        # Ask LLM for a plan
+        tools_list = self.tools.names()
+        prompt = (
+            f"User request: {user_message}\n\n"
+            f"Available tools: {tools_list}\n\n"
+            "Create a step-by-step plan. Reply with ONLY a JSON array:\n"
+            '[{"step": 1, "description": "..."}]\n\n'
+            "Each step should be a brief description of what to do.\n"
+            "Keep it concise — 2-5 steps for most tasks.\n\n"
+            "Plan:"
+        )
+
+        on_status("Creating plan...")
+        try:
+            raw = self._call_llm(prompt, _NoopWriter())
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Plan creation failed: %s", e)
+            return []
+
+        # Parse the plan from JSON
+        import json as _json
+        plan = []
+        try:
+            # Try to extract JSON array from response
+            text = raw.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            parsed = _json.loads(text)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and "description" in item:
+                        plan.append({
+                            "step": item.get("step", len(plan) + 1),
+                            "description": str(item["description"]),
+                            "status": "pending",
+                        })
+        except (ValueError, TypeError):
+            pass
+
+        if plan:
+            on_status(f"Plan ({len(plan)} steps):")
+            for item in plan:
+                on_status(f"  {item['step']}. {item['description']}")
+            logger.info("Agent plan: %d steps for %r", len(plan), user_message[:80])
+
+        return plan
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
     def process(
@@ -179,6 +265,7 @@ class GraphAgent:
         on_tool: Optional[ToolCallback] = None,
         on_token: Optional[Callable[[str], None]] = None,
         on_approval: Optional[ApprovalCallback] = None,
+        on_plan: Optional[Callable[[str, List[Dict[str, Any]]], None]] = None,
     ) -> Dict[str, Any]:
         """Run one agent turn through the graph.
 
@@ -203,7 +290,12 @@ class GraphAgent:
             strategy = self._context_budget.check_budget(base_messages)
             if strategy != "ok":
                 on_status(f"[compact] Compacting context ({strategy})...")
-                base_messages = self._context_budget.compact(base_messages)
+                base_messages = self._context_budget.compact(base_messages)        # --- Planning phase ---
+        # Ask the LLM to create a step-by-step plan before executing.
+        # Simple questions (short, no tool keywords) skip planning.
+        plan = self._create_plan(user_message, on_status)
+        if plan and on_plan:
+            on_plan("plan", plan)
 
         inputs: GraphState = {
             "messages": base_messages + [{"role": "user", "content": user_message}],
@@ -216,7 +308,9 @@ class GraphAgent:
             "pending_calls": [],
             "final_answer": "",
             "raw_response": "",
+            "plan": plan,
         }
+
         config = {"configurable": {"thread_id": self.thread_id}}
 
         tool_results: List[Dict[str, Any]] = []
@@ -499,11 +593,6 @@ class GraphAgent:
 
     def _call_llm_for_fix(self, prompt: str) -> str:
         """LLM call wrapper for ToolOrchestrator fix retries."""
-        # StreamWriter can't be instantiated outside the graph runtime,
-        # so we pass a no-op writer that discards events.
-        class _NoopWriter:
-            def __call__(self, data):
-                pass
         return self._call_llm(prompt, _NoopWriter(), stream_tokens=False)
 
     def _answer_field_present(self, action: Dict[str, Any]) -> bool:
