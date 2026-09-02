@@ -555,7 +555,10 @@ class GraphAgent:
         writer({"event": "status", "text": ""})
 
     def _finish_or_direct(self, state, messages, answer, raw, step, writer, max_steps=None) -> Dict[str, Any]:
-        if answer and len(answer) > 30:
+        tool_results = state.get("tool_results", [])
+        has_evidence = any(r.get("status") == "success" for r in tool_results)
+        accept_short_with_evidence = has_evidence and len(answer) >= 10
+        if answer and (len(answer) >= 200 or accept_short_with_evidence):
             answer = self._clean(answer)
             return {
                 "pending_calls": [],
