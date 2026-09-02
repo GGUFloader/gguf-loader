@@ -2,6 +2,31 @@
 
 ## [3.0.0] - 2026-08-28
 
+### Agent Hardware-Aware Tuning
+
+The agent is now tuned for resource-constrained setups (8 GB VRAM + 32 GB RAM) and stops terminating early with the placeholder "Done." string.
+
+### Added
+- Per-model-family tuning profiles (`gemma4`, `gemma3`, `qwen2.5`, `llama3`, `phi3`, `mistral`) in `ggufloader.core.agent.model_profiles`.
+- Sidebar controls for `n_batch` (128-2048), `n_threads` (0=auto, 1-32), `n_keep` (64-2048), `flash_attn` toggle.
+- Prefill of those controls from the detected model profile on load.
+- `n_ctx`, `count_tokens` (`Tokenizer`), and profile defaults wired through `AgentService.create_engine` into `GraphAgent` and `ContextBudget`.
+- `max_directive_rounds` configurable on `GraphAgent` (default 3, was 1).
+
+### Changed
+- `ModelBackend` constructor accepts the new tuning knobs and passes them to `llama_cpp.Llama(...)`.
+- `AgentService.create_engine` reads model profile and threads `max_tokens`/`max_steps`/`json_retries`/`n_ctx`/`max_directive_rounds` into the agent.
+- `GraphAgent` defaults lowered (`max_tokens=4096`, `max_steps=16`) to match 8 GB-VRAM Gemma 4 12B Q4_K_M defaults.
+
+### Fixed
+- Agent no longer terminates early with "Done." on empty/broken LLM outputs; `_diagnostic` reports step/tool counts.
+- Bumped `max_steps` from a model-claimed `estimated_steps` now persists across iterations of the loop.
+- Short LLM answers are no longer rejected solely by character count; a tool-evidence requirement gates the early-exit path.
+- Agent metrics bar now reflects the engine's actual `max_steps`.
+
+### Target hardware
+- Tested profile: 8 GB VRAM, 32 GB RAM, Gemma 4 12B Q4_K_M (`n_ctx=8192`, `n_batch=512`, `n_threads=8`, `n_keep=512`, `flash_attn=on`).
+
 ### React Frontend Migration
 
 Complete rewrite of the UI from PySide6 (Qt) to React + TypeScript + Tailwind CSS.
