@@ -429,9 +429,9 @@ class GraphAgent:
 
         direct_answer = "\n\n".join(direct_parts)
 
-        # Step 2: Try LLM polish
+        # Step 2: Try LLM polish (stream tokens so user sees answer in real time)
         context = self._prompt_builder.final_response_context(user_q, direct_answer)
-        response = self._call_llm(context, writer, stream_tokens=False)
+        response = self._call_llm(context, writer, stream_tokens=True)
 
         if response.strip():
             try:
@@ -445,15 +445,11 @@ class GraphAgent:
             except (ValueError, TypeError):
                 direct_answer = response.strip()
 
-        # Step 3: Clean and stream
+        # Step 3: Clean
         direct_answer = self._clean(direct_answer)
 
         if not direct_answer.strip():
             direct_answer = "\n\n".join(direct_parts)
-
-        for i in range(0, len(direct_answer), 20):
-            chunk = direct_answer[i:i+20]
-            writer({"event": "token", "chunk": chunk})
 
         return direct_answer
 
