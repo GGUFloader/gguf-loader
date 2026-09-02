@@ -101,6 +101,21 @@ _pending_approvals: dict[str, asyncio.Future] = {}
 _agent_graph: Any = None
 
 
+class WSTransport:
+    """Adapter that implements the Transport protocol for a single WebSocket.
+
+    AgentTransport expects send_event(event), but ConnectionManager.send_event
+    needs (websocket, event). This adapter bridges the gap.
+    """
+
+    def __init__(self, mgr: ConnectionManager, ws: WebSocket):
+        self._mgr = mgr
+        self._ws = ws
+
+    async def send_event(self, event: dict):
+        await self._mgr.send_event(self._ws, event)
+
+
 async def websocket_endpoint(websocket: WebSocket):
     """Main WebSocket endpoint for chat streaming."""
     await manager.connect(websocket)
@@ -355,7 +370,8 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         # --- 5. Wire callbacks via AgentTransport (3 lines instead of 150+) ---
         loop = asyncio.get_event_loop()
         from ggufloader.core.agent.agent_transport import AgentTransport
-        transport = AgentTransport(manager, loop, message_id, preset_id)
+        ws_transport = WSTransport(manager, websocket)
+        transport = AgentTransport(ws_transport, loop, message_id, preset_id)
 
         # --- 6. Run the graph agent in a thread ---
         result = await loop.run_in_executor(
