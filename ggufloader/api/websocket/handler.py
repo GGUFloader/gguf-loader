@@ -297,7 +297,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
     try:
         # --- 1. Load preset ---
         from ggufloader.core.agent.presets import PresetManager
-        from ggufloader.core.agent.agent_engine import _SYSTEM_PROMPT
+        
 
         pm = PresetManager()
         preset_obj = pm.get(preset_id) or pm.get("full_stack")
@@ -364,6 +364,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             n_ctx=actual_n_ctx,
             json_retries=2,
             thread_id=unique_thread_id,
+            system_prompt=router_system_prompt or system_prompt,
         )
         _agent_graph = agent
 

@@ -16,41 +16,38 @@ fragments across 15+ methods in GraphAgent.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .tool_registry import ToolRegistry, tool_content_for_context
 from .workspace_context import PromptPrefixCache
 
 
-# Lightweight system prompt for the file-assistant mode.
-_LIGHT_ASSISTANT_PROMPT = """You are a helpful file assistant. You read files and help the user understand their content.
+# System prompt now comes exclusively from the model router via
+# model_families.json.  The router injects the correct prompt per
+# model family.  This fallback is only used if somehow no prompt
+# was provided (should never happen in normal flow).
+_DEFAULT_SYSTEM_PROMPT = """You are a helpful file assistant. You read files and help users understand their content.
 
 Your workspace: __WORKSPACE__
 
 You have access to these tools:
 __TOOLS__
 
-You communicate through JSON. When you need tools, reply with ONLY a JSON object:
+OUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:
 {
-  "reasoning": "Brief explanation of what you're doing",
+  "reasoning": "What you are doing and why",
   "estimated_steps": 3,
-  "tool_calls": [{"tool": "tool_name", "parameters": {"param": "value"}}],
+  "tool_calls": [{"tool": "tool_name", "parameters": {}}],
   "answer": "Your final answer to the user"
 }
 
 Rules:
-- Be helpful, clear, and concise
-- Read files before answering questions about them
-- Summarize file contents clearly for the user
-- "tool_calls" and "answer" are mutually exclusive
+- tool_calls and answer are mutually exclusive in a single response
 - Never repeat a tool call whose result is already in the conversation
-- Use read_file to open files (handles PDF, DOCX, Markdown)
-- Use list_directory to see what files exist
-- Use search_files to find text inside files
-- Use glob to find files by pattern
-- On your FIRST response, set "estimated_steps" to how many tool calls you expect (e.g. 2 for list+read, 5 for list+read+search+analyze)
-- Update your estimate if the task turns out more complex than expected
-"""
+- Use read_file to open files, list_directory to see folders, search_files to find text
+- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)
+- Be helpful, clear, and concise
+- After gathering evidence, always provide an answer field with a natural language response"""
 
 
 class PromptBuilder:
@@ -62,18 +59,36 @@ class PromptBuilder:
         Workspace root directory.
     tools : ToolRegistry
         Registry of available tools (used for __TOOLS__ replacement).
+    system_prompt_override : Optional[str]
+        If provided, replaces the lightweight default system prompt. Used by
+        the router to inject a per-family system prompt.
     """
 
-    def __init__(self, workspace: Path, tools: ToolRegistry) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        tools: ToolRegistry,
+        system_prompt_override: Optional[str] = None,
+    ) -> None:
         self.workspace = workspace
         self.tools = tools
+        self._system_prompt_override = system_prompt_override
         self._prefix_cache = PromptPrefixCache()
 
-    # ── Public API ──────────────────────────────────────────────────────
+    # ── Public API ────────────────────────────────────────────────────────
 
     def system_prompt(self) -> str:
-        """Build the system prompt with workspace and tool descriptions."""
-        base = _LIGHT_ASSISTANT_PROMPT.replace("__WORKSPACE__", str(self.workspace))
+        """Build the system prompt with workspace and tool descriptions.
+
+        Uses the router-provided prompt (from model_families.json) when
+        available; falls back to _DEFAULT_SYSTEM_PROMPT only when no
+        router prompt was supplied.
+        """
+        if self._system_prompt_override:
+            base = self._system_prompt_override
+        else:
+            base = _DEFAULT_SYSTEM_PROMPT
+        base = base.replace("__WORKSPACE__", str(self.workspace))
         base = base.replace("__TOOLS__", self.tools.describe())
         return base
 

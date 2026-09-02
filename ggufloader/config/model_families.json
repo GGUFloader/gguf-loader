@@ -3,29 +3,338 @@
   "_version": "1.0",
   "families": [
     {
-      "id": "liquid-lfm",
-      "name": "LiquidAI LFM",
+      "id": "deepseek-v2",
+      "name": "DeepSeek V2",
       "name_patterns": [
-        "lfm",
-        "lfm2",
-        "lfm-2",
-        "liquid"
+        "deepseek-v2"
       ],
       "arch_patterns": [
-        "lfm2"
+        "deepseek2"
       ],
       "version_patterns": [],
       "params": {
-        "temperature": 0.2,
+        "temperature": 0.7,
         "top_p": 0.9,
-        "top_k": 80,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "DeepSeek V2 uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "deepseek-v3",
+      "name": "DeepSeek V3",
+      "name_patterns": [
+        "deepseek-v3"
+      ],
+      "arch_patterns": [
+        "deepseek2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "DeepSeek V3 uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "command-r",
+      "name": "Cohere Command R",
+      "name_patterns": [
+        "command-r",
+        "cohere"
+      ],
+      "arch_patterns": [
+        "command-r"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "Command R uses <|START_OF_TURN_TOKEN|> format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "qwen3",
+      "name": "Qwen 3",
+      "name_patterns": [
+        "qwen3",
+        "qwen-3"
+      ],
+      "arch_patterns": [
+        "qwen3",
+        "qwen3moe"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
         "min_p": 0.0,
         "repeat_penalty": 1.05,
         "max_tokens": 4096
       },
       "supports_system_prompt": true,
       "context_length": 32768,
-      "notes": "LiquidAI LFM2 needs very low temperature to avoid degeneration"
+      "notes": "Qwen 3 uses ChatML format, supports thinking mode",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "deepseek-coder",
+      "name": "DeepSeek Coder",
+      "name_patterns": [
+        "deepseek-coder"
+      ],
+      "arch_patterns": [
+        "deepseek"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.3,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 16384,
+      "notes": "DeepSeek Coder uses lower temperature for code generation",
+      "system_prompt": "You are a helpful code assistant. You read files, understand code, and help users.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "stablelm",
+      "name": "Stability AI StableLM",
+      "name_patterns": [
+        "stablelm",
+        "stable-lm"
+      ],
+      "arch_patterns": [
+        "stablelm"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 8192,
+      "notes": "StableLM uses custom format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
+    },
+    {
+      "id": "internlm",
+      "name": "InternLM",
+      "name_patterns": [
+        "internlm",
+        "intern-lm"
+      ],
+      "arch_patterns": [
+        "internlm"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 2048,
+      "notes": "InternLM uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "baichuan",
+      "name": "Baichuan",
+      "name_patterns": [
+        "baichuan"
+      ],
+      "arch_patterns": [
+        "baichuan"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 4096,
+      "notes": "Baichuan uses custom format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
+    },
+    {
+      "id": "mixtral",
+      "name": "Mixtral (Mixture of Experts)",
+      "name_patterns": [
+        "mixtral",
+        "mixtral-8x7b",
+        "mixtral-8x22b"
+      ],
+      "arch_patterns": [
+        "mixtral"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 32768,
+      "notes": "Mixtral inherits Mistral template",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
+    },
+    {
+      "id": "gpt-oss",
+      "name": "OpenAI GPT-OSS",
+      "name_patterns": [
+        "gpt-oss",
+        "gptoss"
+      ],
+      "arch_patterns": [
+        "gpt_oss"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "GPT-OSS uses ChatML format with harmony channels",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "gemma2",
+      "name": "Google Gemma 2",
+      "name_patterns": [
+        "gemma-2",
+        "gemma2"
+      ],
+      "arch_patterns": [
+        "gemma2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 64,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Gemma 2 uses <start_of_turn>user format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "gemma3",
+      "name": "Google Gemma 3",
+      "name_patterns": [
+        "gemma-3",
+        "gemma3"
+      ],
+      "arch_patterns": [
+        "gemma3",
+        "gemma2"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 64,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "Gemma 3 supports higher temperature, long context",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "falcon",
+      "name": "Technology Innovation Institute Falcon",
+      "name_patterns": [
+        "falcon"
+      ],
+      "arch_patterns": [
+        "falcon"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 2048
+      },
+      "supports_system_prompt": false,
+      "context_length": 2048,
+      "notes": "Falcon uses User:/Assistant: format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
+    },
+    {
+      "id": "gemma4",
+      "name": "Google Gemma 4",
+      "name_patterns": [
+        "gemma-4",
+        "gemma4"
+      ],
+      "arch_patterns": [
+        "gemma4"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 64,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 131072,
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response",
+      "notes": "Gemma 4 uses thinking mode, supports very long context"
     },
     {
       "id": "llama3",
@@ -59,7 +368,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 8192,
-      "notes": "Llama 3 uses <|start_header_id|>system<|end_header_id|> format"
+      "notes": "Llama 3 uses <|start_header_id|>system<|end_header_id|> format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "llama2",
@@ -85,7 +395,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "Llama 2 uses [INST] <<SYS>> system prompt <</SYS>> format"
+      "notes": "Llama 2 uses [INST] <<SYS>> system prompt <</SYS>> format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "qwen1.5",
@@ -110,7 +421,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 32768,
-      "notes": "Qwen uses ChatML format"
+      "notes": "Qwen uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "qwen2",
@@ -133,7 +445,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 32768,
-      "notes": "Qwen 2 uses ChatML format"
+      "notes": "Qwen 2 uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "qwen2.5",
@@ -158,165 +471,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 32768,
-      "notes": "Qwen 2.5 uses ChatML format"
-    },
-    {
-      "id": "qwen3",
-      "name": "Qwen 3",
-      "name_patterns": [
-        "qwen3",
-        "qwen-3"
-      ],
-      "arch_patterns": [
-        "qwen3",
-        "qwen3moe"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.6,
-        "top_p": 0.95,
-        "top_k": 20,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 32768,
-      "notes": "Qwen 3 uses ChatML format, supports thinking mode"
-    },
-    {
-      "id": "mistral",
-      "name": "Mistral",
-      "name_patterns": [
-        "mistral",
-        "mistral-7b",
-        "mistral-small",
-        "mistral-large"
-      ],
-      "arch_patterns": [],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.1,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": false,
-      "context_length": 32768,
-      "notes": "Mistral uses strict [INST] alternation, no system message support"
-    },
-    {
-      "id": "mixtral",
-      "name": "Mixtral (Mixture of Experts)",
-      "name_patterns": [
-        "mixtral",
-        "mixtral-8x7b",
-        "mixtral-8x22b"
-      ],
-      "arch_patterns": [
-        "mixtral"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.1,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": false,
-      "context_length": 32768,
-      "notes": "Mixtral inherits Mistral template"
-    },
-    {
-      "id": "deepseek-r1",
-      "name": "DeepSeek R1",
-      "name_patterns": [
-        "deepseek-r1",
-        "r1-distill"
-      ],
-      "arch_patterns": [],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.6,
-        "top_p": 0.95,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.0,
-        "max_tokens": 8192
-      },
-      "supports_system_prompt": true,
-      "context_length": 32768,
-      "notes": "DeepSeek R1 uses thinking mode, higher max_tokens for reasoning"
-    },
-    {
-      "id": "deepseek-v2",
-      "name": "DeepSeek V2",
-      "name_patterns": [
-        "deepseek-v2"
-      ],
-      "arch_patterns": [
-        "deepseek2"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 128000,
-      "notes": "DeepSeek V2 uses ChatML format"
-    },
-    {
-      "id": "deepseek-v3",
-      "name": "DeepSeek V3",
-      "name_patterns": [
-        "deepseek-v3"
-      ],
-      "arch_patterns": [
-        "deepseek2"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 128000,
-      "notes": "DeepSeek V3 uses ChatML format"
-    },
-    {
-      "id": "deepseek-coder",
-      "name": "DeepSeek Coder",
-      "name_patterns": [
-        "deepseek-coder"
-      ],
-      "arch_patterns": [
-        "deepseek"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.3,
-        "top_p": 0.95,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 16384,
-      "notes": "DeepSeek Coder uses lower temperature for code generation"
+      "notes": "Qwen 2.5 uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "gemma1",
@@ -341,170 +497,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 8192,
-      "notes": "Gemma uses <start_of_turn>user format"
-    },
-    {
-      "id": "gemma2",
-      "name": "Google Gemma 2",
-      "name_patterns": [
-        "gemma-2",
-        "gemma2"
-      ],
-      "arch_patterns": [
-        "gemma2"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 64,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 8192
-      },
-      "supports_system_prompt": true,
-      "context_length": 8192,
-      "notes": "Gemma 2 uses <start_of_turn>user format"
-    },
-    {
-      "id": "gemma3",
-      "name": "Google Gemma 3",
-      "name_patterns": [
-        "gemma-3",
-        "gemma3"
-      ],
-      "arch_patterns": [
-        "gemma3",
-        "gemma2"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 1.0,
-        "top_p": 0.95,
-        "top_k": 64,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 8192
-      },
-      "supports_system_prompt": true,
-      "context_length": 128000,
-      "notes": "Gemma 3 supports higher temperature, long context"
-    },
-    {
-      "id": "phi2",
-      "name": "Microsoft Phi-2",
-      "name_patterns": [
-        "phi-2",
-        "phi2"
-      ],
-      "arch_patterns": [
-        "phi2"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.1,
-        "max_tokens": 2048
-      },
-      "supports_system_prompt": false,
-      "context_length": 2048,
-      "notes": "Phi-2 is a small model, use conservative settings"
-    },
-    {
-      "id": "phi3",
-      "name": "Microsoft Phi-3",
-      "name_patterns": [
-        "phi-3",
-        "phi3"
-      ],
-      "arch_patterns": [
-        "phi3"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 128000,
-      "notes": "Phi-3 uses <|user|> format, supports long context"
-    },
-    {
-      "id": "phi4",
-      "name": "Microsoft Phi-4",
-      "name_patterns": [
-        "phi-4",
-        "phi4"
-      ],
-      "arch_patterns": [
-        "phi4"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 16384,
-      "notes": "Phi-4 uses <|user|> format"
-    },
-    {
-      "id": "command-r",
-      "name": "Cohere Command R",
-      "name_patterns": [
-        "command-r",
-        "cohere"
-      ],
-      "arch_patterns": [
-        "command-r"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 128000,
-      "notes": "Command R uses <|START_OF_TURN_TOKEN|> format"
-    },
-    {
-      "id": "yi",
-      "name": "01.AI Yi",
-      "name_patterns": [
-        "yi-",
-        "yi_",
-        "01-ai"
-      ],
-      "arch_patterns": [
-        "yi"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 200000,
-      "notes": "Yi uses ChatML format, supports very long context"
+      "notes": "Gemma uses <start_of_turn>user format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "codellama",
@@ -527,72 +521,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 16384,
-      "notes": "CodeLlama uses very low temperature for code"
-    },
-    {
-      "id": "nous-hermes",
-      "name": "Nous Hermes",
-      "name_patterns": [
-        "nous-hermes",
-        "hermes"
-      ],
-      "arch_patterns": [],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 8192,
-      "notes": "Nous Hermes uses ChatML format"
-    },
-    {
-      "id": "openchat",
-      "name": "OpenChat",
-      "name_patterns": [
-        "openchat",
-        "open-chat"
-      ],
-      "arch_patterns": [],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 8192,
-      "notes": "OpenChat uses ChatML format"
-    },
-    {
-      "id": "stablelm",
-      "name": "Stability AI StableLM",
-      "name_patterns": [
-        "stablelm",
-        "stable-lm"
-      ],
-      "arch_patterns": [
-        "stablelm"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": false,
-      "context_length": 8192,
-      "notes": "StableLM uses custom format"
+      "notes": "CodeLlama uses very low temperature for code",
+      "system_prompt": "You are a helpful code assistant. You read files, understand code, and help users.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "solar",
@@ -615,61 +545,44 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "Solar is a Llama fine-tune"
+      "notes": "Solar is a Llama fine-tune",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
-      "id": "internlm",
-      "name": "InternLM",
+      "id": "liquid-lfm",
+      "name": "LiquidAI LFM",
       "name_patterns": [
-        "internlm",
-        "intern-lm"
+        "lfm",
+        "lfm2",
+        "lfm-2",
+        "liquid"
       ],
       "arch_patterns": [
-        "internlm"
+        "lfm2"
       ],
       "version_patterns": [],
       "params": {
-        "temperature": 0.7,
+        "temperature": 0.2,
         "top_p": 0.9,
-        "top_k": 40,
+        "top_k": 80,
         "min_p": 0.0,
         "repeat_penalty": 1.05,
         "max_tokens": 4096
       },
       "supports_system_prompt": true,
-      "context_length": 2048,
-      "notes": "InternLM uses ChatML format"
+      "context_length": 32768,
+      "notes": "LiquidAI LFM2 needs very low temperature to avoid degeneration",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
-      "id": "baichuan",
-      "name": "Baichuan",
+      "id": "phi2",
+      "name": "Microsoft Phi-2",
       "name_patterns": [
-        "baichuan"
+        "phi-2",
+        "phi2"
       ],
       "arch_patterns": [
-        "baichuan"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": false,
-      "context_length": 4096,
-      "notes": "Baichuan uses custom format"
-    },
-    {
-      "id": "falcon",
-      "name": "Technology Innovation Institute Falcon",
-      "name_patterns": [
-        "falcon"
-      ],
-      "arch_patterns": [
-        "falcon"
+        "phi2"
       ],
       "version_patterns": [],
       "params": {
@@ -682,7 +595,56 @@
       },
       "supports_system_prompt": false,
       "context_length": 2048,
-      "notes": "Falcon uses User:/Assistant: format"
+      "notes": "Phi-2 is a small model, use conservative settings",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
+    },
+    {
+      "id": "phi3",
+      "name": "Microsoft Phi-3",
+      "name_patterns": [
+        "phi-3",
+        "phi3"
+      ],
+      "arch_patterns": [
+        "phi3"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 128000,
+      "notes": "Phi-3 uses <|user|> format, supports long context",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "phi4",
+      "name": "Microsoft Phi-4",
+      "name_patterns": [
+        "phi-4",
+        "phi4"
+      ],
+      "arch_patterns": [
+        "phi4"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 16384,
+      "notes": "Phi-4 uses <|user|> format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "mpt",
@@ -706,7 +668,123 @@
       },
       "supports_system_prompt": true,
       "context_length": 8192,
-      "notes": "MPT uses <|im_start|> format"
+      "notes": "MPT uses <|im_start|> format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "yi",
+      "name": "01.AI Yi",
+      "name_patterns": [
+        "yi-",
+        "yi_",
+        "01-ai"
+      ],
+      "arch_patterns": [
+        "yi"
+      ],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 200000,
+      "notes": "Yi uses ChatML format, supports very long context",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral",
+      "name_patterns": [
+        "mistral",
+        "mistral-7b",
+        "mistral-small",
+        "mistral-large"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.1,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": false,
+      "context_length": 32768,
+      "notes": "Mistral uses strict [INST] alternation, no system message support",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
+    },
+    {
+      "id": "deepseek-r1",
+      "name": "DeepSeek R1",
+      "name_patterns": [
+        "deepseek-r1",
+        "r1-distill"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.0,
+        "max_tokens": 8192
+      },
+      "supports_system_prompt": true,
+      "context_length": 32768,
+      "notes": "DeepSeek R1 uses thinking mode, higher max_tokens for reasoning",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "nous-hermes",
+      "name": "Nous Hermes",
+      "name_patterns": [
+        "nous-hermes",
+        "hermes"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "Nous Hermes uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
+    },
+    {
+      "id": "openchat",
+      "name": "OpenChat",
+      "name_patterns": [
+        "openchat",
+        "open-chat"
+      ],
+      "arch_patterns": [],
+      "version_patterns": [],
+      "params": {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "min_p": 0.0,
+        "repeat_penalty": 1.05,
+        "max_tokens": 4096
+      },
+      "supports_system_prompt": true,
+      "context_length": 8192,
+      "notes": "OpenChat uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "orca",
@@ -727,7 +805,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "Orca is a Llama fine-tune"
+      "notes": "Orca is a Llama fine-tune",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "neural-chat",
@@ -748,7 +827,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "Neural Chat is an Intel Mistral fine-tune"
+      "notes": "Neural Chat is an Intel Mistral fine-tune",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "vicuna",
@@ -768,7 +848,8 @@
       },
       "supports_system_prompt": false,
       "context_length": 4096,
-      "notes": "Vicuna uses USER:/ASSISTANT: format"
+      "notes": "Vicuna uses USER:/ASSISTANT: format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nIMPORTANT: Reply with ONLY a JSON object (no markdown, no fences):\n{\"reasoning\": \"...\", \"estimated_steps\": N, \"tool_calls\": [...], \"answer\": \"...\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Use read_file, list_directory, search_files, glob to explore files\n- After gathering info, always provide an answer field\n- Be concise and helpful"
     },
     {
       "id": "wizard",
@@ -790,7 +871,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "WizardLM uses ChatML format"
+      "notes": "WizardLM uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "zephyr",
@@ -810,7 +892,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 8192,
-      "notes": "Zephyr uses ChatML format"
+      "notes": "Zephyr uses ChatML format",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "dolphin",
@@ -830,7 +913,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "Dolphin is uncensored, based on various architectures"
+      "notes": "Dolphin is uncensored, based on various architectures",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "codestral",
@@ -850,30 +934,8 @@
       },
       "supports_system_prompt": false,
       "context_length": 32768,
-      "notes": "Codestral is a code model, very low temperature"
-    },
-    {
-      "id": "gpt-oss",
-      "name": "OpenAI GPT-OSS",
-      "name_patterns": [
-        "gpt-oss",
-        "gptoss"
-      ],
-      "arch_patterns": [
-        "gpt_oss"
-      ],
-      "version_patterns": [],
-      "params": {
-        "temperature": 1.0,
-        "top_p": 1.0,
-        "top_k": 40,
-        "min_p": 0.0,
-        "repeat_penalty": 1.05,
-        "max_tokens": 4096
-      },
-      "supports_system_prompt": true,
-      "context_length": 128000,
-      "notes": "GPT-OSS uses ChatML format with harmony channels"
+      "notes": "Codestral is a code model, very low temperature",
+      "system_prompt": "You are a helpful code assistant. You read files, understand code, and help users.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     },
     {
       "id": "generic",
@@ -891,7 +953,8 @@
       },
       "supports_system_prompt": true,
       "context_length": 4096,
-      "notes": "Fallback for unknown models"
+      "notes": "Fallback for unknown models",
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nYou are a helpful AI assistant with access to files in the user workspace.\n\nOUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:\n{\n  \"reasoning\": \"What you are doing and why\",\n  \"estimated_steps\": 3,\n  \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}],\n  \"answer\": \"Your final answer to the user\"\n}\n\nRules:\n- tool_calls and answer are mutually exclusive in a single response\n- Never repeat a tool call whose result is already in the conversation\n- Use read_file to open files, list_directory to see folders, search_files to find text\n- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)\n- Be helpful, clear, and concise\n- After gathering evidence, always provide an answer field with a natural language response"
     }
   ]
 }

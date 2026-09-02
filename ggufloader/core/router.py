@@ -293,7 +293,7 @@ class ModelRouter:
             family_params={
                 k: v for k, v in family_profile.items()
                 if k in ("temperature", "top_k", "top_p", "repeat_penalty",
-                         "min_p", "max_tokens")
+                         "min_p", "max_tokens", "system_prompt")
             },
         )
 
@@ -447,7 +447,7 @@ class ModelRouter:
             min_p=base.get("min_p", role_config.min_p),
             repeat_penalty=base.get("repeat_penalty", role_config.repeat_penalty),
             max_tokens=base.get("max_tokens", role_config.max_tokens),
-            system_prompt=role_config.system_prompt,
+            system_prompt=base.get("system_prompt") or role_config.system_prompt,
             notes=role_config.notes,
         )
 

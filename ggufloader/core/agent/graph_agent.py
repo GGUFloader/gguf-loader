@@ -37,7 +37,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, StreamWriter, interrupt
 from typing import TypedDict
 
-from .agent_engine import _SYSTEM_PROMPT, extract_json, stale_repeat_signatures, summarize_directive
+from .agent_engine import extract_json, stale_repeat_signatures, summarize_directive
 from .context_budget import ContextBudget, estimate_tokens
 from .prompt_builder import PromptBuilder
 from .token_cleaner import TokenCleaner, get_cleaner
