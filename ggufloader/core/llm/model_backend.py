@@ -79,13 +79,21 @@ class ModelBackend:
         self,
         model_path: str,
         use_gpu: bool = False,
-        n_ctx: int = 16384,
+        n_ctx: int = 8192,
         n_gpu_layers: int = -1,
+        n_batch: int = 512,
+        n_threads: Optional[int] = None,
+        n_keep: int = 512,
+        flash_attn: bool = True,
     ) -> None:
         self.model_path = model_path
         self.use_gpu = use_gpu
         self.n_gpu_layers_requested = n_gpu_layers
         self._n_ctx = n_ctx
+        self._n_batch = n_batch
+        self._n_threads = n_threads
+        self._n_keep = n_keep
+        self._flash_attn = flash_attn
         self._llama: Any = None
         self._lock = threading.Lock()
         # A3: KV prefix cache — stores last prompt tokens + state snapshot
@@ -115,7 +123,10 @@ class ModelBackend:
             model_path=self.model_path,
             n_ctx=self._n_ctx,
             n_gpu_layers=gpu_layers,
-            flash_attn=True,
+            n_batch=self._n_batch,
+            n_threads=self._n_threads or 8,
+            n_keep=self._n_keep,
+            flash_attn=self._flash_attn,
             n_gpu_layers_k=gpu_layers,
             n_gpu_layers_v=gpu_layers,
             verbose=True,
