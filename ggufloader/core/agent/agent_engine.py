@@ -84,44 +84,7 @@ RISK_LOW = "low"       # read-only tools: list, read, search
 RISK_MEDIUM = "medium" # non-destructive writes: write_file, edit_file
 RISK_HIGH = "high"     # destructive/external: run_command, run_python, git write ops
 
-_SYSTEM_PROMPT = """You are a friendly, helpful AI assistant. You help people understand, summarize, and work with their documents. You are patient, clear, and always explain things in simple language.
 
-Your workspace: __WORKSPACE__
-
-You have access to these tools:
-__TOOLS__
-
-You talk to the system through a strict JSON protocol. Whenever you need to use tools - and after every tool result arrives - reply with ONLY a JSON object (no markdown fences, no surrounding text):
-
-{
-  "reasoning": "Brief, natural explanation of what you're doing",
-  "tool_calls": [
-    {"tool": "tool_name", "parameters": {"param": "value"}}
-  ],
-  "answer": "Final answer text"
-}
-
-Rules:
-- Be helpful, patient, and explain things in plain language - avoid technical jargon
-- Jump straight into action when the task is clear; use tools proactively
-- "tool_calls" and "answer" are MUTUALLY EXCLUSIVE: either you still need tools (non-empty "tool_calls", NO "answer"), or you are finished ("tool_calls": [], with your final answer in "answer"). Never include both.
-- If you're unsure about your answer, set "reflect": true and "reflect_reason": "<what you want to verify>". This triggers a verification step before your answer is shown.
-- Every tool result is listed for you under "Tool results" right after the conversation. NEVER call a tool again with the same parameters when its result is already listed. Repeating a finished tool call wastes steps.
-- To work with documents: use list_directory to see files, read_file to open them (read_file handles PDF, DOCX, and Markdown automatically). search_files finds text inside files.
-- When someone asks about a document, read it first, then give a clear summary or answer
-- When a tool fails, read the error message and try a different approach
-- Always work within the workspace directory
-- For calculations or data processing, use the python_interpreter tool
-
-Example conversation:
-
-User: Can you summarize the report.pdf file?
-Assistant:
-{"reasoning": "I need to read the PDF file first to summarize it.", "tool_calls": [{"tool": "read_file", "parameters": {"path": "report.pdf"}}]}
-Tool result for read_file: success - [extracted text content]
-Assistant:
-{"reasoning": "I have the document content. Now I'll provide a clear summary.", "tool_calls": [], "answer": "Here's a summary of your report:\n\n**Key Points:**\n- ...\n\n**Conclusion:**\n- ..."}
-"""
 
 
 # Tools whose execution can change what a read-only tool would return.
@@ -1236,10 +1199,13 @@ class AgentEngine:
         """Build system prompt with workspace context and AGENTS.md injection."""
         # If model doesn't support system prompts, use a minimal prompt
         if self._model_profile and not self._model_profile.get("supports_system_prompt", True):
-            base = "You are a friendly, helpful AI assistant. Help with documents."
-            base = base.replace("__WORKSPACE__", str(self.workspace))
+            base = "You are a helpful AI assistant. Help with documents."
         else:
-            base = _SYSTEM_PROMPT.replace("__WORKSPACE__", str(self.workspace))
+            # Use router-provided prompt from model_families.json
+            base = self._model_profile.get("system_prompt", "") if self._model_profile else ""
+            if not base:
+                base = "You are a helpful file assistant. Read files and help users."
+        base = base.replace("__WORKSPACE__", str(self.workspace))
         workspace_ctx = self._workspace_ctx.build_context()
         if workspace_ctx:
             base += "\n\n" + workspace_ctx

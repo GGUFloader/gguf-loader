@@ -25,19 +25,6 @@ CHAT_TOP_P = 0.9
 CHAT_MIN_P = 0.0
 CHAT_REPEAT_PENALTY = 1.05
 
-# English System Prompts
-ENGLISH_SYSTEM_PROMPTS = {
-    "helpful_assistant": {
-        "name": "Helpful Assistant",
-        "prompt": "You are a helpful AI assistant. Provide accurate, clear responses and think step by step.",
-        "params": {"temperature": 0.7, "top_p": 0.9, "max_tokens": 20480}
-    },
-    "creative_writer": {
-        "name": "Creative Writer",
-        "prompt": "You are a creative writing assistant. Help with storytelling and creative content.",
-        "params": {"temperature": 0.8, "top_p": 0.95, "max_tokens": 30720}
-    }
-}
 
 # Style Constants
 FONT_FAMILY = "Vazirmatn, Segoe UI, Arial"

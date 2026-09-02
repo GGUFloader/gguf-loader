@@ -22,32 +22,9 @@ from .tool_registry import ToolRegistry, tool_content_for_context
 from .workspace_context import PromptPrefixCache
 
 
-# System prompt now comes exclusively from the model router via
+# System prompt comes exclusively from the model router via
 # model_families.json.  The router injects the correct prompt per
-# model family.  This fallback is only used if somehow no prompt
-# was provided (should never happen in normal flow).
-_DEFAULT_SYSTEM_PROMPT = """You are a helpful file assistant. You read files and help users understand their content.
-
-Your workspace: __WORKSPACE__
-
-You have access to these tools:
-__TOOLS__
-
-OUTPUT FORMAT - respond with ONLY a JSON object, no markdown fences:
-{
-  "reasoning": "What you are doing and why",
-  "estimated_steps": 3,
-  "tool_calls": [{"tool": "tool_name", "parameters": {}}],
-  "answer": "Your final answer to the user"
-}
-
-Rules:
-- tool_calls and answer are mutually exclusive in a single response
-- Never repeat a tool call whose result is already in the conversation
-- Use read_file to open files, list_directory to see folders, search_files to find text
-- On FIRST response set estimated_steps to expected tool calls (e.g. 2-5)
-- Be helpful, clear, and concise
-- After gathering evidence, always provide an answer field with a natural language response"""
+# model family.  No hardcoded fallback — the router must always provide one.
 
 
 class PromptBuilder:
@@ -80,14 +57,19 @@ class PromptBuilder:
     def system_prompt(self) -> str:
         """Build the system prompt with workspace and tool descriptions.
 
-        Uses the router-provided prompt (from model_families.json) when
-        available; falls back to _DEFAULT_SYSTEM_PROMPT only when no
-        router prompt was supplied.
+        Uses the router-provided prompt (from model_families.json). Logs a
+        warning when no router prompt was supplied — the router should
+        always provide one in production.
         """
-        if self._system_prompt_override:
-            base = self._system_prompt_override
-        else:
-            base = _DEFAULT_SYSTEM_PROMPT
+        if not self._system_prompt_override:
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "No system prompt provided by the router. "
+                "Falling back to minimal prompt — add system_prompt to model_families.json."
+            )
+        base = self._system_prompt_override or (
+            "You are a helpful file assistant. Read files and help users."
+        )
         base = base.replace("__WORKSPACE__", str(self.workspace))
         base = base.replace("__TOOLS__", self.tools.describe())
         return base

@@ -215,7 +215,8 @@ def test_graph_agent_system_prompt_has_workspace(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path,
+                       system_prompt="You are a file assistant. Workspace: __WORKSPACE__")
     prompt = agent._system_prompt()
     assert str(tmp_path) in prompt
     agent.close()
