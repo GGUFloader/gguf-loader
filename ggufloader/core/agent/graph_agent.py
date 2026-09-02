@@ -350,6 +350,12 @@ class GraphAgent:
         ]
         if not calls:
             answer = self._clean((action.get("answer") or "").strip())
+            # No answer key AND no tool calls AND we have evidence: the model
+            # rambled in reasoning instead of using the answer field. Ask it
+            # once to produce a clean natural-language answer based on the
+            # evidence (or its own knowledge when no relevant file exists).
+            if not answer and tool_results and not self._answer_field_present(action):
+                answer = self._reask_for_answer(messages, tool_results, writer)
             logger.info(
                 "Agent step %d: model proposed 0 tool calls; answer_len=%d tool_results=%d",
                 step + 1, len(answer), len(tool_results),
@@ -440,6 +446,48 @@ class GraphAgent:
             def __call__(self, data):
                 pass
         return self._call_llm(prompt, _NoopWriter(), stream_tokens=False)
+
+    def _answer_field_present(self, action: Dict[str, Any]) -> bool:
+        """True when the action JSON contains a non-empty 'answer' key."""
+        return isinstance(action, dict) and bool((action.get("answer") or "").strip())
+
+    def _reask_for_answer(self, messages, tool_results, writer) -> str:
+        """Re-prompt the LLM to produce a clean natural-language answer.
+
+        Used when the action step returned only reasoning without an
+        ``answer`` field. Asks the model to reply either from file
+        evidence (when relevant) or from its own internal knowledge.
+        """
+        import json as _json
+        user_q = messages[-1]['content'] if messages else ''
+        evidence_lines = []
+        for r in tool_results:
+            if r.get("status") != "success":
+                continue
+            content = tool_content_for_context(r, max_chars=600)
+            if content:
+                evidence_lines.append(f"- {r.get('tool_name')}: {content}")
+        evidence = "\n".join(evidence_lines) if evidence_lines else "(no usable file content)"
+
+        prompt = (
+            f"User asked: {user_q}\n\n"
+            f"Workspace evidence so far:\n{evidence}\n\n"
+            "Respond to the user in plain natural language. If relevant files were found, "
+            "use them. Otherwise answer from your own knowledge. "
+            "Do NOT call any tools. Do NOT return JSON. Just write the answer text.\n\n"
+            "Answer:"
+        )
+        try:
+            response = self._call_llm(prompt, writer, stream_tokens=True)
+        except Exception as e:  # noqa: BLE001 - best-effort re-ask
+            logger.warning("_reask_for_answer LLM call failed: %s", e)
+            return ""
+        cleaned = self._clean(response or "")
+        logger.info(
+            "_reask_for_answer: LLM returned len=%d cleaned_len=%d raw_preview=%r",
+            len(response or ""), len(cleaned), (response or "")[:300],
+        )
+        return cleaned
 
     def _final_response(self, messages, tool_results, writer) -> str:
         """Synthesize a natural-language wrap-up from tool results."""
