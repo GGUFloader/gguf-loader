@@ -266,6 +266,21 @@ class GraphAgent:
         except (ValueError, TypeError):
             pass
 
+        # Cap plan length — LLMs often create too many steps despite instructions
+        MAX_PLAN_STEPS = 6
+        if len(plan) > MAX_PLAN_STEPS:
+            # Keep first N-1 tool steps + last answer step
+            tool_steps = [s for s in plan if s.get("tool") is not None]
+            answer_step = [s for s in plan if s.get("tool") is None]
+            kept = tool_steps[:MAX_PLAN_STEPS - 1]
+            if answer_step:
+                kept.append(answer_step[-1])
+            # Renumber steps
+            for i, item in enumerate(kept, 1):
+                item["step"] = i
+            plan = kept
+            _status(f"[plan] Trimmed to {len(plan)} steps (was {len(plan) + (MAX_PLAN_STEPS - len(plan))})")
+
         if plan:
             goal = parsed.get("goal", user_message[:100]) if isinstance(parsed, dict) else user_message[:100]
             _status(f"Goal: {goal}")
