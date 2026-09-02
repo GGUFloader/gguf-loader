@@ -302,19 +302,16 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         pm = PresetManager()
         preset_obj = pm.get(preset_id) or pm.get("full_stack")
 
-        # --- 2. Get router-optimized agent params (single call) ---
-        agent_temperature = preset_obj.temperature
-        agent_max_tokens = preset_obj.max_tokens
-        agent_top_k = 40
-        agent_top_p = 0.9
-        agent_repeat_penalty = 1.05
-        
-        # Build preset system prompt addition
-        preset_prompt_addition = preset_obj.system_prompt_addition or ""
-        preset_allowed = preset_obj.allowed_tools if preset_obj.allowed_tools else None
-        preset_blocked = preset_obj.blocked_tools if preset_obj.blocked_tools else None
+        # --- 2. Router is the SINGLE source for model settings ---
+        # Router provides: system_prompt, temperature, top_k, top_p, repeat_penalty, max_tokens
+        # Preset provides: mode instructions, tool restrictions, step limits
         router_info = {}
         router_system_prompt = None
+        agent_temperature = 0.1  # safe default
+        agent_max_tokens = 4096
+        agent_top_k = 40
+        agent_top_p = 0.9
+        agent_repeat_penalty = 1.1
 
         if model_path:
             try:
@@ -334,7 +331,12 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                     "architecture": profile.architecture,
                 }
             except Exception as e:
-                logger.debug("Router inspection failed, using preset defaults: %s", e)
+                logger.debug("Router inspection failed, using safe defaults: %s", e)
+
+        # Preset adds MODE context on top of router settings
+        preset_prompt_addition = preset_obj.system_prompt_addition or ""
+        preset_allowed = preset_obj.allowed_tools if preset_obj.allowed_tools else None
+        preset_blocked = preset_obj.blocked_tools if preset_obj.blocked_tools else None
 
         def llm_call(prompt, max_tokens=None, temperature=None):
             """Synchronous LLM call for the graph agent."""
