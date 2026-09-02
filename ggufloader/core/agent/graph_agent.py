@@ -96,6 +96,7 @@ class GraphAgent:
         cleaner: Optional[TokenCleaner] = None,
         max_directive_rounds: int = 3,
         system_prompt: Optional[str] = None,
+        task_prompts: Optional[Dict[str, str]] = None,
         allowed_tools: Optional[List[str]] = None,
         blocked_tools: Optional[List[str]] = None,
         plan: bool = True,
@@ -145,6 +146,7 @@ class GraphAgent:
         self._prefix_cache = PromptPrefixCache()
         self._context_budget = ContextBudget(total_budget=n_ctx or max_tokens)
         self._plan_enabled = plan
+        self._task_prompts = task_prompts or {}
 
         # --- Lazy subsystems (only loaded when needed) ---
         self._lazy: Dict[str, Any] = {}
@@ -203,36 +205,22 @@ class GraphAgent:
             return []
 
         tools_list = self.tools.describe()
-        prompt = (
-            f"User request: {user_message}\n\n"
-            f"Available tools:\n{tools_list}\n\n"
-            "Create a concrete execution plan. Reply with ONLY a JSON object:\n"
-            '{\n'
-            '  "goal": "one-sentence goal",\n'
-            '  "steps": [\n'
-            '    {\n'
-            '      "step": 1,\n'
-            '      "description": "what this step does",\n'
-            '      "tool": "tool_name or null if just answering",\n'
-            '      "parameters": {"param": "value"},\n'
-            '      "depends_on": []\n'
-            '    }\n'
-            '  ]\n'
-            '}\n\n'
-            "Rules:\n"
-            "- Use EXACTLY the number of steps needed — no more, no less\n"
-            "- Simple questions: 1 step (tool=null, answer directly)\n"
-            "- Quick tasks (list files, read one file): 2 steps\n"
-            "- Medium tasks (search + read + answer): 3 steps\n"
-            "- Complex tasks (multiple files, analysis): 4-6 steps MAX\n"
-            "- NEVER exceed 6 steps — most tasks need only 2-4\n"
-            "- Each step should do ONE thing (one tool call or one answer)\n"
-            "- Use depends_on to link steps that need results from earlier steps\n"
-            "- Parameters can reference previous results: use \"STEP_N.result\" as a value\n"
-            "- In the description, mention which step results you need\n"
-            "- The last step should always be the answer (tool=null)\n\n"
-            "Plan:"
-        )
+        # Use task-specific plan prompt from router if available
+        if self._task_prompts.get("plan"):
+            prompt = self._task_prompts["plan"].replace("{tools}", tools_list).replace("{request}", user_message)
+        else:
+            prompt = (
+                f"User request: {user_message}\n\n"
+                f"Available tools: {tools_list}\n\n"
+                "Create a plan. Reply with ONLY a JSON object:\n"
+                '{"goal": "one sentence", "steps": [{"step": 1, "description": "what to do", "tool": "name or null", "parameters": {}, "depends_on": []}]}'
+                "Rules:\n"
+                "1. General knowledge questions: 1 step, tool=null, answer directly.\n"
+                "2. File tasks: 2-4 steps with tools.\n"
+                "3. Max 6 steps. Each step = one action.\n"
+                "4. Last step is always the answer (tool=null).\n\n"
+                "Plan:"
+            )
 
         _status = on_status or (lambda _msg: None)
         _status("Planning...")

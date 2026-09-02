@@ -326,6 +326,7 @@ def _load_family_profiles() -> List[Dict[str, Any]]:
                 "names": tuple(fam.get("name_patterns", [])),
                 "supports_system_prompt": fam.get("supports_system_prompt", True),
                 "system_prompt": fam.get("system_prompt", ""),
+                "task_prompts": fam.get("task_prompts", {}),
                 "temperature": params.get("temperature", 0.7),
                 "top_k": params.get("top_k", 40),
                 "top_p": params.get("top_p", 0.9),

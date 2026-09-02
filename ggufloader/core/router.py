@@ -175,6 +175,7 @@ class RoleConfig:
     repeat_penalty: float = 1.05
     max_tokens: int = 4096
     system_prompt: Optional[str] = None
+    task_prompts: Dict[str, str] = field(default_factory=dict)
     stop_tokens: List[str] = field(default_factory=list)
     notes: str = ""
 
@@ -293,7 +294,7 @@ class ModelRouter:
             family_params={
                 k: v for k, v in family_profile.items()
                 if k in ("temperature", "top_k", "top_p", "repeat_penalty",
-                         "min_p", "max_tokens", "system_prompt")
+                         "min_p", "max_tokens", "system_prompt", "task_prompts")
             },
         )
 
@@ -448,6 +449,7 @@ class ModelRouter:
             repeat_penalty=base.get("repeat_penalty", role_config.repeat_penalty),
             max_tokens=base.get("max_tokens", role_config.max_tokens),
             system_prompt=base.get("system_prompt") or role_config.system_prompt,
+            task_prompts=base.get("task_prompts", {}),
             notes=role_config.notes,
         )
 

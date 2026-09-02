@@ -307,6 +307,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         # Preset provides: mode instructions, tool restrictions, step limits
         router_info = {}
         router_system_prompt = None
+        router_task_prompts = {}
         agent_temperature = 0.1  # safe default
         agent_max_tokens = 4096
         agent_top_k = 40
@@ -325,6 +326,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 agent_top_p = role_config.top_p
                 agent_repeat_penalty = role_config.repeat_penalty
                 router_system_prompt = role_config.system_prompt
+                router_task_prompts = role_config.task_prompts
                 router_info = {
                     "family": profile.family,
                     "size_tier": profile.size_tier.value,
@@ -377,6 +379,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             json_retries=2,
             thread_id=unique_thread_id,
             system_prompt=full_system_prompt or None,
+            task_prompts=router_task_prompts or None,
             allowed_tools=preset_allowed,
             blocked_tools=preset_blocked,
         )
