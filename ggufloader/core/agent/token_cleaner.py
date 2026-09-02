@@ -29,18 +29,30 @@ class GemmaCleaner:
 
     Gemma emits patterns like:
         <|channel|>thought <|channel|>thought <|channel|>The answer is...
+        <|channel|>analysis<|message|>...<|channel|>final<|message|>answer<|end|>
     """
 
-    _CHANNEL_THINK = re.compile(
-        r"(<\|channel\|>\s*(?:thinking|thought|answer|reasoning)\s*)+",
+    # Strip "<|channel|>NAME<|message|>" (channel-name + message marker) so
+    # words like "analysis", "final", "thought", "reasoning" don't leak into
+    # the visible output, and "<|message|>" doesn't survive as "|message|>".
+    _CHANNEL_NAMED = re.compile(
+        r"<\|channel\|>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model)\b[^|<]*\|?",
         re.IGNORECASE,
     )
-    _CHANNEL_BARE = re.compile(r"(<\|channel\|>\s*)+")
+    _CHANNEL_BARE = re.compile(r"<\|channel\|>\s*")
+    _MESSAGE = re.compile(r"<\|message\|>\s*")
+    _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
+    _END_TURN = re.compile(r"<\|end\|>\s*")
+    _CONSTRAIN = re.compile(r"<\|constrain\|>\s*[^|]*?\|>", re.IGNORECASE)
     _NAMED_TOKEN = re.compile(r"<\|[a-z_]+\|>")
 
     def clean(self, text: str) -> str:
-        text = self._CHANNEL_THINK.sub("", text)
+        text = self._CHANNEL_NAMED.sub("", text)
+        text = self._START_TURN.sub("", text)
+        text = self._END_TURN.sub("", text)
+        text = self._MESSAGE.sub("", text)
         text = self._CHANNEL_BARE.sub("", text)
+        text = self._CONSTRAIN.sub("", text)
         text = self._NAMED_TOKEN.sub("", text)
         return _collapse_whitespace(text)
 
@@ -58,21 +70,25 @@ class QwenCleaner:
 
 
 class DeepSeekCleaner:
-    """Handles DeepSeek <\|begin_of_thought\|> blocks."""
+    """Handles DeepSeek <|begin_of_thought|> blocks."""
 
     _BLOCK = re.compile(
         r"<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>"
     )
-    _CHANNEL_THINK = re.compile(
-        r"(<\|channel\|>\s*(?:thinking|thought|answer|reasoning)\s*)+",
+    _CHANNEL_NAMED = re.compile(
+        r"<\|channel\|>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model)\b[^\n|]*",
         re.IGNORECASE,
     )
-    _CHANNEL_BARE = re.compile(r"(<\|channel\|>\s*)+")
+    _CHANNEL_BARE = re.compile(r"<\|channel\|>\s*")
+    _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
+    _END_TURN = re.compile(r"<\|end\|>\s*")
     _NAMED_TOKEN = re.compile(r"<\|[a-z_]+\|>")
 
     def clean(self, text: str) -> str:
         text = self._BLOCK.sub("", text)
-        text = self._CHANNEL_THINK.sub("", text)
+        text = self._CHANNEL_NAMED.sub("", text)
+        text = self._START_TURN.sub("", text)
+        text = self._END_TURN.sub("", text)
         text = self._CHANNEL_BARE.sub("", text)
         text = self._NAMED_TOKEN.sub("", text)
         return _collapse_whitespace(text)
@@ -89,18 +105,22 @@ class GenericCleaner:
     _BLOCK = re.compile(
         r"<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>"
     )
-    _CHANNEL_THINK = re.compile(
-        r"(<\|channel\|>\s*(?:thinking|thought|answer|reasoning)\s*)+",
+    _CHANNEL_NAMED = re.compile(
+        r"<\|channel\|>\s*(?:thinking|thought|answer|reasoning|analysis|final|user|assistant|model)\b[^\n|]*",
         re.IGNORECASE,
     )
-    _CHANNEL_BARE = re.compile(r"(<\|channel\|>\s*)+")
+    _CHANNEL_BARE = re.compile(r"<\|channel\|>\s*")
+    _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
+    _END_TURN = re.compile(r"<\|end\|>\s*")
     _NAMED_TOKEN = re.compile(r"<\|[a-z_]+\|>")
 
     def clean(self, text: str) -> str:
         text = self._THINK_FULL.sub("", text)
         text = self._THINK_PARTIAL.sub("", text)
         text = self._BLOCK.sub("", text)
-        text = self._CHANNEL_THINK.sub("", text)
+        text = self._CHANNEL_NAMED.sub("", text)
+        text = self._START_TURN.sub("", text)
+        text = self._END_TURN.sub("", text)
         text = self._CHANNEL_BARE.sub("", text)
         text = self._NAMED_TOKEN.sub("", text)
         return _collapse_whitespace(text)
