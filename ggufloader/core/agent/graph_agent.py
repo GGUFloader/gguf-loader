@@ -76,6 +76,7 @@ class GraphState(TypedDict, total=False):
     final_answer: str                    # set when the run is done
     raw_response: str                    # last raw LLM output (fallback answer)
     plan: List[Dict[str, Any]]           # step plan from _create_plan
+    plan_index: int                      # current position in plan (0-based)
 
 
 class GraphAgent:
@@ -424,41 +425,7 @@ class GraphAgent:
         if plan and on_plan:
             on_plan("plan", plan)
 
-        # --- Plan-based execution ---
-        # If a plan was created, execute it step-by-step with result flow.
-        if plan:
-            tool_results = self._execute_plan(plan, user_message, on_status, on_tool, on_plan)
-
-            # Find the final answer from the plan (last step with tool=null)
-            final_answer = ""
-            for item in reversed(plan):
-                if item.get("tool") is None and item.get("result"):
-                    final_answer = self._clean(item["result"])
-                    break
-
-            if not final_answer:
-                # Plan didn't produce an answer — synthesize from tool results
-                final_answer = self._final_response(
-                    [{"role": "user", "content": user_message}], tool_results, _NoopWriter()
-                )
-
-            if final_answer and on_plan:
-                on_plan("finish", plan)
-
-            self.messages = base_messages + [
-                {"role": "user", "content": user_message},
-                {"role": "assistant", "content": final_answer},
-            ]
-
-            return {
-                "response": final_answer or self._diagnostic(
-                    "plan execution completed", len(plan), len(plan), tool_results
-                ),
-                "tool_results": tool_results,
-                "plan": plan,
-            }
-
-        # --- Fallback: no plan — use graph loop (for tests or plan failures) ---
+        # --- Execute through the graph (plan or fallback) ---
         inputs: GraphState = {
             "messages": base_messages + [{"role": "user", "content": user_message}],
             "tool_results": [],
@@ -470,6 +437,8 @@ class GraphAgent:
             "pending_calls": [],
             "final_answer": "",
             "raw_response": "",
+            "plan": plan,
+            "plan_index": 0,
         }
 
         config = {"configurable": {"thread_id": self.thread_id}}
@@ -544,15 +513,132 @@ class GraphAgent:
             pass
 
     # ------------------------------------------------------------------
+    # Plan-following logic (executes plan steps through the graph)
+    # ------------------------------------------------------------------
+    def _follow_plan_step(self, plan, plan_index, step, max_steps,
+                          messages, tool_results, writer) -> Dict[str, Any]:
+        """Execute the next step from the plan through the graph.
+
+        Tool steps → set pending_calls, let _tools_node execute via ToolOrchestrator.
+        Answer steps → generate final answer and finish.
+        """
+        import json as _json
+        item = plan[plan_index]
+        step_num = item["step"]
+        tool = item.get("tool")
+        params = dict(item.get("parameters", {}))
+        depends_on = item.get("depends_on", [])
+
+        writer({"event": "step", "step": step_num, "max": len(plan)})
+        writer({"event": "status", "text": f"Step {step_num}/{len(plan)}: {item['description']}"})
+
+        # Mark as running
+        item["status"] = "running"
+        if self._on_status:
+            self._on_status(f"Step {step_num}/{len(plan)}: {item['description']}")
+
+        # --- Answer step (tool=null) ---
+        if tool is None:
+            # Collect evidence from dependency steps
+            evidence = []
+            for dep in depends_on:
+                dep_item = next((p for p in plan if p["step"] == dep), None)
+                if dep_item and dep_item.get("result"):
+                    evidence.append(f"Step {dep}: {dep_item['result'][:500]}")
+            evidence_str = "\n".join(evidence) if evidence else "(no prior results)"
+
+            # Ask LLM to synthesize the answer from evidence
+            answer_prompt = (
+                f"User asked: {messages[-1]['content'] if messages else ''}\n\n"
+                f"Evidence from previous steps:\n{evidence_str}\n\n"
+                "Write a clear, natural-language answer. Do NOT call tools. "
+                "Do NOT return JSON. Just write the answer text.\n\nAnswer:"
+            )
+            writer({"event": "status", "text": "[plan] Synthesizing answer..."})
+            answer = self._call_llm(answer_prompt, writer, stream_tokens=True)
+            answer = self._clean(answer)
+
+            if not answer.strip():
+                answer = self._diagnostic("plan answer step produced empty result", step_num, len(plan), tool_results)
+
+            item["status"] = "done"
+            item["result"] = answer
+
+            return {
+                "pending_calls": [],
+                "final_answer": answer,
+                "messages": messages + [{"role": "assistant", "content": answer}],
+                "step": step + 1,
+                "plan_index": plan_index + 1,
+            }
+
+        # --- Tool step ---
+        # Resolve STEP_N.result references in parameters
+        params = self._resolve_plan_refs(params, plan)
+
+        writer({"event": "status", "text": f"[plan] → {tool}({params})"})
+
+        # Return as pending_calls → _tools_node will execute via ToolOrchestrator
+        # (retries, approvals, stuck detection all apply)
+        return {
+            "pending_calls": [{"tool": tool, "parameters": params}],
+            "final_answer": "",
+            "step": step + 1,
+            "plan_index": plan_index + 1,
+            "raw_response": _json.dumps({"tool": tool, "parameters": params}),
+        }
+
+    def _resolve_plan_refs(self, params: Dict[str, Any],
+                           plan: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Resolve STEP_N.result references using plan step results."""
+        import re as _re
+        resolved = {}
+        for key, value in params.items():
+            if isinstance(value, str) and "STEP_" in value:
+                def _replace_ref(m):
+                    step_num = int(m.group(1))
+                    dep_item = next((p for p in plan if p["step"] == step_num), None)
+                    if dep_item and dep_item.get("result"):
+                        return dep_item["result"][:2000]
+                    return m.group(0)
+                value = _re.sub(r"STEP_(\d+)\.result", _replace_ref, value)
+            resolved[key] = value
+        return resolved
+
+    def _store_plan_result(self, plan: List[Dict[str, Any]],
+                           plan_index: int, tool_results: List[Dict[str, Any]]) -> None:
+        """Store the latest tool result back into the plan step."""
+        if plan_index < len(plan) and tool_results:
+            last_result = tool_results[-1]
+            content = last_result.get("content", last_result.get("error", ""))
+            plan[plan_index]["result"] = content[:2000]
+            plan[plan_index]["status"] = "done" if last_result.get("status") == "success" else "failed"
+
+    # ------------------------------------------------------------------
     # Graph nodes
     # ------------------------------------------------------------------
     def _agent_node(self, state: GraphState, writer: StreamWriter) -> Dict[str, Any]:
-        """Ask the model for the next JSON action (or finish the run)."""
+        """Ask the model for the next JSON action (or finish the run).
+
+        When a plan exists, follows the plan step-by-step instead of
+        asking the LLM each time. Each plan step goes through the normal
+        tools node (ToolOrchestrator) for retries, approvals, etc.
+        """
         self._check_cancel()
         step = state.get("step", 0)
         max_steps = state.get("max_steps", self.max_steps)
         messages = state.get("messages", [])
-        tool_results = state.get("tool_results", [])
+        tool_results = list(state.get("tool_results", []))
+        plan = state.get("plan", [])
+        plan_index = state.get("plan_index", 0)
+
+        # --- Plan-following mode ---
+        if plan and plan_index < len(plan):
+            return self._follow_plan_step(
+                plan, plan_index, step, max_steps, messages, tool_results, writer
+            )
+
+        # --- No plan or plan finished: fallback to LLM-based flow ---
 
         # Budget exhausted
         if step >= max_steps:
@@ -718,6 +804,12 @@ class GraphAgent:
             approval_fn=self._on_approval,
             llm_call=self._call_llm_for_fix,
         )
+
+        # Store results back into plan step if following a plan
+        plan = state.get("plan", [])
+        plan_index = state.get("plan_index", 0)
+        if plan and plan_index > 0 and tool_results:
+            self._store_plan_result(plan, plan_index - 1, tool_results)
 
         return {"tool_results": tool_results, "executed_calls": executed_calls, "pending_calls": []}
 
