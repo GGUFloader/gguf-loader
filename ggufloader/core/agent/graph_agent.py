@@ -300,6 +300,11 @@ class GraphAgent:
             messages, tool_results, writer, directive=state.get("directive", "")
         )
         if action is None:
+            logger.warning(
+                "Agent step %d: LLM failed to produce valid JSON after %d retries. "
+                "Raw response (first 500 chars): %r",
+                step + 1, self.json_retries, (raw or "")[:500],
+            )
             answer = self._clean(raw or "I couldn't produce a valid response.")
             return {
                 "pending_calls": [],
@@ -308,6 +313,23 @@ class GraphAgent:
                 "raw_response": raw,
                 "step": step + 1,
             }
+
+        # Log the parsed action structure so we can diagnose missing-answer bugs.
+        logger.info(
+            "Agent step %d action: reasoning=%r tool_calls=%d answer=%r estimated_steps=%r",
+            step + 1,
+            (action.get("reasoning") or "")[:200],
+            len(action.get("tool_calls") or []),
+            (action.get("answer") or "")[:200],
+            action.get("estimated_steps"),
+        )
+        if not action.get("answer") and not action.get("tool_calls"):
+            logger.warning(
+                "Agent step %d: model produced NO answer and NO tool_calls. "
+                "This usually means the LLM returned only reasoning and stopped. "
+                "reasoning=%r",
+                step + 1, (action.get("reasoning") or "")[:300],
+            )
 
         reasoning = self._clean((action.get("reasoning") or "").strip())
         if reasoning:
@@ -328,6 +350,10 @@ class GraphAgent:
         ]
         if not calls:
             answer = self._clean((action.get("answer") or "").strip())
+            logger.info(
+                "Agent step %d: model proposed 0 tool calls; answer_len=%d tool_results=%d",
+                step + 1, len(answer), len(tool_results),
+            )
             if not answer and tool_results:
                 answer = self._final_response(messages, tool_results, writer)
             if not answer:
@@ -340,6 +366,10 @@ class GraphAgent:
         stale = stale_repeat_signatures(calls, state.get("executed_calls", []))
         new_calls = [c for c in calls if self._signature(c) not in stale]
         if not new_calls:
+            logger.info(
+                "Agent step %d: all %d proposed tool calls were stale repeats",
+                step + 1, len(calls),
+            )
             answer = self._clean((action.get("answer") or "").strip())
             if not answer:
                 answer = self._final_response(messages, tool_results, writer)
@@ -396,6 +426,10 @@ class GraphAgent:
             data = extract_json(raw)
             if data is not None:
                 return data, raw
+        logger.warning(
+            "extract_json failed after %d retries. Raw (first 800 chars): %r",
+            self.json_retries, (raw or "")[:800],
+        )
         return None, raw
 
     def _call_llm_for_fix(self, prompt: str) -> str:
@@ -436,10 +470,19 @@ class GraphAgent:
             for r in tool_results
         )
 
+        logger.info(
+            "_final_response: tool_results=%d direct_parts=%d readable_evidence=%s user_q=%r",
+            len(tool_results), len(direct_parts), has_readable_evidence, user_q[:120],
+        )
+
         if not direct_parts:
             response = self._call_llm(
                 f"Answer this question briefly: {user_q}\n\nAssistant:",
                 writer, stream_tokens=True,
+            )
+            logger.info(
+                "_final_response (no evidence): LLM returned len=%d raw_preview=%r",
+                len(response or ""), (response or "")[:300],
             )
             cleaned = self._clean(response)
             if cleaned.strip():
@@ -462,6 +505,10 @@ class GraphAgent:
                 "NOT return JSON.\n\nAssistant:",
                 writer, stream_tokens=True,
             )
+            logger.info(
+                "_final_response (list-only evidence): LLM returned len=%d raw_preview=%r",
+                len(response or ""), (response or "")[:300],
+            )
             cleaned = self._clean(response)
             if cleaned.strip():
                 return cleaned
@@ -478,10 +525,20 @@ class GraphAgent:
             logger.warning("Final-response polish failed: %s", e)
             response = ""
 
+        logger.info(
+            "_final_response (with evidence): polish len=%d raw_preview=%r",
+            len(response or ""), (response or "")[:300],
+        )
+
         if response.strip():
             try:
                 parsed = _json.loads(response.strip())
                 if isinstance(parsed, dict) and (parsed.get("tool_calls") or parsed.get("answer") is None):
+                    logger.warning(
+                        "_final_response polish returned JSON with tool_calls; "
+                        "falling back to direct answer. raw=%r",
+                        response[:300],
+                    )
                     pass  # LLM returned tool calls -- use direct answer
                 elif isinstance(parsed, dict) and parsed.get("answer"):
                     direct_answer = parsed["answer"]
@@ -494,6 +551,9 @@ class GraphAgent:
         direct_answer = self._clean(direct_answer)
 
         if not direct_answer.strip():
+            logger.warning(
+                "_final_response: cleaned answer is empty; falling back to direct_parts"
+            )
             direct_answer = "\n\n".join(direct_parts)
 
         return direct_answer
