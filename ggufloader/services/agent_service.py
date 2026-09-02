@@ -131,50 +131,110 @@ class AgentService(QObject):
 
         The LLM callable streams tokens (``backend.generate_stream``); the
         graph consumes the chunk iterable and emits them as custom events.
+
+        The router inspects the loaded model and selects per-family:
+          * TokenCleaner (architecture-specific channel-marker stripping)
+          * sampling parameters (temperature, top_k, top_p, repeat_penalty)
+          * n_ctx, n_batch, n_threads, n_keep, flash_attn
+          * system prompt tuned for that family
+
+        The agent role then layers on top: lower temperature, tighter
+        top_k, higher repeat_penalty for reliable JSON output.
         """
         from ggufloader.core.agent.model_profiles import get_profile
+        from ggufloader.core.agent.token_cleaner import get_cleaner
+        from ggufloader.core.router import ModelRouter, ModelRole
 
         self.stop()
         if self._engine is not None:
             self._engine.close()
             self._engine = None
 
-        def llm(prompt: str, max_tokens: int = 2048, temperature: float = 0.1):
+        # ---- Router-based model inspection ----
+        model_path = getattr(backend, "model_path", "")
+        router_profile = None
+        agent_role_config = None
+        try:
+            router = ModelRouter()
+            router_profile = router.inspect(model_path)
+            agent_role_config = router.route(router_profile, ModelRole.AGENT)
+        except Exception as e:  # noqa: BLE001 - router must never block agent
+            logger.warning("ModelRouter inspect failed for %s: %s", model_path, e)
+
+        # ---- Sampling params from the role config (router), with safe fallbacks ----
+        temperature = 0.1
+        top_p = 0.9
+        top_k = 40
+        repeat_penalty = 1.1
+        max_tokens_default = 4096
+        if agent_role_config is not None:
+            temperature = agent_role_config.temperature
+            top_p = agent_role_config.top_p
+            top_k = agent_role_config.top_k
+            repeat_penalty = agent_role_config.repeat_penalty
+            max_tokens_default = agent_role_config.max_tokens
+
+        def llm(prompt: str, max_tokens: int = max_tokens_default, temperature: float = temperature):
             # Template-aware single-turn chat call: the agent's raw prompt
             # is delivered as one user message so llama.cpp wraps it in the
             # model's native template (better instruction adherence than a
-            # bare completion). No repeat penalty / text stops - they hurt
-            # the strict JSON protocol output.
+            # bare completion). No text stops - they hurt the strict JSON
+            # protocol output.
             return backend.chat_stream(
                 [{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
-                top_p=0.9,
-                top_k=40,
-                repeat_penalty=1.1,  # Ollama's default
+                top_p=top_p,
+                top_k=top_k,
+                repeat_penalty=repeat_penalty,
                 stop=CHAT_STOP_TOKENS,
             )
 
+        # ---- Per-family static profile (the lightweight agent profile) ----
         profile = get_profile(
-            getattr(backend, "model_path", ""),
+            model_path,
             n_ctx_train=getattr(backend, "n_ctx_train", 0) or 0,
         )
+        # Override max_tokens from the family profile if router didn't supply one
+        if agent_role_config is None:
+            max_tokens_default = profile.max_tokens
+
+        # ---- Per-architecture TokenCleaner ----
+        architecture = (router_profile.architecture if router_profile else "") or ""
+        cleaner = get_cleaner(architecture)
+
+        # ---- Per-family system prompt (optional override) ----
+        family_system_prompt = None
+        if agent_role_config is not None and agent_role_config.system_prompt:
+            family_system_prompt = agent_role_config.system_prompt
+
         n_ctx_val = getattr(backend, "n_ctx", None) or profile.n_ctx_target
         tools = ToolRegistry(Path(workspace))
         self._engine = GraphAgent(
             llm,
             Path(workspace),
             tools=tools,
-            max_tokens=profile.max_tokens,
+            max_tokens=max_tokens_default,
             max_steps=profile.max_steps,
             json_retries=profile.json_retries,
             n_ctx=n_ctx_val,
             max_directive_rounds=3,
+            cleaner=cleaner,
+            system_prompt=family_system_prompt,
         )
         if n_ctx_val:
             self._engine._context_budget.set_budget(n_ctx_val)
         if hasattr(backend, "count_tokens"):
             self._engine._context_budget.set_tokenizer(backend.count_tokens)
+        logger.info(
+            "Agent engine created: arch=%s family=%s temp=%.2f top_p=%.2f top_k=%d "
+            "repeat_penalty=%.2f max_tokens=%d max_steps=%d cleaner=%s",
+            architecture or "?",
+            router_profile.family if router_profile else "?",
+            temperature, top_p, top_k, repeat_penalty,
+            max_tokens_default, profile.max_steps,
+            type(cleaner).__name__,
+        )
         return self._engine
 
     @property

@@ -139,6 +139,14 @@ _CLEANERS: dict[str, TokenCleaner] = {
     "deepseek": DeepSeekCleaner(),
     "deepseek2": DeepSeekCleaner(),
     "deepseek3": DeepSeekCleaner(),
+    # Architectures that share chat-template structure with Gemma (channel markers)
+    "lfm2": GemmaCleaner(),
+    # Architectures that share thinking-block structure with Qwen
+    "llama": QwenCleaner(),
+    "llama3": QwenCleaner(),
+    "mistral": QwenCleaner(),
+    "phi3": QwenCleaner(),
+    "phi4": QwenCleaner(),
 }
 
 _DEFAULT = GenericCleaner()
