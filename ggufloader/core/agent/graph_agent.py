@@ -531,12 +531,12 @@ class GraphAgent:
         depends_on = item.get("depends_on", [])
 
         writer({"event": "step", "step": step_num, "max": len(plan)})
-        writer({"event": "status", "text": f"Step {step_num}/{len(plan)}: {item['description']}"})
+        writer({"event": "status", "text": f"> Step {step_num}/{len(plan)}: {item['description']}"})
 
         # Mark as running
         item["status"] = "running"
         if self._on_status:
-            self._on_status(f"Step {step_num}/{len(plan)}: {item['description']}")
+            self._on_status(f"> Step {step_num}/{len(plan)}: {item['description']}")
 
         # --- Answer step (tool=null) ---
         if tool is None:
