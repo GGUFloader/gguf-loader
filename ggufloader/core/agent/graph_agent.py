@@ -220,16 +220,17 @@ class GraphAgent:
             '  ]\n'
             '}\n\n'
             "Rules:\n"
-            "- Simple questions (general knowledge): 1 step with tool=null (answer directly)\n"
-            "- File/workspace tasks: 2-5 steps, each with a specific tool call\n"
+            "- Use EXACTLY the number of steps needed — no more, no less\n"
+            "- Simple questions: 1 step (tool=null, answer directly)\n"
+            "- Quick tasks (list files, read one file): 2 steps\n"
+            "- Medium tasks (search + read + answer): 3 steps\n"
+            "- Complex tasks (multiple files, analysis): 4-6 steps MAX\n"
+            "- NEVER exceed 6 steps — most tasks need only 2-4\n"
+            "- Each step should do ONE thing (one tool call or one answer)\n"
             "- Use depends_on to link steps that need results from earlier steps\n"
             "- Parameters can reference previous results: use \"STEP_N.result\" as a value\n"
-            "- In the description, ALWAYS mention which step results you need. Examples:\n"
-            "  - Step 2 description: 'Read the file found in step 1 (STEP_1.result)'\n"
-            "  - Step 3 description: 'Search for text from step 2 result (STEP_2.result)'\n"
-            "  - Step 4 description: 'Summarize findings from steps 1, 2, and 3'\n"
-            "- The last step should always be the answer (tool=null)\n"
-            "- Be specific: use exact file paths and search terms\n\n"
+            "- In the description, mention which step results you need\n"
+            "- The last step should always be the answer (tool=null)\n\n"
             "Plan:"
         )
 
@@ -652,7 +653,9 @@ class GraphAgent:
                 "step": step,
             }
 
-        writer({"event": "step", "step": step + 1, "max": max_steps})
+        # Use actual plan length if available, otherwise max_steps
+        actual_max = len(plan) if plan else max_steps
+        writer({"event": "step", "step": step + 1, "max": actual_max})
 
         action, raw = self._request_action(
             messages, tool_results, writer, directive=state.get("directive", "")
