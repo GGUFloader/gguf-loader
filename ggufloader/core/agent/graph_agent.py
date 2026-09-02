@@ -313,11 +313,13 @@ class GraphAgent:
         if reasoning:
             writer({"event": "status", "text": f"... {reasoning}"})
 
-        # Dynamic step estimate
+        # Dynamic step estimate — only expand the budget, never shrink it.
+        # Add a generous +2 buffer because small models routinely under-estimate
+        # how many steps a multi-tool task really takes.
         est = action.get("estimated_steps")
         if isinstance(est, (int, float)) and est > 0:
-            est = min(int(est) + 1, 20)
-            if step == 0 or est > max_steps:
+            est = min(int(est) + 2, 20)
+            if est > max_steps:
                 max_steps = est
 
         calls = [
@@ -429,6 +431,11 @@ class GraphAgent:
                 else:
                     direct_parts.append(content)
 
+        has_readable_evidence = any(
+            r.get("status") == "success" and r.get("tool_name") in ("read_file", "search_files")
+            for r in tool_results
+        )
+
         if not direct_parts:
             response = self._call_llm(
                 f"Answer this question briefly: {user_q}\n\nAssistant:",
@@ -437,13 +444,39 @@ class GraphAgent:
             cleaned = self._clean(response)
             if cleaned.strip():
                 return cleaned
-            return f"I was unable to find information about: {user_q}"
+            return self._diagnostic(
+                "model returned empty response and no tool evidence was available",
+                self.max_steps, self.max_steps, tool_results,
+            )
 
         direct_answer = "\n\n".join(direct_parts)
 
-        # Step 2: Try LLM polish (stream tokens so user sees answer in real time)
-        context = self._prompt_builder.final_response_context(user_q, direct_answer)
-        response = self._call_llm(context, writer, stream_tokens=True)
+        # Step 2: If the only evidence is a directory listing (no read/search hit),
+        # the user probably asked a general question — answer it directly without
+        # trying to force a polish that reuses the file list as context.
+        if not has_readable_evidence:
+            response = self._call_llm(
+                f"User asked: {user_q}\n\n"
+                "Note: no relevant files were found in the workspace, so this is a "
+                "general question. Answer it in plain text, do NOT call tools, do "
+                "NOT return JSON.\n\nAssistant:",
+                writer, stream_tokens=True,
+            )
+            cleaned = self._clean(response)
+            if cleaned.strip():
+                return cleaned
+            return (
+                f"I couldn't find files in the workspace relevant to your question "
+                f"({user_q}). Here's what I saw:\n\n{direct_answer}"
+            )
+
+        # Step 3: Tool evidence exists — let the LLM polish it into a real answer.
+        try:
+            context = self._prompt_builder.final_response_context(user_q, direct_answer)
+            response = self._call_llm(context, writer, stream_tokens=True)
+        except Exception as e:  # noqa: BLE001 - polish is best-effort
+            logger.warning("Final-response polish failed: %s", e)
+            response = ""
 
         if response.strip():
             try:
@@ -457,7 +490,7 @@ class GraphAgent:
             except (ValueError, TypeError):
                 direct_answer = response.strip()
 
-        # Step 3: Clean
+        # Step 4: Clean
         direct_answer = self._clean(direct_answer)
 
         if not direct_answer.strip():
