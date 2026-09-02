@@ -185,30 +185,51 @@ class GraphAgent:
     # StreamWriter can't be instantiated outside the graph runtime,
     # so we use a no-op writer for calls outside the graph.
     def _create_plan(self, user_message: str, on_status: StatusCallback) -> List[Dict[str, Any]]:
-        """Ask the LLM to create a step-by-step plan before executing.
+        """Ask the LLM to create a concrete, tool-call plan with dependencies.
 
-        Always plans — the planning step is important for dividing and
-        scheduling tasks. Simple questions get a 1-step plan (answer
-        directly), complex requests get 2-5 steps.
+        The plan is a list of steps, each with:
+          - step: int (1-based)
+          - description: what this step does
+          - tool: tool name (null for answer-only steps)
+          - parameters: dict of tool parameters (may reference STEP_N.result)
+          - depends_on: list of step numbers whose results this step needs
+          - status: pending/running/done/failed
+          - result: filled after execution
+
         Skipped when plan=False (e.g. in tests).
         """
         if not self._plan_enabled:
             return []
-        tools_list = self.tools.names()
+
+        tools_list = self.tools.describe()
         prompt = (
             f"User request: {user_message}\n\n"
-            f"Available tools: {tools_list}\n\n"
-            "Create a step-by-step plan. Reply with ONLY a JSON array:\n"
-            '[{"step": 1, "description": "..."}]\n\n'
+            f"Available tools:\n{tools_list}\n\n"
+            "Create a concrete execution plan. Reply with ONLY a JSON object:\n"
+            '{\n'
+            '  "goal": "one-sentence goal",\n'
+            '  "steps": [\n'
+            '    {\n'
+            '      "step": 1,\n'
+            '      "description": "what this step does",\n'
+            '      "tool": "tool_name or null if just answering",\n'
+            '      "parameters": {"param": "value"},\n'
+            '      "depends_on": []\n'
+            '    }\n'
+            '  ]\n'
+            '}\n\n'
             "Rules:\n"
-            "- For simple questions (general knowledge, no tools needed): 1 step (answer directly)\n"
-            "- For file/workspace tasks: 2-5 steps (search, read, analyze, answer)\n"
-            "- For complex requests: 3-5 steps (break into clear subtasks)\n"
-            "- Each step description should be brief and actionable\n\n"
+            "- Simple questions (general knowledge): 1 step with tool=null (answer directly)\n"
+            "- File/workspace tasks: 2-5 steps, each with a specific tool call\n"
+            "- Use depends_on to link steps that need results from earlier steps\n"
+            "- Parameters can reference previous results: use \"STEP_N.result\" as a value\n"
+            "- The last step should always be the answer (tool=null)\n"
+            "- Be specific: list_directory for . not the whole workspace, read_file for exact paths\n\n"
             "Plan:"
         )
 
-        (on_status or (lambda _msg: None))("Creating plan...")
+        _status = on_status or (lambda _msg: None)
+        _status("Planning...")
         try:
             raw = self._call_llm(prompt, _NoopWriter())
         except Exception as e:  # noqa: BLE001
@@ -219,30 +240,145 @@ class GraphAgent:
         import json as _json
         plan = []
         try:
-            # Try to extract JSON array from response
             text = raw.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
             parsed = _json.loads(text)
-            if isinstance(parsed, list):
-                for item in parsed:
-                    if isinstance(item, dict) and "description" in item:
+            steps = parsed.get("steps", []) if isinstance(parsed, dict) else parsed
+            if isinstance(steps, list):
+                for item in steps:
+                    if isinstance(item, dict):
                         plan.append({
                             "step": item.get("step", len(plan) + 1),
-                            "description": str(item["description"]),
+                            "description": str(item.get("description", "")),
+                            "tool": item.get("tool"),
+                            "parameters": item.get("parameters", {}),
+                            "depends_on": item.get("depends_on", []),
                             "status": "pending",
+                            "result": None,
                         })
         except (ValueError, TypeError):
             pass
 
         if plan:
-            _status = on_status or (lambda _msg: None)
+            goal = parsed.get("goal", user_message[:100]) if isinstance(parsed, dict) else user_message[:100]
+            _status(f"Goal: {goal}")
             _status(f"Plan ({len(plan)} steps):")
             for item in plan:
-                _status(f"  {item['step']}. {item['description']}")
+                tool_info = f" [{item['tool']}]" if item.get("tool") else ""
+                deps = f" (needs: {item['depends_on']})" if item.get("depends_on") else ""
+                _status(f"  {item['step']}. {item['description']}{tool_info}{deps}")
             logger.info("Agent plan: %d steps for %r", len(plan), user_message[:80])
 
         return plan
+
+    def _execute_plan(self, plan: List[Dict[str, Any]], user_message: str,
+                      on_status: StatusCallback, on_tool: ToolCallback,
+                      on_plan: Optional[Callable]) -> List[Dict[str, Any]]:
+        """Execute a plan step-by-step, passing results between steps.
+
+        Each step either:
+          1. Runs a tool call (tool != null) and stores the result
+          2. Answers directly (tool == null) — this is the final step
+
+        Results from earlier steps are available to later steps via
+        the step_results dict. Parameters containing "STEP_N.result"
+        are resolved by substituting the actual result.
+        """
+        import json as _json
+        _status = on_status or (lambda _msg: None)
+        step_results: Dict[int, Any] = {}  # step_num -> result dict
+        all_tool_results: List[Dict[str, Any]] = []
+
+        for item in plan:
+            step_num = item["step"]
+            tool = item.get("tool")
+            params = dict(item.get("parameters", {}))
+            depends_on = item.get("depends_on", [])
+
+            # Check if dependencies are met
+            for dep in depends_on:
+                if dep not in step_results:
+                    _status(f"  Step {step_num}: waiting for step {dep}...")
+                elif step_results[dep] is None:
+                    _status(f"  Step {step_num}: dependency {dep} had no result, skipping")
+                    item["status"] = "skipped"
+                    continue
+
+            # Resolve STEP_N.result references in parameters
+            params = self._resolve_step_refs(params, step_results)
+
+            # Update status
+            item["status"] = "running"
+            if on_plan:
+                on_plan("execute", plan)
+
+            if tool is None:
+                # Answer step — generate final answer
+                _status(f"  Step {step_num}/{len(plan)}: {item['description']}")
+                evidence = []
+                for dep in depends_on:
+                    if dep in step_results and step_results[dep]:
+                        r = step_results[dep]
+                        content = r.get("content", r.get("error", ""))[:500] if isinstance(r, dict) else str(r)[:500]
+                        evidence.append(f"Step {dep}: {content}")
+                evidence_str = "\n".join(evidence) if evidence else "(no prior results)"
+                answer = self._reask_for_answer(
+                    [{"role": "user", "content": user_message}],
+                    [{"tool_name": "plan_evidence", "status": "success", "content": evidence_str}],
+                    _NoopWriter(),
+                )
+                item["status"] = "done"
+                item["result"] = answer
+                step_results[step_num] = {"content": answer}
+                if on_plan:
+                    on_plan("execute", plan)
+                continue
+
+            # Tool step — execute the tool
+            _status(f"  Step {step_num}/{len(plan)}: {item['description']} [{tool}]")
+            try:
+                result = self.tools.execute(tool, params)
+                all_tool_results.append(result)
+                step_results[step_num] = result
+                item["status"] = "done" if result.get("status") == "success" else "failed"
+                item["result"] = result.get("content", result.get("error", ""))[:200]
+                if on_tool:
+                    on_tool(result)
+                if result.get("status") == "success":
+                    _status(f"    OK: {result.get('content', '')[:100]}")
+                else:
+                    _status(f"    Failed: {result.get('error', 'Unknown error')}")
+            except Exception as e:  # noqa: BLE001
+                item["status"] = "failed"
+                item["result"] = str(e)[:200]
+                step_results[step_num] = {"error": str(e)}
+                _status(f"    Error: {e}")
+
+            if on_plan:
+                on_plan("execute", plan)
+
+        return all_tool_results
+
+    def _resolve_step_refs(self, params: Dict[str, Any],
+                           step_results: Dict[int, Any]) -> Dict[str, Any]:
+        """Resolve STEP_N.result references in parameter values."""
+        import re as _re
+        resolved = {}
+        for key, value in params.items():
+            if isinstance(value, str) and "STEP_" in value:
+                # Replace STEP_N.result with actual result content
+                def _replace_ref(m):
+                    step_num = int(m.group(1))
+                    if step_num in step_results:
+                        r = step_results[step_num]
+                        if isinstance(r, dict):
+                            return r.get("content", r.get("error", ""))[:2000]
+                        return str(r)[:2000]
+                    return m.group(0)  # keep original if step not found
+                value = _re.sub(r"STEP_(\d+)\.result", _replace_ref, value)
+            resolved[key] = value
+        return resolved
 
     # ------------------------------------------------------------------
     # Public API
@@ -280,12 +416,45 @@ class GraphAgent:
             if strategy != "ok":
                 on_status(f"[compact] Compacting context ({strategy})...")
                 base_messages = self._context_budget.compact(base_messages)        # --- Planning phase ---
-        # Ask the LLM to create a step-by-step plan before executing.
-        # Simple questions (short, no tool keywords) skip planning.
         plan = self._create_plan(user_message, on_status)
         if plan and on_plan:
             on_plan("plan", plan)
 
+        # --- Plan-based execution ---
+        # If a plan was created, execute it step-by-step with result flow.
+        if plan:
+            tool_results = self._execute_plan(plan, user_message, on_status, on_tool, on_plan)
+
+            # Find the final answer from the plan (last step with tool=null)
+            final_answer = ""
+            for item in reversed(plan):
+                if item.get("tool") is None and item.get("result"):
+                    final_answer = self._clean(item["result"])
+                    break
+
+            if not final_answer:
+                # Plan didn't produce an answer — synthesize from tool results
+                final_answer = self._final_response(
+                    [{"role": "user", "content": user_message}], tool_results, _NoopWriter()
+                )
+
+            if final_answer and on_plan:
+                on_plan("finish", plan)
+
+            self.messages = base_messages + [
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": final_answer},
+            ]
+
+            return {
+                "response": final_answer or self._diagnostic(
+                    "plan execution completed", len(plan), len(plan), tool_results
+                ),
+                "tool_results": tool_results,
+                "plan": plan,
+            }
+
+        # --- Fallback: no plan — use graph loop (for tests or plan failures) ---
         inputs: GraphState = {
             "messages": base_messages + [{"role": "user", "content": user_message}],
             "tool_results": [],
@@ -297,7 +466,6 @@ class GraphAgent:
             "pending_calls": [],
             "final_answer": "",
             "raw_response": "",
-            "plan": plan,
         }
 
         config = {"configurable": {"thread_id": self.thread_id}}
