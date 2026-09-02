@@ -101,7 +101,11 @@ class AgentPanel(QWidget):
 
     def begin_streaming(self) -> None:
         """Start a new empty AI bubble that tokens will stream into."""
-        self.metrics_bar.start(max_steps=8)
+        max_steps = 8
+        engine = getattr(self, "_current_engine", None)
+        if engine is not None and hasattr(engine, "max_steps"):
+            max_steps = engine.max_steps
+        self.metrics_bar.start(max_steps=max_steps)
         self._current_ai_text = ""
         self._parser = ReasoningStreamParser()
         self._reasoning = ReasoningBlock()

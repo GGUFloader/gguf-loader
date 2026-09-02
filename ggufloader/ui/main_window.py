@@ -1611,6 +1611,7 @@ class MainWindow(QMainWindow, ThemeMixin):
             self.chat_panel.agent_panel.add_status("⚠️ Agent not initialized")
             return
         panel = self.chat_panel.agent_panel
+        panel._current_engine = engine
         panel.add_user_message(text)
 
         self._ensure_current_session("agent", self.chat_panel.get_workspace())
