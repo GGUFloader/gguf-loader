@@ -308,6 +308,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         agent_top_k = 40
         agent_top_p = 0.9
         agent_repeat_penalty = 1.05
+        
+        # Build preset system prompt addition
+        preset_prompt_addition = preset_obj.system_prompt_addition or ""
         router_info = {}
         router_system_prompt = None
 
@@ -356,6 +359,11 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         except Exception:
             actual_n_ctx = agent_max_tokens
 
+        # Combine router prompt + preset addition
+        full_system_prompt = router_system_prompt or system_prompt or ""
+        if preset_prompt_addition:
+            full_system_prompt = full_system_prompt + chr(10) + chr(10) + preset_prompt_addition
+        
         agent = GraphAgent(
             llm=llm_call,
             workspace=workspace,
@@ -364,7 +372,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             n_ctx=actual_n_ctx,
             json_retries=2,
             thread_id=unique_thread_id,
-            system_prompt=router_system_prompt or system_prompt,
+            system_prompt=full_system_prompt or None,
+            allowed_tools=preset_allowed,
+            blocked_tools=preset_blocked,
         )
         _agent_graph = agent
 

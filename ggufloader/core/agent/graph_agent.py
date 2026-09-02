@@ -87,11 +87,23 @@ class GraphAgent:
         cleaner: Optional[TokenCleaner] = None,
         max_directive_rounds: int = 3,
         system_prompt: Optional[str] = None,
+        allowed_tools: Optional[List[str]] = None,
+        blocked_tools: Optional[List[str]] = None,
     ) -> None:
         self.llm = llm
         self.workspace = Path(workspace)
         READONLY_TOOLS = ["list_directory", "read_file", "search_files", "glob"]
-        self.tools = tools or ToolRegistry(self.workspace, only=READONLY_TOOLS)
+        if tools is not None:
+            self.tools = tools
+        elif allowed_tools is not None:
+            # Preset restricts to specific tools
+            self.tools = ToolRegistry(self.workspace, only=allowed_tools)
+        else:
+            self.tools = ToolRegistry(self.workspace, only=READONLY_TOOLS)
+        # Block specific tools if preset says so
+        if blocked_tools:
+            for tool_name in blocked_tools:
+                self.tools._tools.pop(tool_name, None)
         self.max_tokens = max_tokens
         self.max_steps = max_steps
         self.json_retries = json_retries
