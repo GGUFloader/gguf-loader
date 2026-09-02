@@ -311,6 +311,8 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         
         # Build preset system prompt addition
         preset_prompt_addition = preset_obj.system_prompt_addition or ""
+        preset_allowed = preset_obj.allowed_tools if preset_obj.allowed_tools else None
+        preset_blocked = preset_obj.blocked_tools if preset_obj.blocked_tools else None
         router_info = {}
         router_system_prompt = None
 
