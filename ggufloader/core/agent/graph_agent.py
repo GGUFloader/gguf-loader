@@ -223,8 +223,12 @@ class GraphAgent:
             "- File/workspace tasks: 2-5 steps, each with a specific tool call\n"
             "- Use depends_on to link steps that need results from earlier steps\n"
             "- Parameters can reference previous results: use \"STEP_N.result\" as a value\n"
+            "- In the description, ALWAYS mention which step results you need. Examples:\n"
+            "  - Step 2 description: 'Read the file found in step 1 (STEP_1.result)'\n"
+            "  - Step 3 description: 'Search for text from step 2 result (STEP_2.result)'\n"
+            "  - Step 4 description: 'Summarize findings from steps 1, 2, and 3'\n"
             "- The last step should always be the answer (tool=null)\n"
-            "- Be specific: list_directory for . not the whole workspace, read_file for exact paths\n\n"
+            "- Be specific: use exact file paths and search terms\n\n"
             "Plan:"
         )
 
