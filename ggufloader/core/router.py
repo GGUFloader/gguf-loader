@@ -28,7 +28,6 @@ import math
 import os
 import platform
 import re
-import struct
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -655,82 +654,9 @@ _ROLE_DEFAULTS: Dict[ModelRole, RoleConfig] = {
 
 # -- GGUF metadata reading (minimal, no tensor access) --
 
-_GGUF_MAGIC = b"GGUF"
-_TYPES = {0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8}
-_T_STRING, _T_ARRAY = 8, 9
-
-
-def _read_str(f) -> str:
-    (n,) = struct.unpack("<Q", f.read(8))
-    return f.read(n).decode("utf-8", errors="replace")
-
-
-def _skip_value(f, vtype: int) -> Any:
-    if vtype == _T_STRING:
-        return _read_str(f)
-    if vtype == _T_ARRAY:
-        (etype,) = struct.unpack("<I", f.read(4))
-        (count,) = struct.unpack("<Q", f.read(8))
-        if etype == _T_STRING:
-            for _ in range(count):
-                _read_str(f)
-            return None
-        size = _TYPES.get(etype)
-        if size is None:
-            return None
-        f.seek(count * size, 1)
-        return None
-    size = _TYPES.get(vtype)
-    if size is None:
-        return None
-    raw = f.read(size)
-    if vtype in (4, 10):
-        return struct.unpack("<Q" if vtype == 10 else "<I", raw)[0]
-    if vtype in (5, 11):
-        return struct.unpack("<q" if vtype == 11 else "<i", raw)[0]
-    if vtype == 6:
-        return struct.unpack("<f", raw)[0]
-    if vtype == 12:
-        return struct.unpack("<d", raw)[0]
-    if vtype == 7:
-        return raw[0] != 0
-    return raw[0] if raw else None
-
-
-def _read_gguf_metadata(path: Path, max_bytes: int = 8 * 1024 * 1024) -> Dict[str, Any]:
-    """Read GGUF header metadata (architecture, name, context_length, etc.)."""
-    out: Dict[str, Any] = {}
-    try:
-        with open(path, "rb") as f:
-            if f.read(4) != _GGUF_MAGIC:
-                return {}
-            (version,) = struct.unpack("<I", f.read(4))
-            if version not in (2, 3):
-                return {}
-            struct.unpack("<Q", f.read(8))  # tensor count
-            (kv_count,) = struct.unpack("<Q", f.read(8))
-            for _ in range(kv_count):
-                if f.tell() > max_bytes:
-                    break
-                key = _read_str(f)
-                (vtype,) = struct.unpack("<I", f.read(4))
-
-                # Capture general.* strings
-                if key.startswith("general.") and vtype == _T_STRING:
-                    out[key[len("general."):]] = _read_str(f)
-                # Capture chat template
-                elif key == "tokenizer.chat_template" and vtype == _T_STRING:
-                    out["chat_template"] = _read_str(f)
-                # Capture context_length / block_count
-                elif vtype in (4, 10) and (
-                    key.endswith(".context_length") or key.endswith(".block_count")
-                ):
-                    out[key] = _skip_value(f, vtype)
-                else:
-                    _skip_value(f, vtype)
-    except Exception as e:
-        logger.debug("GGUF metadata read failed for %s: %s", path, e)
-    return out
+# Single shared reader lives in core/llm/gguf_meta.py; keep the name so
+# existing callers (inspect/quick_profile) keep working unchanged.
+from ggufloader.core.llm.gguf_meta import read as _read_gguf_metadata  # noqa: E402
 
 
 def _extract_uint(meta: Dict, arch: str, suffix: str) -> int:

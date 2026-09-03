@@ -419,3 +419,48 @@ def test_all_roles_produce_valid_config():
         assert isinstance(config.temperature, float)
         assert isinstance(config.top_k, int)
         assert isinstance(config.max_tokens, int)
+
+
+# ---------------------------------------------------------------------------
+# Task 1: single shared GGUF reader with attention-head fields
+# ---------------------------------------------------------------------------
+
+def test_gguf_meta_reads_heads(tmp_path):
+    """The shared reader (gguf_meta) exposes GQA fields: head counts, dims."""
+    from ggufloader.core.llm.gguf_meta import read as meta_read
+    kvs = (
+        _kv_str("general.architecture", "gemma3")
+        + _kv_str("general.name", "gemma-3-8b-it")
+        + _kv_u32("gemma3.context_length", 8192)
+        + _kv_u32("gemma3.block_count", 32)
+        + _kv_u32("gemma3.embedding_length", 3072)
+        + _kv_u32("gemma3.attention.head_count", 16)
+        + _kv_u32("gemma3.attention.head_count_kv", 8)
+    )
+    p = tmp_path / "gemma-3-8b-it-Q4_K_M.gguf"
+    p.write_bytes(_make_gguf(kvs, kv_count=7) + b"\x00" * 64)
+    meta = meta_read(str(p))
+    assert meta["architecture"] == "gemma3"
+    assert meta["gemma3.block_count"] == 32
+    assert meta["gemma3.attention.head_count_kv"] == 8
+
+
+def test_gguf_meta_shared_across_readers(tmp_path):
+    """router and model_profiles must agree byte-for-byte with gguf_meta."""
+    from ggufloader.core.llm.gguf_meta import read as meta_read
+    from ggufloader.core.router import _read_gguf_metadata
+    from ggufloader.core.llm.model_profiles import read_gguf_general_metadata
+    kvs = (
+        _kv_str("general.architecture", "llama")
+        + _kv_str("general.name", "Llama-3-8B-Instruct")
+        + _kv_u32("llama.context_length", 8192)
+        + _kv_u32("llama.block_count", 32)
+        + _kv_u32("llama.attention.head_count", 32)
+        + _kv_u32("llama.attention.head_count_kv", 8)
+    )
+    p = _create_model_file(tmp_path, "llama-3-8b.gguf", kvs, kv_count=6)
+    shared = meta_read(p)
+    assert _read_gguf_metadata(p) == shared
+    assert read_gguf_general_metadata(p) == shared
+    assert shared["architecture"] == "llama"
+    assert shared["llama.attention.head_count_kv"] == 8

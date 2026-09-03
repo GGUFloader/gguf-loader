@@ -21,68 +21,21 @@ Google Gemma-3: 1.0/0.95/64; gpt-oss: 1.0/1.0).
 from __future__ import annotations
 
 import logging
-import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Minimal GGUF metadata reader (v2/v3). Skips arrays/tensors cheaply.
-# ---------------------------------------------------------------------------
-
-_GGUF_MAGIC = b"GGUF"
-_SIZES = {0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8}
-_T_STRING, _T_ARRAY = 8, 9
-
-
-def _read_str(f) -> str:
-    (n,) = struct.unpack("<Q", f.read(8))
-    return f.read(n).decode("utf-8", errors="replace")
-
-
-def _skip_or_read(f, vtype: int, want: bool) -> Any:
-    if vtype == _T_STRING:
-        s = _read_str(f)
-        return s if want else None
-    if vtype == _T_ARRAY:
-        (etype,) = struct.unpack("<I", f.read(4))
-        (count,) = struct.unpack("<Q", f.read(8))
-        if etype == _T_STRING:
-            for _ in range(count):
-                _read_str(f)
-            return None
-        size = _SIZES.get(etype)
-        if size is None:  # nested arrays are illegal in GGUF; bail safely
-            raise ValueError("nested array in GGUF metadata")
-        f.seek(count * size, 1)
-        return None
-    size = _SIZES.get(vtype)
-    if size is None:
-        raise ValueError(f"unknown GGUF value type {vtype}")
-    raw = f.read(size)
-    if vtype == 4:  # uint32
-        return struct.unpack("<I", raw)[0]
-    if vtype == 5:  # int32
-        return struct.unpack("<i", raw)[0]
-    if vtype == 6:  # float32
-        return struct.unpack("<f", raw)[0]
-    if vtype == 12:  # float64
-        return struct.unpack("<d", raw)[0]
-    if vtype == 10:  # uint64
-        return struct.unpack("<Q", raw)[0]
-    if vtype == 11:  # int64
-        return struct.unpack("<q", raw)[0]
-    if vtype == 7:  # bool
-        return raw[0] != 0
-    return raw[0] if raw else None
-
+# GGUF metadata reading is centralized in core/llm/gguf_meta.py (single
+# reader shared with the router). See read_gguf_general_metadata below.
 
 def read_gguf_general_metadata(
     path: str | Path, max_bytes: int = 8 * 1024 * 1024
 ) -> Dict[str, Any]:
     """Return model metadata from the GGUF header (no tensor access).
 
+    Compatibility shim over the single shared reader in
+    ``ggufloader.core.llm.gguf_meta`` (Task 1: one reader everywhere).
     Collects:
     - Every ``general.*`` string (architecture, name, etc.)
     - ``tokenizer.chat_template`` for template-based system prompt detection
@@ -90,39 +43,8 @@ def read_gguf_general_metadata(
 
     Raises nothing; returns {} for non-GGUF or unreadable files.
     """
-    out: Dict[str, Any] = {}
-    try:
-        with open(path, "rb") as f:
-            if f.read(4) != _GGUF_MAGIC:
-                return {}
-            (version,) = struct.unpack("<I", f.read(4))
-            if version not in (2, 3):
-                return {}
-            struct.unpack("<Q", f.read(8))  # tensor count
-            (kv_count,) = struct.unpack("<Q", f.read(8))
-            for _ in range(kv_count):
-                if f.tell() > max_bytes:
-                    break
-                key = _read_str(f)
-                (vtype,) = struct.unpack("<I", f.read(4))
-                want_string = key.startswith("general.") and vtype == _T_STRING
-                # Read tokenizer.chat_template for template detection
-                want_template = key == "tokenizer.chat_template" and vtype == _T_STRING
-                want_limit = (
-                    vtype in (4, 10)  # uint32 / uint64
-                    and (key.endswith(".context_length") or key.endswith(".block_count"))
-                )
-                if want_string:
-                    out[key[len("general."):]] = _read_str(f)
-                elif want_template:
-                    out["chat_template"] = _read_str(f)
-                elif want_limit:
-                    out[key] = _skip_or_read(f, vtype, False)
-                else:
-                    _skip_or_read(f, vtype, False)
-    except Exception as e:  # noqa: BLE001 - any malformed file => no metadata
-        logger.debug("GGUF metadata read failed for %s: %s", path, e)
-    return out
+    from ggufloader.core.llm.gguf_meta import read as _gguf_meta_read
+    return _gguf_meta_read(path, max_bytes)
 
 
 def read_model_limits(path: str | Path) -> Dict[str, Optional[int]]:
