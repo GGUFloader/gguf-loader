@@ -33,6 +33,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ggufloader.core.defaults import (
+    CTX_OPTIONS,
+    CUDA_RESERVE_GB,
+    RAM_HEADROOM,
+    VRAM_HEADROOM,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -152,10 +159,14 @@ class ModelProfile:
 @dataclass
 class LoadStrategy:
     """Optimal loading parameters for a model on a given system."""
-    n_ctx: int = 16384
+    n_ctx: int = 8192
     n_gpu_layers: int = -1         # -1 = auto (all layers)
     use_gpu: bool = False
     batch_size: int = 512
+    n_threads: Optional[int] = None
+    flash_attn: bool = True
+    use_mmap: bool = True
+    bytes_per_layer: float = 0.0   # model GB / total_layers (GB per layer)
     rope_freq_base: Optional[float] = None
     reasoning: str = ""            # human explanation of choices
 
@@ -320,71 +331,76 @@ class ModelRouter:
     # ------------------------------------------------------------------
 
     def plan(self, profile: ModelProfile) -> LoadStrategy:
-        """Determine the optimal loading strategy for this model on this system."""
-        sys = self._system
-        strategy = LoadStrategy()
+        """Determine the optimal loading strategy for this model on this system.
 
-        # --- GPU decision ---
-        use_gpu = False
-        n_gpu_layers = 0
+        Fit-aware: n_ctx is chosen so model + GQA KV cache fit inside
+        RAM headroom (and, on GPU systems, preferably inside a reserve-
+        aware VRAM budget). Partial offload leaves CUDA_RESERVE_GB free and
+        charges each offloaded layer its share of the KV cache, not just
+        its weight bytes.
+        """
+        sys = self._system
         reasoning_parts = []
 
-        if profile.is_embedding_model:
-            # Embedding models are small; CPU is fine
-            reasoning_parts.append("Embedding model — CPU preferred for quick load/unload")
-            use_gpu = False
-            n_gpu_layers = 0
-        elif sys.has_gpu_support and sys.vram_gb > 0:
-            # Check if model fits in VRAM
-            if profile.model_memory_gb <= sys.vram_gb * 0.85:
-                use_gpu = True
-                n_gpu_layers = -1  # all layers
-                reasoning_parts.append(
-                    f"Model ({profile.model_memory_gb:.1f} GB) fits in VRAM "
-                    f"({sys.vram_gb:.1f} GB) — full GPU offload"
-                )
-            elif profile.model_memory_gb <= sys.vram_gb * 1.2:
-                # Partial offload — estimate how many layers fit
-                if profile.total_layers > 0:
-                    vram_ratio = (sys.vram_gb * 0.85) / profile.model_memory_gb
-                    n_gpu_layers = max(1, int(profile.total_layers * vram_ratio))
-                    use_gpu = True
-                    reasoning_parts.append(
-                        f"Partial GPU offload: {n_gpu_layers}/{profile.total_layers} "
-                        f"layers ({vram_ratio:.0%} of model fits in VRAM)"
-                    )
-                else:
-                    use_gpu = True
-                    n_gpu_layers = -1
-                    reasoning_parts.append(
-                        f"Attempting full offload (layers unknown); GPU ladder will adjust"
-                    )
-            else:
-                # Model too large for VRAM — try CPU
-                reasoning_parts.append(
-                    f"Model ({profile.model_memory_gb:.1f} GB) exceeds VRAM "
-                    f"({sys.vram_gb:.1f} GB) — CPU mode"
-                )
-        else:
-            reasoning_parts.append("No GPU support — CPU mode")
-
-        # --- Context size ---
+        # --- Context size first: drives both RAM and VRAM KV cost ---
         n_ctx = self._optimal_context(profile, sys)
-        if n_ctx != 32768:
-            reasoning_parts.append(f"Context set to {n_ctx} (optimized for model + system)")
+        if profile.trained_context > 0 and n_ctx != min(profile.trained_context, 32768):
+            reasoning_parts.append(f"Context set to {n_ctx} (capped to fit this system)")
 
-        # --- Batch size ---
-        batch = self._optimal_batch(profile, sys)
+        ok_ram, ok_vram, kv_gb = self._ctx_fits(profile, sys, n_ctx)
+        bpl = profile.model_memory_gb / profile.total_layers if profile.total_layers > 0 else 0.0
+
+        use_gpu = False
+        n_gpu_layers = 0
+        if profile.is_embedding_model:
+            reasoning_parts.append("Embedding model — CPU preferred for quick load/unload")
+        elif not (sys.has_gpu_support and sys.vram_gb > 0):
+            reasoning_parts.append("No GPU support — CPU mode")
+        elif ok_vram:
+            # Whole model + whole KV cache fits with the CUDA reserve intact.
+            use_gpu = True
+            n_gpu_layers = -1  # all layers
+            reasoning_parts.append(
+                f"Model+KV ({profile.model_memory_gb + kv_gb:.1f} GB) fits in VRAM "
+                f"with 1 GB reserve — full GPU offload"
+            )
+        elif sys.vram_gb * VRAM_HEADROOM > CUDA_RESERVE_GB and bpl > 0 and ok_ram:
+            # Reserve-aware partial offload: leave CUDA_RESERVE_GB free and
+            # charge each GPU layer its proportional share of the KV cache
+            # (llama.cpp places KV on the same device as its layer).
+            avail = sys.vram_gb * VRAM_HEADROOM - CUDA_RESERVE_GB
+            total_units = profile.model_memory_gb + kv_gb  # scales linearly w/ layers
+            n_gpu_layers = int(avail * profile.total_layers / total_units)
+            n_gpu_layers = max(1, min(profile.total_layers - 1, n_gpu_layers))
+            if n_gpu_layers >= 1:
+                use_gpu = True
+                reasoning_parts.append(
+                    f"Partial GPU offload: {n_gpu_layers} of {profile.total_layers} layers "
+                    f"(reserve-aware: KV cache charged per offloaded layer)"
+                )
+            else:
+                reasoning_parts.append("Model fits RAM but not VRAM — CPU mode")
+        elif ok_ram:
+            reasoning_parts.append(
+                f"Model ({profile.model_memory_gb:.1f} GB) exceeds reserve-aware VRAM — CPU mode"
+            )
+        else:
+            reasoning_parts.append(
+                f"Model+KV does not fit RAM headroom at ctx {n_ctx} — smallest context"
+            )
+
+        batch = self._optimal_batch(profile, sys, n_ctx)
 
         strategy = LoadStrategy(
             n_ctx=n_ctx,
             n_gpu_layers=n_gpu_layers,
             use_gpu=use_gpu,
             batch_size=batch,
+            bytes_per_layer=round(bpl, 4),
             reasoning="; ".join(reasoning_parts),
-            fits_vram=self._check_fits_vram(profile, use_gpu),
-            fits_ram=self._check_fits_ram(profile),
-            fallback_chain=["full_gpu", "half_gpu", "cpu"] if use_gpu else ["cpu"],
+            fits_vram=bool(ok_vram),
+            fits_ram=bool(ok_ram),
+            fallback_chain=["full_gpu", "partial_gpu", "cpu"] if use_gpu else ["cpu"],
         )
 
         logger.info(
@@ -394,43 +410,80 @@ class ModelRouter:
         )
         return strategy
 
+    def plan_with_overrides(
+        self, profile: ModelProfile, *,
+        n_ctx: Optional[int] = None,
+        use_gpu: Optional[bool] = None,
+        n_gpu_layers: Optional[int] = None,
+    ) -> LoadStrategy:
+        """Re-plan after a user override, recomputing fits for the new ctx.
+
+        The auto plan picks ctx/layers; this applies a user's explicit
+        choice and reports whether the result actually fits.
+        """
+        s = self.plan(profile)
+        if n_ctx is not None:
+            s.n_ctx = int(n_ctx)
+        if use_gpu is not None:
+            s.use_gpu = bool(use_gpu)
+        if n_gpu_layers is not None:
+            s.n_gpu_layers = int(n_gpu_layers)
+        if not s.use_gpu:
+            s.n_gpu_layers = 0
+        ok_ram, ok_vram, _ = self._ctx_fits(profile, self._system, s.n_ctx)
+        s.fits_vram = bool(ok_vram)
+        s.fits_ram = bool(ok_ram)
+        return s
+
     # ------------------------------------------------------------------
     # Adaptive helpers
     # ------------------------------------------------------------------
 
+    def _ctx_fits(
+        self, profile: ModelProfile, sys: SystemProfile, n_ctx: int
+    ) -> Tuple[bool, bool, float]:
+        """(ok_ram, ok_vram, kv_gb) for a candidate context size."""
+        _, kv_gb, _ = _estimate_memory_detailed(
+            profile.model_memory_gb, profile.total_layers, n_ctx,
+            getattr(profile, "kv_heads", None),
+            getattr(profile, "head_dim", None) or 128,
+        )
+        total = profile.model_memory_gb + kv_gb
+        ok_ram = (sys.ram_gb <= 0) or (total <= sys.ram_gb * RAM_HEADROOM)
+        ok_vram = False
+        if sys.has_gpu_support and sys.vram_gb > 0:
+            ok_vram = total + CUDA_RESERVE_GB <= sys.vram_gb
+        return ok_ram, ok_vram, kv_gb
+
     def _optimal_context(self, profile: ModelProfile, sys: SystemProfile) -> int:
-        """Choose the best context size for this model + system."""
-        # If the model declares a trained context, respect it
-        if profile.trained_context > 0:
-            # Don't go above trained context (degrades quality)
-            return min(profile.trained_context, 32768)
-        # Memory-aware: fit model + KV within available RAM
-        # KV at 32K context is ~20% of model size (heuristic)
-        kv_at_32k = profile.model_memory_gb * 0.2
-        if profile.model_memory_gb + kv_at_32k > sys.ram_gb * 0.8 and sys.ram_gb > 0:
-            # Scale down context proportionally
-            ratio = (sys.ram_gb * 0.8 - profile.model_memory_gb) / max(kv_at_32k, 0.01)
-            ratio = max(0.1, min(1.0, ratio))
-            return max(512, int(32768 * ratio))
-        return 32768
+        """Largest ctx from the canonical options that fits RAM (and, above
+        8192, also fits reserve-aware VRAM on GPU systems).
 
-    def _optimal_batch(self, profile: ModelProfile, sys: SystemProfile) -> int:
-        """Choose batch size. Larger models and more RAM → larger batch."""
-        if profile.size_tier in (SizeTier.TINY, SizeTier.SMALL):
-            return 256
-        if profile.size_tier in (SizeTier.LARGE, SizeTier.XLARGE):
-            return 512
-        if profile.size_tier in (SizeTier.XXLARGE, SizeTier.MEGA):
+        Never blindly returns min(trained_context, 32768): on a small GPU
+        that context may not even fit in RAM once KV is counted.
+        """
+        cap = profile.trained_context if profile.trained_context > 0 else 32768
+        for cand in sorted(CTX_OPTIONS, reverse=True):
+            if cand > cap:
+                continue
+            ok_ram, ok_vram, _ = self._ctx_fits(profile, sys, cand)
+            if not ok_ram:
+                continue
+            if not (sys.has_gpu_support and sys.vram_gb > 0):
+                return cand
+            if ok_vram or cand <= 8192:
+                return cand
+        return 2048
+
+    def _optimal_batch(self, profile: ModelProfile, sys: SystemProfile,
+                       n_ctx: int = 0) -> int:
+        """Canonical batch: 512 default; 256 on long ctx or tiny VRAM;
+        1024 only for giant models on big GPUs."""
+        if profile.size_tier in (SizeTier.XXLARGE, SizeTier.MEGA) and sys.vram_gb >= 16:
             return 1024
+        if n_ctx >= 16384 or (sys.vram_gb > 0 and sys.vram_gb < 6):
+            return 256
         return 512
-
-    def _check_fits_vram(self, profile: ModelProfile, use_gpu: bool) -> bool:
-        if not use_gpu:
-            return False
-        return profile.model_memory_gb <= self._system.vram_gb * 0.85
-
-    def _check_fits_ram(self, profile: ModelProfile) -> bool:
-        return profile.total_memory_gb <= self._system.ram_gb * 0.85
 
     # ------------------------------------------------------------------
     # Role-based routing

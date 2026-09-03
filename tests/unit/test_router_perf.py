@@ -54,3 +54,63 @@ def test_defaults_module_exists_and_canonical():
     assert "<end_of_turn>" in defaults.STOP_TOKENS_UNIFIED
     # The bare lowercase "user:" trap must not live in the canonical stop set.
     assert "user:" not in defaults.STOP_TOKENS_UNIFIED
+
+
+# ---------------------------------------------------------------------------
+# Task 3: fit-aware plan() + reserve-aware partial offload
+# ---------------------------------------------------------------------------
+
+def _router_8gb_32gb():
+    return ModelRouter(system=SystemProfile(
+        ram_gb=32.0, vram_gb=8.0, has_gpu_support=True))
+
+
+def test_plan_caps_ctx_by_vram_not_trained():
+    r = _router_8gb_32gb()
+    prof = ModelProfile(filename="huge-70b-Q4.gguf", file_size_gb=40.0,
+                        total_layers=80, trained_context=128000, model_memory_gb=40.0)
+    s = r.plan(prof)
+    assert s.n_ctx <= 8192  # must NOT return min(128000, 32768)=32768 on 8GB
+    assert s.use_gpu is False
+
+
+def test_plan_partial_reserves_kv():
+    r = _router_8gb_32gb()
+    prof = ModelProfile(filename="qwen-14b-Q4.gguf", file_size_gb=8.0,
+                        total_layers=40, trained_context=32768, model_memory_gb=8.0)
+    s = r.plan(prof)
+    assert 0 < s.n_gpu_layers < 40  # partial, not full, not CPU
+    assert "Partial" in s.reasoning
+
+
+def test_plan_full_offload_checks_kv_too():
+    # 4.9 GB model fits VRAM alone but model+KV at 32k ctx does not.
+    r = _router_8gb_32gb()
+    prof = ModelProfile(filename="gemma-8-q4.gguf", file_size_gb=4.9,
+                        total_layers=32, trained_context=32768, model_memory_gb=4.9,
+                        kv_heads=8, head_dim=128)
+    s = r.plan(prof)
+    # KV at 32k ~= 4 GiB -> total ~9 GiB > 6.8 usable; must drop ctx.
+    assert s.n_ctx <= 16384
+
+
+def test_plan_reasoning_reports_partial_layers():
+    r = _router_8gb_32gb()
+    prof = ModelProfile(filename="qwen-14b-Q4.gguf", file_size_gb=8.0,
+                        total_layers=40, trained_context=32768, model_memory_gb=8.0)
+    s = r.plan(prof)
+    assert s.bytes_per_layer == pytest.approx(8.0 / 40, abs=0.001)
+    assert "of 40" in s.reasoning
+
+
+def test_plan_with_overrides_recomputes_fits():
+    r = _router_8gb_32gb()
+    prof = ModelProfile(filename="gemma-3-8b-it-Q4_K_M.gguf", file_size_gb=5.0,
+                        total_layers=32, trained_context=8192, model_memory_gb=5.0,
+                        kv_heads=8, head_dim=128)
+    auto = r.plan(prof)
+    assert auto.fits_vram  # 5 GB model + 1 GB KV at 8k ctx fits 6.8 GB usable
+    forced = r.plan_with_overrides(prof, n_ctx=32768)
+    # Same model forced to 32k ctx must NOT still claim fits_vram.
+    assert forced.n_ctx == 32768
+    assert forced.fits_vram is False

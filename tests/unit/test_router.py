@@ -241,7 +241,9 @@ def test_plan_gpu_partial_offload():
     assert 0 < strategy.n_gpu_layers <= 32  # partial offload
 
 
-def test_plan_gpu_too_large_for_vram():
+def test_plan_gpu_large_model_ram_fit_partials():
+    # 20 GB model on 8 GB VRAM / 64 GB RAM: too big for full offload but
+    # fits RAM, so the reserve-aware plan offloads the layers that fit.
     sys = SystemProfile(ram_gb=64.0, vram_gb=8.0, has_gpu_support=True)
     router = ModelRouter(system=sys)
     profile = ModelProfile(
@@ -250,7 +252,8 @@ def test_plan_gpu_too_large_for_vram():
     )
     strategy = router.plan(profile)
 
-    assert strategy.use_gpu is False
+    assert strategy.use_gpu is True
+    assert 0 < strategy.n_gpu_layers < 80  # reserve-aware partial offload
     assert strategy.fits_ram is True
 
 
