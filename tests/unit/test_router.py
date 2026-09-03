@@ -471,3 +471,31 @@ def test_gguf_meta_shared_across_readers(tmp_path):
     assert read_gguf_general_metadata(p) == shared
     assert shared["architecture"] == "llama"
     assert shared["llama.attention.head_count_kv"] == 8
+
+
+# ---------------------------------------------------------------------------
+# Task 5: nullable auto contract + mtime-aware cache
+# ---------------------------------------------------------------------------
+
+def test_load_request_nullable_auto_contract():
+    from ggufloader.api.routes.model import LoadRequest
+    assert LoadRequest.model_fields["n_ctx"].is_required() is False
+    assert LoadRequest.model_fields["n_ctx"].default is None
+    assert LoadRequest.model_fields["n_gpu_layers"].default is None
+    assert LoadRequest.model_fields["use_gpu"].default is None
+    assert LoadRequest.model_fields["role"].default == "chat"
+
+
+def test_inspect_cache_invalidated_on_mtime_change(tmp_path):
+    from ggufloader.core.router import ModelRouter
+    r = ModelRouter(system=SystemProfile(ram_gb=16.0, vram_gb=0.0,
+                                         has_gpu_support=False))
+    kvs = _kv_str("general.architecture", "llama") + _kv_u32("llama.block_count", 32)
+    p = _create_model_file(tmp_path, "swap.gguf", kvs, kv_count=2)
+    prof1 = r.inspect(str(p))
+    # Rewrite the file with different metadata (same path/size-ish).
+    kvs2 = _kv_str("general.architecture", "qwen2") + _kv_u32("qwen2.block_count", 28)
+    p.write_bytes(_make_gguf(kvs2, kv_count=2) + b"\x00" * 64)
+    prof2 = r.inspect(str(p))
+    assert prof1.architecture == "llama"
+    assert prof2.architecture == "qwen2"  # cache must not serve the stale profile

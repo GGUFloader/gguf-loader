@@ -55,6 +55,19 @@ def get_router() -> ModelRouter:
     return _router
 
 
+def refresh_router_system() -> None:
+    """Re-detect RAM/VRAM/GPU support after a hardware-level change.
+
+    Call after a GPU install/upgrade so future plans reflect reality
+    instead of a stale SystemProfile captured at first use.
+    """
+    global _router
+    if _router is not None:
+        _router.system.refresh()
+        logger.info("Router system profile refreshed")
+    # If no router exists yet, the next get_router() detects fresh anyway.
+
+
 def is_model_loaded() -> bool:
     """Check if a model is currently loaded."""
     return _model_backend is not None

@@ -108,6 +108,13 @@ class SystemProfile:
             has_gpu_support=gpu_support,
         )
 
+    def refresh(self) -> "SystemProfile":
+        """Re-run detection in place (e.g. right after a GPU install)."""
+        fresh = SystemProfile.detect()
+        for name, value in vars(fresh).items():
+            setattr(self, name, value)
+        return self
+
 
 @dataclass
 class ModelProfile:
@@ -209,7 +216,8 @@ class ModelRouter:
 
     def __init__(self, system: Optional[SystemProfile] = None) -> None:
         self._system = system or SystemProfile.detect()
-        self._profile_cache: Dict[str, ModelProfile] = {}  # path → cached profile
+        # path+size+mtime → cached profile (stale file = re-inspect)
+        self._profile_cache: Dict[Any, ModelProfile] = {}
 
     @property
     def system(self) -> SystemProfile:
@@ -228,12 +236,14 @@ class ModelRouter:
         if not p.exists():
             raise FileNotFoundError(f"Model file not found: {path}")
 
-        # Return cached profile if available
-        cache_key = str(p.resolve())
+        # Cache is invalidated when the file changes on disk (ns precision
+        # so two writes in the same second are still seen as distinct).
+        st = p.stat()
+        cache_key = (str(p.resolve()), st.st_size, st.st_mtime_ns)
         if cache_key in self._profile_cache:
             return self._profile_cache[cache_key]
 
-        file_size_gb = p.stat().st_size / (1024 ** 3)
+        file_size_gb = st.st_size / (1024 ** 3)
 
         # Read GGUF metadata
         meta = _read_gguf_metadata(p)

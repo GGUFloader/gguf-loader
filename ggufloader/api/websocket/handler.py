@@ -316,8 +316,9 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
 
         if model_path:
             try:
-                from ggufloader.core.router import ModelRouter, ModelRole
-                router = ModelRouter()
+                from ggufloader.core.router import ModelRole
+                from ggufloader.api.deps import get_router
+                router = get_router()
                 profile = router.inspect(model_path)
                 role_config = router.route(profile, ModelRole.AGENT)
                 agent_temperature = role_config.temperature

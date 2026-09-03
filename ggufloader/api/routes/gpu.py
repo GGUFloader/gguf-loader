@@ -6,6 +6,8 @@ import logging
 
 from fastapi import APIRouter
 
+from ggufloader.api.deps import refresh_router_system
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -29,4 +31,6 @@ async def install_gpu() -> dict:
     """Install GPU support (triggers background installation)."""
     # This would trigger the GPU install service
     # For now, return a placeholder
+    # A re-detection lets the router's SystemProfile see the new GPU.
+    refresh_router_system()
     return {"status": "installation_started", "message": "GPU installation initiated"}

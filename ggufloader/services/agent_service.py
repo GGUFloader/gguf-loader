@@ -143,7 +143,8 @@ class AgentService(QObject):
         """
         from ggufloader.core.agent.model_profiles import get_profile
         from ggufloader.core.agent.token_cleaner import get_cleaner
-        from ggufloader.core.router import ModelRouter, ModelRole
+        from ggufloader.core.router import ModelRole
+        from ggufloader.api.deps import get_router
 
         self.stop()
         if self._engine is not None:
@@ -155,7 +156,7 @@ class AgentService(QObject):
         router_profile = None
         agent_role_config = None
         try:
-            router = ModelRouter()
+            router = get_router()
             router_profile = router.inspect(model_path)
             agent_role_config = router.route(router_profile, ModelRole.AGENT)
         except Exception as e:  # noqa: BLE001 - router must never block agent

@@ -21,9 +21,10 @@ logger = logging.getLogger(__name__)
 
 class LoadRequest(BaseModel):
     path: str
-    use_gpu: bool | None = None  # None = auto-detect via router
-    n_ctx: int = 32768
-    n_gpu_layers: int = -1
+    use_gpu: bool | None = None      # None = auto-detect via router
+    n_ctx: int | None = None         # None = router picks (auto contract)
+    n_gpu_layers: int | None = None  # None = router picks
+    role: str = "chat"
 
 
 class ModelInfo(BaseModel):
@@ -83,40 +84,48 @@ async def model_info() -> ModelInfo:
 
 @router.post("/load")
 async def load_model(req: LoadRequest) -> dict:
-    """Load a GGUF model file. Uses router for GPU auto-detection when use_gpu not set."""
+    """Load a GGUF model. Router decides; null fields mean "auto".
+
+    Any of n_ctx / use_gpu / n_gpu_layers being null delegates that
+    decision to the router's plan; explicit values override it and are
+    still verified against real memory before the load ladder runs.
+    """
     if not os.path.exists(req.path):
         raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
 
     try:
-        # Use the router for auto GPU detection when use_gpu is not explicitly set
+        try:
+            role = ModelRole(req.role)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Unknown role: {req.role}")
+
         router = get_router()
-        if router is not None and req.use_gpu is None:
-            # Let the router decide n_gpu_layers — don't pass it unless user chose a specific value
-            backend, profile, strategy, config = router.load(
-                req.path,
-                n_ctx=req.n_ctx,
-            )
-            set_model_backend(backend)
-            return {
-                "status": "loaded",
-                "path": req.path,
-                "strategy": {
-                    "n_ctx": strategy.n_ctx,
-                    "n_gpu_layers": strategy.n_gpu_layers,
-                    "use_gpu": strategy.use_gpu,
-                    "reasoning": strategy.reasoning,
-                },
-            }
-        # Fallback: direct load without router
-        backend = ModelBackend(
+        backend, profile, strategy, _config = router.load(
             req.path,
-            use_gpu=req.use_gpu or False,
+            role,
             n_ctx=req.n_ctx,
+            use_gpu=req.use_gpu,
             n_gpu_layers=req.n_gpu_layers,
         )
-        backend.load()
         set_model_backend(backend)
-        return {"status": "loaded", "path": req.path}
+        return {
+            "status": "loaded",
+            "path": req.path,
+            "filename": profile.filename,
+            "strategy": {
+                "n_ctx": strategy.n_ctx,
+                "n_gpu_layers": strategy.n_gpu_layers,
+                "use_gpu": strategy.use_gpu,
+                "batch_size": strategy.batch_size,
+                "fits_vram": strategy.fits_vram,
+                "fits_ram": strategy.fits_ram,
+                "fallback_chain": strategy.fallback_chain,
+                "attempts": strategy.attempts,
+                "reasoning": strategy.reasoning,
+            },
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Model load failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -143,23 +152,45 @@ async def model_profile(path: str) -> dict:
 
 @router.get("/estimate")
 async def estimate_memory(path: str) -> dict:
-    """Estimate VRAM/RAM needed for a model file."""
+    """Estimate RAM/VRAM needed for a model via the router's GQA-aware math."""
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
-    file_size = os.path.getsize(path)
-    # Rough estimate: model size * 1.2 for overhead
-    estimated_ram = int(file_size * 1.2)
-    estimated_vram = int(file_size * 0.8) if file_size > 1_000_000_000 else 0
-
-    return {
-        "file_size": file_size,
-        "estimated_ram_bytes": estimated_ram,
-        "estimated_vram_bytes": estimated_vram,
-        "file_size_human": _human_size(file_size),
-        "estimated_ram_human": _human_size(estimated_ram),
-        "estimated_vram_human": _human_size(estimated_vram) if estimated_vram > 0 else "N/A",
-    }
+    router = get_router()
+    try:
+        profile = router.inspect(path)
+        strategy = router.plan(profile)
+        total_gb = profile.model_memory_gb + profile.kv_memory_gb
+        estimated_ram = int(total_gb * (1024 ** 3))
+        # VRAM need at the planned ctx: model + KV when fully offloaded;
+        # for partial plans report the GPU-resident share.
+        if strategy.use_gpu and strategy.n_gpu_layers == -1:
+            estimated_vram = estimated_ram
+        elif strategy.use_gpu and profile.total_layers:
+            frac = strategy.n_gpu_layers / profile.total_layers
+            estimated_vram = int(
+                (profile.model_memory_gb + profile.kv_memory_gb) * frac * (1024 ** 3))
+        else:
+            estimated_vram = 0
+        return {
+            "file_size": int(profile.file_size_gb * (1024 ** 3)),
+            "estimated_ram_bytes": estimated_ram,
+            "estimated_vram_bytes": estimated_vram,
+            "file_size_human": _human_size(int(profile.file_size_gb * (1024 ** 3))),
+            "estimated_ram_human": _human_size(estimated_ram),
+            "estimated_vram_human": _human_size(estimated_vram) if estimated_vram > 0 else "N/A",
+            "strategy": {
+                "n_ctx": strategy.n_ctx,
+                "n_gpu_layers": strategy.n_gpu_layers,
+                "use_gpu": strategy.use_gpu,
+                "reasoning": strategy.reasoning,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Router estimate failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ------------------------------------------------------------------
@@ -206,16 +237,27 @@ async def router_inspect(path: str) -> dict:
 
 
 @router.get("/router/plan")
-async def router_plan(path: str, n_ctx: Optional[int] = None) -> dict:
-    """Plan the optimal loading strategy for a model on this system."""
+async def router_plan(
+    path: str,
+    n_ctx: Optional[int] = None,
+    use_gpu: Optional[bool] = None,
+    n_gpu_layers: Optional[int] = None,
+) -> dict:
+    """Plan the optimal loading strategy for a model on this system.
+
+    Optional overrides are honored AND fits are recomputed against the
+    real memory budget, so the UI can show "wanted 32k, fits? no".
+    """
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
     router = get_router()
     try:
         profile = router.inspect(path)
-        strategy = router.plan(profile)
-        if n_ctx is not None:
-            strategy.n_ctx = n_ctx
+        if any(v is not None for v in (n_ctx, use_gpu, n_gpu_layers)):
+            strategy = router.plan_with_overrides(
+                profile, n_ctx=n_ctx, use_gpu=use_gpu, n_gpu_layers=n_gpu_layers)
+        else:
+            strategy = router.plan(profile)
         return {
             "n_ctx": strategy.n_ctx,
             "n_gpu_layers": strategy.n_gpu_layers,
@@ -410,9 +452,7 @@ async def model_catalog(
             # Router inspection (lightweight)
             profile_data = {}
             try:
-                from ggufloader.core.router import ModelRouter
-                router = ModelRouter()
-                profile = router.quick_profile(str(f))
+                profile = get_router().quick_profile(str(f))
                 profile_data = {
                     "family": profile.get("family", ""),
                     "architecture": profile.get("architecture", ""),
