@@ -120,6 +120,8 @@ class ModelProfile:
     size_tier: SizeTier = SizeTier.MEDIUM
     param_count_estimate: str = ""  # "7B", "13B", etc. (from filename)
     total_layers: int = 0
+    kv_heads: Optional[int] = None   # GQA: attention.head_count_kv
+    head_dim: Optional[int] = None   # per-head dim (defaults to 128)
     quantization: str = ""          # "Q4_K_M", "Q8_0", etc.
     quant_tier: QuantTier = QuantTier.GOOD
 
@@ -261,9 +263,14 @@ class ModelRouter:
             from ggufloader.core.llm.model_profiles import _template_supports_system
             supports_sys = _template_supports_system(chat_template)
 
-        # Memory estimates
-        model_gb, kv_gb = _estimate_memory_detailed(
-            file_size_gb, total_layers, max_ctx or 32768
+        # Memory estimates (GQA-aware: KV heads + head dim from metadata)
+        kv_heads = _extract_uint(meta, arch, "attention.head_count_kv") or None
+        head_count = _extract_uint(meta, arch, "attention.head_count")
+        embed_dim = _extract_uint(meta, arch, "embedding_length")
+        head_dim = (embed_dim // head_count) if (head_count and embed_dim) else None
+        model_gb, kv_gb, _bpl = _estimate_memory_detailed(
+            file_size_gb, total_layers, max_ctx or 32768,
+            kv_heads=kv_heads, head_dim=head_dim,
         )
 
         profile = ModelProfile(
@@ -277,6 +284,8 @@ class ModelRouter:
             size_tier=size_tier,
             param_count_estimate=param_estimate,
             total_layers=total_layers,
+            kv_heads=kv_heads,
+            head_dim=head_dim,
             quantization=quant,
             quant_tier=quant_tier,
             trained_context=trained_ctx,
@@ -805,19 +814,28 @@ def _is_code_model(profile: ModelProfile) -> bool:
 # -- Memory estimation --
 
 def _estimate_memory_detailed(
-    file_size_gb: float, layers: int, n_ctx: int
-) -> Tuple[float, float]:
-    """Estimate model + KV cache memory in GB."""
+    file_size_gb: float, layers: int, n_ctx: int,
+    kv_heads: Optional[int] = None, head_dim: Optional[int] = None,
+) -> Tuple[float, float, float]:
+    """Estimate model + KV cache memory in GB, plus bytes-per-layer.
+
+    GQA-aware: KV bytes = n_ctx * 2 (K+V) * layers * kv_heads * head_dim *
+    2 bytes (fp16). Falls back to 8 kv heads / 128 head dim when the GGUF
+    header did not expose them.
+    """
     model_gb = file_size_gb  # GGUF file size ≈ model weights
 
-    if layers > 0:
-        head_dim = 128
-        kv_per_layer = n_ctx * 2 * head_dim * 2  # bytes (key+value, float16)
-        kv_gb = (layers * kv_per_layer) / (1024 ** 3)
+    if layers and layers > 0:
+        kv_heads_eff = kv_heads or 8
+        head_dim_eff = head_dim or 128
+        kv_bytes = n_ctx * 2 * layers * kv_heads_eff * head_dim_eff * 2
+        kv_gb = kv_bytes / (1024 ** 3)
+        bpl = file_size_gb / layers
     else:
         kv_gb = model_gb * 0.2 * (n_ctx / 32768)
+        bpl = 0.0
 
-    return model_gb, kv_gb
+    return model_gb, kv_gb, bpl
 
 
 def _fits_in_vram(profile: ModelProfile, use_gpu: bool) -> bool:

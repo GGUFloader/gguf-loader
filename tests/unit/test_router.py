@@ -1,6 +1,8 @@
 """Tests for the rich model router (core/router.py)."""
 
 import struct
+
+import pytest
 from pathlib import Path
 
 from ggufloader.core.router import (
@@ -118,16 +120,18 @@ def test_is_thinking_model():
 # ---------------------------------------------------------------------------
 
 def test_estimate_memory_detailed():
-    model_gb, kv_gb = _estimate_memory_detailed(4.0, 32, 32768)
+    model_gb, kv_gb, bpl = _estimate_memory_detailed(4.0, 32, 32768)
     assert model_gb == 4.0
-    assert kv_gb > 0
-    assert kv_gb < model_gb  # KV should be smaller than model for typical setups
+    # 32k ctx, 32 layers, 8 GQA kv heads x dim 128 x fp16 = 4.0 GiB
+    assert kv_gb == pytest.approx(4.0, abs=0.05)
+    assert bpl == pytest.approx(4.0 / 32)
 
 
 def test_estimate_memory_no_layers():
-    model_gb, kv_gb = _estimate_memory_detailed(4.0, 0, 32768)
+    model_gb, kv_gb, bpl = _estimate_memory_detailed(4.0, 0, 32768)
     assert model_gb == 4.0
     assert kv_gb > 0  # fallback estimation
+    assert bpl == 0.0
 
 
 # ---------------------------------------------------------------------------
