@@ -114,3 +114,34 @@ def test_plan_with_overrides_recomputes_fits():
     # Same model forced to 32k ctx must NOT still claim fits_vram.
     assert forced.n_ctx == 32768
     assert forced.fits_vram is False
+
+
+# ---------------------------------------------------------------------------
+# Task 14: golden verification matrix (Gemma-8-Q4 on 8GB/32GB + edge cases)
+# ---------------------------------------------------------------------------
+
+def test_golden_gemma8_8gb_vram():
+    """The reference rig's canonical plan: full GPU offload at 8k context."""
+    r = ModelRouter(system=SystemProfile(
+        ram_gb=32.0, vram_gb=8.0, gpu_name="8GB", gpu_backend="cuda",
+        cpu_cores=12, has_gpu_support=True))
+    p = ModelProfile(filename="gemma-3-8b-it-Q4_K_M.gguf", file_size_gb=5.0,
+                     total_layers=32, trained_context=8192, model_memory_gb=5.0,
+                     kv_heads=8, head_dim=128)
+    s = r.plan(p)
+    assert (s.n_ctx, s.n_gpu_layers, s.use_gpu) == (8192, -1, True)
+    assert s.batch_size == 512 and s.fits_vram and s.fits_ram
+
+
+def test_golden_14b_partial_and_70b_cpu():
+    """14B partial-offloads on 8GB; a 40GB 70B stays on CPU at low ctx."""
+    r = ModelRouter(system=SystemProfile(
+        ram_gb=32.0, vram_gb=8.0, has_gpu_support=True))
+    s1 = r.plan(ModelProfile(filename="qwen-14b-Q4.gguf", file_size_gb=8.0,
+                             total_layers=40, trained_context=32768,
+                             model_memory_gb=8.0, kv_heads=8, head_dim=128))
+    assert 0 < s1.n_gpu_layers < 40
+    s2 = r.plan(ModelProfile(filename="huge-70b-Q4.gguf", file_size_gb=40.0,
+                             total_layers=80, trained_context=8192,
+                             model_memory_gb=40.0))
+    assert s2.use_gpu is False and s2.n_ctx <= 8192

@@ -442,3 +442,34 @@ def test_e2e_run_command(tmp_path):
     assert len(tool_results) == 1
     assert tool_results[0]["tool_name"] == "run_command"
     agent.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 14: golden log assertions - a clean run stays silent
+# ---------------------------------------------------------------------------
+
+def test_e2e_readonly_run_no_error_logs(tmp_path, caplog):
+    """A clean read-only run emits no JSON-parse or empty-output errors."""
+    import logging
+
+    (tmp_path / "hello.txt").write_text("hello world")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "nested.py").write_text("print('hi')")
+
+    responses = [
+        _make_tool_call("list_directory", {"path": "."}),
+        _make_answer("Found 2 items: hello.txt and sub/"),
+    ]
+    llm = ScriptedLLM(responses)
+    agent = GraphAgent(
+        llm=llm, workspace=tmp_path, plan=False, max_steps=3,
+        system_prompt="You are a test assistant for unit tests.",
+    )
+    with caplog.at_level(logging.INFO, logger="ggufloader.core.agent"):
+        result = agent.process(user_message="List the files")
+
+    assert result["response"] == "Found 2 items: hello.txt and sub/"
+    assert llm._call_count <= 3  # tool decision + final answer, no retry spam
+    assert "extract_json failed" not in caplog.text
+    assert "NO answer and NO tool_calls" not in caplog.text
+    agent.close()
