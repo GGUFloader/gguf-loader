@@ -216,9 +216,12 @@ class AgentPanel(QWidget):
             try:
                 parts = text.split()
                 step_part = parts[1]  # "Step"
-                nums = parts[2].split("/")  # "3/8"
+                nums = parts[2].split("/")  # "3/8" (plan total) or "3" (no total)
                 if len(nums) == 2:
                     self.metrics_bar.update_steps(int(nums[0]), int(nums[1]))
+                else:
+                    # No denominator → just the current step; total stays as set
+                    self.metrics_bar.update_steps(int(nums[0]))
             except (IndexError, ValueError):
                 pass
         if not text:

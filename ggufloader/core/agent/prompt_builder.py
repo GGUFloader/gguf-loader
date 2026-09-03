@@ -3,7 +3,7 @@ PromptBuilder — constructs LLM prompts from messages + tool results.
 
 Extracted from GraphAgent to separate prompt construction from the agent
 loop.  The builder owns:
-  - System prompt generation (lightweight file-assistant mode)
+  - System prompt generation (router-provided; never a generic fallback)
   - Cached prefix (system prompt + workspace context)
   - Action prompt assembly (prefix + transcript + tool results + directives)
   - Tool result formatting for context
@@ -37,8 +37,8 @@ class PromptBuilder:
     tools : ToolRegistry
         Registry of available tools (used for __TOOLS__ replacement).
     system_prompt_override : Optional[str]
-        If provided, replaces the lightweight default system prompt. Used by
-        the router to inject a per-family system prompt.
+        System prompt from the model router (model_families.json). Required:
+        the agent refuses to run without it (see :meth:`system_prompt`).
     """
 
     def __init__(
@@ -57,19 +57,22 @@ class PromptBuilder:
     def system_prompt(self) -> str:
         """Build the system prompt with workspace and tool descriptions.
 
-        Uses the router-provided prompt (from model_families.json). Logs a
-        warning when no router prompt was supplied — the router should
-        always provide one in production.
+        The prompt MUST come from the model router (model_families.json).
+        There is deliberately NO generic fallback: running the agent with
+        a made-up prompt silently degrades it (the exact bug this module
+        used to have). If the router failed to provide one, we fail loudly
+        so the misconfiguration is visible instead of the agent quietly
+        misbehaving.
         """
         if not self._system_prompt_override:
-            import logging as _log
-            _log.getLogger(__name__).warning(
-                "No system prompt provided by the router. "
-                "Falling back to minimal prompt — add system_prompt to model_families.json."
+            raise RuntimeError(
+                "No system prompt provided by the model router. Add a "
+                "`system_prompt` for this model family in "
+                "ggufloader/config/model_families.json (or pass "
+                "system_prompt=... when constructing GraphAgent). The agent "
+                "refuses to run with a generic fallback prompt."
             )
-        base = self._system_prompt_override or (
-            "You are a helpful file assistant. Read files and help users."
-        )
+        base = self._system_prompt_override
         base = base.replace("__WORKSPACE__", str(self.workspace))
         base = base.replace("__TOOLS__", self.tools.describe())
         return base

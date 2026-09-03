@@ -177,6 +177,13 @@ class AgentTransport:
             self._send({"type": "progress_step_complete", "content": stripped})
         elif stripped.startswith("Plan") or stripped.startswith("All plan") or stripped.startswith("Verif"):
             self._send({"type": "progress_step_complete", "content": stripped})
+        # Bare "Step N/M" counters (no "> " prefix) are legacy reactive-loop
+        # messages whose total is max_steps, not the plan length. The plan
+        # length is the only valid total, so suppress these to avoid showing
+        # e.g. "Step 1/12" when the plan has 3 steps. A bare "Step N"
+        # (no denominator) is fine — it carries no misleading total.
+        elif re.match(r"^Step \d+/\d+$", stripped):
+            pass
         else:
             self._send({"type": "progress_announce", "content": stripped})
 

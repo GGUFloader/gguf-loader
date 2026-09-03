@@ -14,7 +14,7 @@ class _StepBumpingLLM:
 
 def test_agent_node_persists_bumped_max_steps():
     llm = _StepBumpingLLM()
-    agent = GraphAgent(llm=llm, workspace="/tmp/ws", max_steps=4)
+    agent = GraphAgent(llm=llm, workspace="/tmp/ws", max_steps=4, system_prompt='You are a test assistant for unit tests.')
     state: GraphState = {
         "messages": [{"role": "user", "content": "hi"}],
         "tool_results": [],

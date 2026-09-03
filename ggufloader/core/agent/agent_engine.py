@@ -1023,7 +1023,13 @@ class AgentEngine:
                     break
 
                 if step > 1:
-                    status(f"▶ Step {step}/{self.max_steps}")
+                    # Step total comes from the plan when one exists;
+                    # otherwise report just the current step (max_steps
+                    # is a safety budget, not a plan length).
+                    if self._plan:
+                        status(f"▶ Step {step}/{len(self._plan)}")
+                    else:
+                        status(f"▶ Step {step}")
 
                 action = self._request_action()
                 if action is None:

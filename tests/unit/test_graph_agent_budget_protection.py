@@ -15,7 +15,7 @@ class _UnderestimatingLLM:
 
 def test_max_steps_never_shrinks_from_underestimate():
     llm = _UnderestimatingLLM()
-    agent = GraphAgent(llm=llm, workspace="/tmp/ws", max_steps=20)
+    agent = GraphAgent(llm=llm, workspace="/tmp/ws", max_steps=20, system_prompt='You are a test assistant for unit tests.')
     state: GraphState = {
         "messages": [{"role": "user", "content": "hi"}],
         "tool_results": [],

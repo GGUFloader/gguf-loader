@@ -212,7 +212,7 @@ def test_graph_agent_has_lightweight_core(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
 
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     assert hasattr(agent, '_context_budget')
     assert hasattr(agent, '_prefix_cache')
     assert hasattr(agent, '_workspace_ctx')
@@ -224,7 +224,7 @@ def test_graph_agent_processes_lightweight(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "Hello!"}'
 
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2, system_prompt='You are a test assistant for unit tests.')
     result = agent.process(user_message="Hi")
 
     assert result["response"] == "Hello!"

@@ -173,7 +173,7 @@ def test_graph_agent_has_workspace_ctx(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     assert hasattr(agent, '_workspace_ctx')
     agent.close()
 
@@ -183,7 +183,7 @@ def test_graph_agent_has_context_budget(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     assert hasattr(agent, '_context_budget')
     agent.close()
 
@@ -193,20 +193,31 @@ def test_graph_agent_has_prefix_cache(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     assert hasattr(agent, '_prefix_cache')
     agent.close()
 
 
-def test_graph_agent_system_prompt_is_lightweight(tmp_path):
-    """System prompt should use the lightweight file-assistant prompt."""
+def test_graph_agent_requires_router_system_prompt(tmp_path):
+    """Agent must fail loudly when no router system prompt is provided."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    with pytest.raises(RuntimeError, match="No system prompt provided"):
+        agent._system_prompt()
+    agent.close()
+
+
+def test_graph_agent_uses_router_system_prompt(tmp_path):
+    """Router-provided prompt is used verbatim (no fallback rewrite)."""
+    def fake_llm(prompt, **kwargs):
+        return '{"tool_calls": [], "answer": "ok"}'
+    
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path,
+                       system_prompt="You are a test assistant for unit tests.")
     prompt = agent._system_prompt()
-    # Should be the lightweight prompt
-    assert "file assistant" in prompt.lower()
+    assert prompt.startswith("You are a test assistant for unit tests.")
     agent.close()
 
 
@@ -228,7 +239,7 @@ def test_graph_agent_tool_count_includes_plugins(tmp_path):
         return '{"tool_calls": [], "answer": "ok"}'
     
     from ggufloader.core.agent.tool_registry import ToolRegistry as TR
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path))
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path), system_prompt='You are a test assistant for unit tests.')
     names = agent.tools.names()
     # Built-in tools
     assert "list_directory" in names

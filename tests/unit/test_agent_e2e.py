@@ -84,7 +84,7 @@ def test_e2e_list_directory(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, system_prompt='You are a test assistant for unit tests.')
     status_log = []
     tool_results = []
 
@@ -110,7 +110,7 @@ def test_e2e_write_and_read_file(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=5, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=5, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(
@@ -139,7 +139,7 @@ def test_e2e_search_files(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(
@@ -169,7 +169,7 @@ def test_e2e_glob_tool(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(
@@ -200,7 +200,7 @@ def test_e2e_tool_failure_retry(tmp_path):
 
     (tmp_path / "real.txt").write_text("hello")
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=5)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=5, system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(
@@ -229,7 +229,7 @@ def test_e2e_approval_flow(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     approvals = []
 
     def on_approval(payload):
@@ -264,7 +264,7 @@ def test_e2e_session_persistence(tmp_path):
     agent1 = GraphAgent(
         llm=llm1, workspace=tmp_path, max_steps=3,
         checkpoint_path=checkpoint, tools=_full_tools(tmp_path),
-    )
+    system_prompt='You are a test assistant for unit tests.')
     result1 = agent1.process(user_message="Create a notes file")
     assert "notes" in result1["response"].lower()
     thread_id = agent1.thread_id
@@ -279,7 +279,7 @@ def test_e2e_session_persistence(tmp_path):
         llm=llm2, workspace=tmp_path, max_steps=3,
         checkpoint_path=checkpoint,
         thread_id=thread_id,  # same thread
-    )
+    system_prompt='You are a test assistant for unit tests.')
 
     # The agent should have loaded previous messages
     assert checkpoint.exists()
@@ -300,11 +300,13 @@ def test_e2e_workspace_context_injection(tmp_path):
     responses = [_make_answer("Context received")]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=1)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=1, system_prompt='You are a test assistant for unit tests.')
 
-    # The system prompt should be lightweight (file-assistant mode)
+    # The router-provided system prompt must be used verbatim — the agent
+    # never falls back to a generic "file assistant" prompt anymore.
     sys_prompt = agent._system_prompt()
-    assert "file assistant" in sys_prompt.lower() or "AGENTS.md" in sys_prompt
+    assert sys_prompt.startswith("You are a test assistant for unit tests.")
+    assert "file assistant" not in sys_prompt.lower()
     agent.close()
 
 
@@ -328,7 +330,7 @@ def test_e2e_multi_step_plan(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=6, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=6, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(
@@ -352,7 +354,7 @@ def test_e2e_cancel_mechanism(tmp_path):
     responses = [_make_answer("ok")]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3)
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, system_prompt='You are a test assistant for unit tests.')
     assert not agent._cancel.is_set()
 
     agent.cancel()
@@ -401,7 +403,7 @@ def test_e2e_edit_file(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(
@@ -428,7 +430,7 @@ def test_e2e_run_command(tmp_path):
     ]
     llm = ScriptedLLM(responses)
 
-    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path))
+    agent = GraphAgent(llm=llm, workspace=tmp_path, plan=False, max_steps=3, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     tool_results = []
 
     result = agent.process(

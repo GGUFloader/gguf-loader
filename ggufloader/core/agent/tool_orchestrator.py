@@ -47,10 +47,12 @@ class ToolOrchestrator:
         tools: ToolRegistry,
         workspace: str,
         failed_signatures: Dict[str, int],
+        system_prompt: Optional[str] = None,
     ) -> None:
         self.tools = tools
         self.workspace = workspace
         self._failed = failed_signatures
+        self._system_prompt = system_prompt
 
     def execute_batch(
         self,
@@ -190,7 +192,7 @@ class ToolOrchestrator:
     ) -> Optional[Dict[str, Any]]:
         """Ask the model to correct a failed tool call; execute the corrected call."""
         from .prompt_builder import PromptBuilder
-        pb = PromptBuilder(Path(self.workspace), self.tools)
+        pb = PromptBuilder(Path(self.workspace), self.tools, system_prompt_override=self._system_prompt)
         prompt = pb.fix_prompt(failed_call, failed_result)
         raw = llm_call(prompt)
         from .agent_engine import extract_json

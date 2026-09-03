@@ -280,7 +280,7 @@ def test_graph_agent_has_lightweight_core(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
 
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     assert hasattr(agent, '_context_budget')
     assert hasattr(agent, '_prefix_cache')
     assert hasattr(agent, '_workspace_ctx')
@@ -293,7 +293,7 @@ def test_graph_agent_process_returns_response(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "Hello!"}'
 
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2, system_prompt='You are a test assistant for unit tests.')
     result = agent.process(user_message="Hi")
     assert result["response"] == "Hello!"
     agent.close()
@@ -305,7 +305,7 @@ def test_graph_agent_total_tool_count(tmp_path):
         return '{"tool_calls": [], "answer": "ok"}'
 
     from ggufloader.core.agent.tool_registry import ToolRegistry as TR
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path))
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path), system_prompt='You are a test assistant for unit tests.')
     names = agent.tools.names()
     # Phase 2 tools
     assert "glob" in names

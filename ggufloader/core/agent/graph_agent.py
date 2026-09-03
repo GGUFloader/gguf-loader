@@ -251,8 +251,11 @@ class GraphAgent:
                             "status": "pending",
                             "result": None,
                         })
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as parse_err:
+            logger.warning(
+                "_create_plan: could not parse plan JSON (len=%d). raw=%.500r err=%s",
+                len(text), text, parse_err,
+            )
 
         # Cap plan length — LLMs often create too many steps despite instructions
         MAX_PLAN_STEPS = 6
@@ -413,9 +416,16 @@ class GraphAgent:
         self._on_token = on_token or (lambda _tok: None)
         self._on_approval = on_approval or (lambda _payload: True)
 
-        # Create tool orchestrator for this turn
+        # Create tool orchestrator for this turn. Thread the router system
+        # prompt through so the failed-tool repair path uses the same prompt
+        # (PromptBuilder raises when no prompt is provided).
+        try:
+            orch_prompt = self._prompt_builder.system_prompt()
+        except RuntimeError:
+            orch_prompt = None
         self._tool_orch = ToolOrchestrator(
-            self.tools, str(self.workspace), self._failed_signatures
+            self.tools, str(self.workspace), self._failed_signatures,
+            system_prompt=orch_prompt,
         )
 
         base_messages = self._load_thread_messages() or list(self.messages)
@@ -506,7 +516,8 @@ class GraphAgent:
         tools = len(tool_results) if tool_results else 0
         return (
             f"I couldn't complete the full task ({reason}). "
-            f"Reached step {step}/{max_steps} after {tools} tool call(s). "
+            f"Stopped after {step} steps and {tools} tool call(s) "
+            f"(reached the {max_steps}-step safety budget). "
             "Try a more specific request or a smaller workspace scope."
         )
 
@@ -656,9 +667,13 @@ class GraphAgent:
                 "step": step,
             }
 
-        # Use actual plan length if available, otherwise max_steps
-        actual_max = len(plan) if plan else max_steps
-        writer({"event": "step", "step": step + 1, "max": actual_max})
+        # Step total comes ONLY from the plan length. The reactive loop
+        # has no meaningful total (max_steps is a safety budget, not a
+        # plan) so it reports just the current step, no denominator.
+        if plan:
+            writer({"event": "step", "step": step + 1, "max": len(plan)})
+        else:
+            writer({"event": "step", "step": step + 1})
 
         action, raw = self._request_action(
             messages, tool_results, writer, directive=state.get("directive", "")
@@ -1092,8 +1107,11 @@ class GraphAgent:
                 self._on_tool(result)
         elif event == "step":
             step = payload.get("step", 0)
-            maximum = payload.get("max", self.max_steps)
-            self._on_status(f"Step {step}/{maximum}")
+            maximum = payload.get("max")
+            if maximum is not None:
+                self._on_status(f"Step {step}/{maximum}")
+            else:
+                self._on_status(f"Step {step}")
 
     def _load_thread_messages(self) -> List[Dict[str, str]]:
         try:

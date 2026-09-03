@@ -36,7 +36,7 @@ class AgentMetricsBar(QWidget):
         self.setObjectName("agentMetricsBar")
         self._start_time: float = 0
         self._steps = 0
-        self._max_steps = 8
+        self._max_steps: int | None = None  # None = no plan total known
         self._tokens = 0
         self._retries = 0
         self._context_pct = 0
@@ -100,7 +100,7 @@ class AgentMetricsBar(QWidget):
         self._status_dot.setStyleSheet("color: #22c55e; font-size: 8px;")
         layout.addWidget(self._status_dot)
 
-    def start(self, max_steps: int = 8) -> None:
+    def start(self, max_steps: int | None = None) -> None:
         """Show the bar and start timing."""
         self._start_time = time.monotonic()
         self._steps = 0
@@ -123,6 +123,9 @@ class AgentMetricsBar(QWidget):
 
     def update_steps(self, current: int, max_steps: int | None = None) -> None:
         self._steps = current
+        # A plan-provided total replaces any previous one. Passing None
+        # (the default) leaves the total untouched; start() resets it per
+        # run so a stale budget total never leaks into the label.
         if max_steps is not None:
             self._max_steps = max_steps
         self._update_labels()
@@ -144,7 +147,10 @@ class AgentMetricsBar(QWidget):
 
     def _update_labels(self) -> None:
         elapsed = time.monotonic() - self._start_time if self._start_time else 0
-        self._steps_label.setText(f"Steps: {self._steps}/{self._max_steps}")
+        if self._max_steps is not None:
+            self._steps_label.setText(f"Steps: {self._steps}/{self._max_steps}")
+        else:
+            self._steps_label.setText(f"Steps: {self._steps}")
 
         if self._tokens > 1000:
             self._tokens_label.setText(f"Tokens: {self._tokens / 1000:.1f}k")

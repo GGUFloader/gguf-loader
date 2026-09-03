@@ -9,7 +9,9 @@ class _EmptyLLM:
 def test_diagnostic_helper_has_step_info():
     diag = GraphAgent._diagnostic("test reason", step=3, max_steps=5, tool_results=[])
     assert "Done." not in diag
-    assert "3/5" in diag
+    assert "3/5" not in diag  # step totals come from plan length, never max_steps
+    assert "Stopped after 3 steps" in diag
+    assert "5-step safety budget" in diag
     assert "test reason" in diag
 
 
