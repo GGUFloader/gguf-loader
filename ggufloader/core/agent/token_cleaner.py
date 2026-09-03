@@ -46,6 +46,13 @@ class GemmaCleaner:
     _MESSAGE = re.compile(r"<\|?message\|?>\s*")
     _START_TURN = re.compile(r"<\|start\|>\s*(?:user|assistant|model|system)\s*", re.IGNORECASE)
     _END_TURN = re.compile(r"<\|end\|>\s*")
+    # Gemma 3/4 chat-template markers
+    # (<start_of_turn>user, <end_of_turn>) are stripped together with their
+    # role name so no "user"/"model" residue survives into the JSON parser.
+    _TURN_START_V3 = re.compile(
+        r"<start_of_turn>\s*(?:user|assistant|model|system)?\s*", re.IGNORECASE)
+    _TURN_END_V3 = re.compile(r"<end_of_turn>\s*")
+
     _CONSTRAIN = re.compile(r"<\|constrain\|>\s*[^|]*?\|>", re.IGNORECASE)
     _NAMED_TOKEN = re.compile(r"<\|[a-z_]+\|>")
 
@@ -53,6 +60,8 @@ class GemmaCleaner:
         text = self._CHANNEL_NAMED.sub("", text)
         text = self._START_TURN.sub("", text)
         text = self._END_TURN.sub("", text)
+        text = self._TURN_START_V3.sub("", text)
+        text = self._TURN_END_V3.sub("", text)
         text = self._MESSAGE.sub("", text)
         text = self._CHANNEL_BARE.sub("", text)
         text = self._CONSTRAIN.sub("", text)

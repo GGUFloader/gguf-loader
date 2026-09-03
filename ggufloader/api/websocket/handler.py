@@ -375,6 +375,8 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         if preset_prompt_addition:
             full_system_prompt = full_system_prompt + chr(10) + chr(10) + preset_prompt_addition
         
+        from ggufloader.core.agent.token_cleaner import get_cleaner
+        arch = (router_info.get("architecture") or "") if router_info else ""
         agent = GraphAgent(
             llm=llm_call,
             workspace=workspace,
@@ -387,6 +389,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             task_prompts=router_task_prompts or None,
             allowed_tools=preset_allowed,
             blocked_tools=preset_blocked,
+            cleaner=get_cleaner(arch),
         )
         _agent_graph = agent
 

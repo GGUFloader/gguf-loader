@@ -851,13 +851,15 @@ class GraphAgent:
     def _request_action(self, messages, tool_results, writer, repair: str = "", directive: str = "") -> Tuple[Optional[Dict[str, Any]], str]:
         prompt = self._prompt_builder.action_prompt(messages, tool_results, repair, directive)
         raw = self._call_llm(prompt, writer)
-        data = extract_json(raw)
+        # Clean template/turn markers BEFORE parsing JSON (Task 8) — parsing
+        # raw gemma channel tokens was a top cause of empty-action results.
+        data = extract_json(self._clean(raw))
         if data is not None:
             return data, raw
         for _attempt in range(self.json_retries):
             prompt = self._prompt_builder.action_prompt(messages, tool_results, repair=raw, directive=directive)
             raw = self._call_llm(prompt, writer)
-            data = extract_json(raw)
+            data = extract_json(self._clean(raw))
             if data is not None:
                 return data, raw
         logger.warning(
