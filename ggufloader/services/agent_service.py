@@ -20,7 +20,6 @@ from shiboken6 import isValid
 
 from ggufloader.core.agent import GraphAgent, ToolRegistry
 from ggufloader.core.llm.model_backend import ModelBackend
-from ggufloader.core.llm.prompt_builder import CHAT_STOP_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -175,21 +174,19 @@ class AgentService(QObject):
             repeat_penalty = agent_role_config.repeat_penalty
             max_tokens_default = agent_role_config.max_tokens
 
-        def llm(prompt: str, max_tokens: int = max_tokens_default, temperature: float = temperature):
-            # Template-aware single-turn chat call: the agent's raw prompt
-            # is delivered as one user message so llama.cpp wraps it in the
-            # model's native template (better instruction adherence than a
-            # bare completion). No text stops - they hurt the strict JSON
-            # protocol output.
-            return backend.chat_stream(
-                [{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repeat_penalty=repeat_penalty,
-                stop=CHAT_STOP_TOKENS,
-            )
+        # Single template-aware LLM path (Task 7): one user message in the
+        # model's native template, unified stop set, purpose temps.
+        from ggufloader.core.agent.llm_factory import build_llm
+        llm = build_llm(
+            backend,
+            {
+                "max_tokens": max_tokens_default,
+                "top_k": top_k,
+                "top_p": top_p,
+                "repeat_penalty": repeat_penalty,
+            },
+            purpose="action",
+        )
 
         # ---- Per-family static profile (the lightweight agent profile) ----
         profile = get_profile(

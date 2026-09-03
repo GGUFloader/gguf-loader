@@ -341,16 +341,20 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         preset_allowed = preset_obj.allowed_tools if preset_obj.allowed_tools else None
         preset_blocked = preset_obj.blocked_tools if preset_obj.blocked_tools else None
 
-        def llm_call(prompt, max_tokens=None, temperature=None):
-            """Synchronous LLM call for the graph agent."""
-            return backend(
-                prompt,
-                max_tokens=max_tokens or agent_max_tokens,
-                temperature=temperature or agent_temperature,
-                top_k=agent_top_k,
-                top_p=agent_top_p,
-                repeat_penalty=agent_repeat_penalty,
-            )
+        # Single template-aware LLM path (Task 7): raw prompt becomes one
+        # user message wrapped in the model's native chat template, with
+        # the unified stop set and purpose-selected temperatures.
+        from ggufloader.core.agent.llm_factory import build_llm
+        llm_call = build_llm(
+            backend,
+            {
+                "max_tokens": agent_max_tokens,
+                "top_k": agent_top_k,
+                "top_p": agent_top_p,
+                "repeat_penalty": agent_repeat_penalty,
+            },
+            purpose="action",
+        )
 
         # --- 4. Create GraphAgent (with checkpointing + cancellation) ---
         from ggufloader.core.agent.graph_agent import GraphAgent

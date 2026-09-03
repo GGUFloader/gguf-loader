@@ -570,7 +570,8 @@ class GraphAgent:
                 "Do NOT return JSON. Just write the answer text.\n\nAnswer:"
             )
             writer({"event": "status", "text": "[plan] Synthesizing answer..."})
-            answer = self._call_llm(answer_prompt, writer, stream_tokens=True)
+            answer = self._call_llm(
+                answer_prompt, writer, stream_tokens=True, purpose="answer")
             answer = self._clean(answer)
 
             if not answer.strip():
@@ -901,7 +902,8 @@ class GraphAgent:
         )
         writer({"event": "status", "text": "[reask] Asking model for a plain-text answer..."})
         try:
-            response = self._call_llm(prompt, writer, stream_tokens=True)
+            response = self._call_llm(
+                prompt, writer, stream_tokens=True, purpose="answer")
         except Exception as e:  # noqa: BLE001 - best-effort re-ask
             logger.warning("_reask_for_answer LLM call failed: %s", e)
             return ""
@@ -968,7 +970,7 @@ class GraphAgent:
         if not direct_parts:
             response = self._call_llm(
                 f"Answer this question briefly: {user_q}\n\nAssistant:",
-                writer, stream_tokens=True,
+                writer, stream_tokens=True, purpose="answer",
             )
             logger.info(
                 "_final_response (no evidence): LLM returned len=%d raw_preview=%r",
@@ -993,7 +995,7 @@ class GraphAgent:
                 "Note: no relevant files were found in the workspace, so this is a "
                 "general question. Answer it in plain text, do NOT call tools, do "
                 "NOT return JSON.\n\nAssistant:",
-                writer, stream_tokens=True,
+                writer, stream_tokens=True, purpose="answer",
             )
             logger.info(
                 "_final_response (list-only evidence): LLM returned len=%d raw_preview=%r",
@@ -1010,7 +1012,8 @@ class GraphAgent:
         # Step 3: Tool evidence exists — let the LLM polish it into a real answer.
         try:
             context = self._prompt_builder.final_response_context(user_q, direct_answer)
-            response = self._call_llm(context, writer, stream_tokens=True)
+            response = self._call_llm(
+                context, writer, stream_tokens=True, purpose="answer")
         except Exception as e:  # noqa: BLE001 - polish is best-effort
             logger.warning("Final-response polish failed: %s", e)
             response = ""
@@ -1048,12 +1051,23 @@ class GraphAgent:
 
         return direct_answer
 
-    def _call_llm(self, prompt: str, writer: StreamWriter, stream_tokens: bool = False) -> str:
-        """Call the LLM; streams token events when the callable yields chunks."""
+    def _call_llm(
+        self, prompt: str, writer: StreamWriter,
+        stream_tokens: bool = False, purpose: str = "action",
+    ) -> str:
+        """Call the LLM; streams token events when the callable yields chunks.
+
+        ``purpose`` picks the temperature: ``action`` (tool/plan JSON,
+        near-greedy) vs ``answer`` (final prose, mildly creative). The
+        router role config lives in the callable built by llm_factory.
+        """
+        from ggufloader.core.defaults import TEMP_ACTION, TEMP_ANSWER
+        temperature = TEMP_ANSWER if purpose == "answer" else TEMP_ACTION
         self._check_cancel()
 
         try:
-            result = self.llm(prompt, max_tokens=self.max_tokens, temperature=0.1)
+            result = self.llm(
+                prompt, max_tokens=self.max_tokens, temperature=temperature)
         except AgentCancelled:
             raise
         except Exception as e:  # noqa: BLE001
