@@ -85,6 +85,8 @@ class ModelBackend:
         n_threads: Optional[int] = None,
         n_keep: int = 512,
         flash_attn: bool = True,
+        use_mmap: bool = True,
+        rope_freq_base: Optional[float] = None,
     ) -> None:
         self.model_path = model_path
         self.use_gpu = use_gpu
@@ -94,6 +96,8 @@ class ModelBackend:
         self._n_threads = n_threads
         self._n_keep = n_keep
         self._flash_attn = flash_attn
+        self._use_mmap = use_mmap
+        self._rope_freq_base = rope_freq_base
         self._llama: Any = None
         self._lock = threading.Lock()
         # A3: KV prefix cache — stores last prompt tokens + state snapshot
@@ -105,9 +109,11 @@ class ModelBackend:
     # Lifecycle
     # ------------------------------------------------------------------
     def load(self) -> "ModelBackend":
-        """Create the underlying llama_cpp runtime. Raises on failure.
+        """Execute exactly one load attempt at the requested gpu_layers.
 
-        B2 parity: on CUDA OOM, retry with 50% layers then CPU.
+        The backend executes; it does NOT decide. The retry ladder
+        (full → partial → CPU-small-ctx) lives in ``ModelRouter.load``,
+        which records each attempt on ``strategy.attempts``.
         """
         if not LLAMA_AVAILABLE:
             raise RuntimeError(
@@ -127,28 +133,15 @@ class ModelBackend:
             n_threads=self._n_threads or 8,
             n_keep=self._n_keep,
             flash_attn=self._flash_attn,
+            use_mmap=self._use_mmap,
             n_gpu_layers_k=gpu_layers,
             n_gpu_layers_v=gpu_layers,
             verbose=True,
         )
-        try:
-            self._llama = Llama(**llama_kwargs)
-            return self
-        except Exception as e:
-            # GPU retry ladder: full → half → CPU (GPT4All chatllm.cpp:627-658)
-            if gpu_layers > 0:
-                half = max(1, gpu_layers // 2)
-                logger.warning("GPU load failed (ngl=%d): %s — retrying at ngl=%d",
-                               gpu_layers, e, half)
-                try:
-                    self._llama = Llama(**{**llama_kwargs, 'n_gpu_layers': half})
-                    return self
-                except Exception as e2:
-                    logger.warning("Half-GL retry failed (ngl=%d): %s — falling back to CPU",
-                                   half, e2)
-                    self._llama = Llama(**{**llama_kwargs, 'n_gpu_layers': 0, 'flash_attn': False})
-                    return self
-            raise
+        if self._rope_freq_base:
+            llama_kwargs["rope_freq_base"] = self._rope_freq_base
+        self._llama = Llama(**llama_kwargs)
+        return self
 
     def unload(self) -> None:
         """Release the model and free GPU/CPU memory."""

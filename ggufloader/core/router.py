@@ -174,6 +174,7 @@ class LoadStrategy:
     fits_vram: bool = False
     fits_ram: bool = False
     fallback_chain: List[str] = field(default_factory=list)  # what was tried
+    attempts: List[str] = field(default_factory=list)        # ladder steps executed
 
 
 @dataclass
@@ -577,20 +578,19 @@ class ModelRouter:
     ) -> Tuple["ModelBackend", ModelProfile, LoadStrategy, RoleConfig]:
         """Inspect → plan → load. Returns (backend, profile, strategy, config).
 
-        Caller can override any plan parameter (n_ctx, use_gpu, n_gpu_layers).
+        The router decides: it picks the strategy (honoring any explicit
+        overrides) and walks the fallback ladder full → partial → CPU, so
+        ModelBackend stays a pure executor. Every attempt is recorded on
+        ``strategy.attempts``.
         """
         from ggufloader.core.llm.model_backend import ModelBackend
 
         profile = self.inspect(path)
-        strategy = self.plan(profile)
-
-        # Apply overrides
-        if n_ctx is not None:
-            strategy.n_ctx = n_ctx
-        if use_gpu is not None:
-            strategy.use_gpu = use_gpu
-        if n_gpu_layers is not None:
-            strategy.n_gpu_layers = n_gpu_layers
+        if any(v is not None for v in (n_ctx, use_gpu, n_gpu_layers)):
+            strategy = self.plan_with_overrides(
+                profile, n_ctx=n_ctx, use_gpu=use_gpu, n_gpu_layers=n_gpu_layers)
+        else:
+            strategy = self.plan(profile)
 
         config = self.route(profile, role)
 
@@ -600,15 +600,78 @@ class ModelRouter:
             strategy.use_gpu, strategy.n_gpu_layers,
         )
 
-        backend = ModelBackend(
-            path,
-            use_gpu=strategy.use_gpu,
-            n_ctx=strategy.n_ctx,
-            n_gpu_layers=strategy.n_gpu_layers,
-        )
-        backend.load()
+        # --- Fallback ladder: full → partial → CPU (small ctx, no FA) ---
+        attempts: List[str] = []
+        ladder = self._load_ladder(strategy, profile)
+        last_err: Optional[Exception] = None
+        for desc, kwargs in ladder:
+            try:
+                backend = ModelBackend(
+                    path,
+                    use_gpu=kwargs["use_gpu"],
+                    n_ctx=kwargs["n_ctx"],
+                    n_gpu_layers=kwargs["n_gpu_layers"],
+                    n_batch=strategy.batch_size,
+                    n_threads=strategy.n_threads,
+                    n_keep=512,
+                    flash_attn=kwargs.get("flash_attn", strategy.flash_attn),
+                    use_mmap=strategy.use_mmap,
+                    rope_freq_base=strategy.rope_freq_base,
+                )
+                backend.load()
+                attempts.append(desc)
+                strategy.attempts = attempts
+                return backend, profile, strategy, config
+            except Exception as e:  # noqa: BLE001 - any attempt may fail
+                attempts.append(desc)
+                last_err = e
+                logger.warning(
+                    "Router load attempt '%s' failed for %s: %s",
+                    desc, path, e,
+                )
 
-        return backend, profile, strategy, config
+        strategy.attempts = attempts
+        suggestion = (
+            "Try a Q3/Q4 quantization, a smaller context (4096), or CPU-only mode."
+            if strategy.use_gpu
+            else "The model file may be corrupt or unsupported."
+        )
+        raise RuntimeError(
+            f"Could not load {profile.filename} after {len(attempts)} attempt(s) "
+            f"({', '.join(attempts)}). Last error: {last_err}. {suggestion}"
+        )
+
+    def _load_ladder(
+        self, strategy: LoadStrategy, profile: ModelProfile
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        """Ordered attempts: full → partial → CPU-small-ctx."""
+        if not strategy.use_gpu:
+            return [(
+                "cpu",
+                {"use_gpu": False, "n_ctx": strategy.n_ctx, "n_gpu_layers": 0},
+            )]
+        steps: List[Tuple[str, Dict[str, Any]]] = []
+        full_ngl = strategy.n_gpu_layers
+        steps.append((
+            "full_gpu",
+            {"use_gpu": True, "n_ctx": strategy.n_ctx, "n_gpu_layers": full_ngl},
+        ))
+        total = profile.total_layers or 0
+        if total > 0:
+            base = total if full_ngl == -1 else min(full_ngl, total)
+            partial_ngl = max(1, base // 2)
+            if partial_ngl < (total if full_ngl == -1 else full_ngl):
+                steps.append((
+                    "partial_gpu",
+                    {"use_gpu": True, "n_ctx": strategy.n_ctx,
+                     "n_gpu_layers": partial_ngl},
+                ))
+        steps.append((
+            "cpu",
+            {"use_gpu": False, "n_ctx": min(strategy.n_ctx, 8192),
+             "n_gpu_layers": 0, "flash_attn": False},
+        ))
+        return steps
 
     # ------------------------------------------------------------------
     # Model switching
