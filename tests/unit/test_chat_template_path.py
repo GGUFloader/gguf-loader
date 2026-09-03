@@ -93,3 +93,17 @@ def test_chat_requires_loaded_model():
     b = ModelBackend("fake.gguf")
     with pytest.raises(RuntimeError):
         list(b.chat_stream([{"role": "user", "content": "x"}]))
+
+
+# ---------------------------------------------------------------------------
+# Unified stop tokens across every generation path
+# ---------------------------------------------------------------------------
+
+def test_unified_stops_everywhere():
+    import inspect
+    from ggufloader.services import chat_service
+    from ggufloader.core import defaults
+    src = inspect.getsource(chat_service)
+    assert "CHAT_STOP_TOKENS" not in src or "STOP_TOKENS_UNIFIED" in src
+    assert "<end_of_turn>" in defaults.STOP_TOKENS_UNIFIED
+    assert "user:" not in defaults.STOP_TOKENS_UNIFIED  # bare lowercase trap removed

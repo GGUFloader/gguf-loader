@@ -383,6 +383,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             checkpoint_path = None
 
         # Get actual context size from model backend
+        backend_ref = None
         try:
             backend_ref = get_model_backend()
             actual_n_ctx = backend_ref.n_ctx if backend_ref else agent_max_tokens
@@ -412,6 +413,13 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             cleaner=get_cleaner(arch),
         )
         _agent_graph = agent
+
+        # Give the agent's context budget the real model tokenizer so
+        # compaction/trim decisions use accurate counts (mirror Qt path).
+        if actual_n_ctx:
+            agent._context_budget.set_budget(actual_n_ctx)
+        if backend_ref is not None and hasattr(backend_ref, "count_tokens"):
+            agent._context_budget.set_tokenizer(backend_ref.count_tokens)
 
         # --- 5. Wire callbacks via AgentTransport (3 lines instead of 150+) ---
         loop = asyncio.get_event_loop()

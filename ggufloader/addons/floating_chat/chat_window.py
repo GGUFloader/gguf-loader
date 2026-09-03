@@ -31,6 +31,7 @@ except ImportError:
     ChatBubble = None
 
 from ggufloader.ui.theme import DARK_TOKENS, LIGHT_TOKENS
+from ggufloader.core.defaults import STOP_TOKENS_UNIFIED
 
 
 class StreamingWorker(QObject):
@@ -60,7 +61,7 @@ class StreamingWorker(QObject):
                 self.prompt,
                 max_tokens=self.max_tokens,
                 stream=True,
-                stop=["User:", "\nUser:", "user:", "\nuser:"],
+                stop=STOP_TOKENS_UNIFIED,
                 echo=False,
                 temperature=0.7,
                 top_p=0.9,

@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from shiboken6 import isValid
 
 from ggufloader.core.llm.model_backend import ModelBackend
-from ggufloader.core.llm.prompt_builder import CHAT_STOP_TOKENS
+from ggufloader.core.defaults import STOP_TOKENS_UNIFIED
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class ChatWorker(QObject):
         try:
             kwargs = dict(self.params)
             if self.messages is not None:
-                kwargs["stop"] = CHAT_STOP_TOKENS
+                kwargs["stop"] = STOP_TOKENS_UNIFIED
                 for token in self.backend.chat_stream(self.messages, **kwargs):
                     if self._stop_event.is_set():
                         break

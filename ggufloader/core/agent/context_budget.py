@@ -19,6 +19,8 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checka
 
 logger = logging.getLogger(__name__)
 
+from ggufloader.core.defaults import DEFAULT_CTX
+
 # Rough token estimation: ~4 chars per token for English text
 CHARS_PER_TOKEN = 4
 
@@ -82,7 +84,7 @@ class ContextBudget:
 
     def __init__(
         self,
-        total_budget: int = 8192,
+        total_budget: int = DEFAULT_CTX,
         system_prompt_tokens: int = 500,
         tokenizer: Optional[Tokenizer] = None,
     ) -> None:

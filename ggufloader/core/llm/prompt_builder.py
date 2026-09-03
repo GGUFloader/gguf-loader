@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from ggufloader.core.defaults import STOP_TOKENS_UNIFIED
+
 if TYPE_CHECKING:
     from ggufloader.core.rag.retrieve import RetrievedChunk
 
@@ -29,23 +31,18 @@ def _has_template_artifacts(text: str) -> bool:
     return any(marker in text for marker in _TEMPLATE_MARKERS)
 
 # Token-level stop sequences that terminate generation cleanly.
-STOP_TOKENS = [
-    "<|im_end|>", "</s>", "user:", "assistant:", "###",
-    "\nHuman:", "\nUser:", "Human:", "User:",
-]
+# Canonical list lives in core.defaults (STOP_TOKENS_UNIFIED) so chat,
+# agent, Qt, and React all observe identical stop behavior. Kept as
+# module-level aliases for backward compatibility; never add bare
+# lowercase "user:" / "assistant:" markers here - they truncate
+# mid-word in prose.
+STOP_TOKENS = list(STOP_TOKENS_UNIFIED)
 
 # End-of-turn markers passed as *stop strings* alongside the chat
 # template. When a model's special tokens degrade to plain text (weak
 # quant, template fallback), the runtime never sees EOS and generation
 # runs until the context window fills - these strings catch that case.
-CHAT_STOP_TOKENS = [
-    "<|im_end|>",      # ChatML / LFM2 / Qwen turn end
-    "<|endoftext|>",   # GPT-style / LFM2
-    "<|eot_id|>",      # Llama 3 turn end
-    "</s>",            # Mistral / Llama 2
-    "<|end_of_text|>", # Llama 3
-    "<|return|>",      # gpt-oss final
-]
+CHAT_STOP_TOKENS = list(STOP_TOKENS_UNIFIED)
 
 
 class PromptBuilder:
