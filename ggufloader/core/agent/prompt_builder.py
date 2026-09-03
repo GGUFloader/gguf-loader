@@ -74,7 +74,15 @@ class PromptBuilder:
             )
         base = self._system_prompt_override
         base = base.replace("__WORKSPACE__", str(self.workspace))
-        base = base.replace("__TOOLS__", self.tools.describe())
+        if "__TOOLS__" in base:
+            base = base.replace("__TOOLS__", self.tools.describe())
+        else:
+            # Task 10 (one tool universe): the prompt must always list the
+            # LIVE registry tool set (preset-filtered), never a hardcoded
+            # subset. Family prompts no longer enumerate tools themselves.
+            described = self.tools.describe()
+            if described:
+                base = base.rstrip() + "\n\nAvailable tools:\n" + described
         return base
 
     def action_prompt(

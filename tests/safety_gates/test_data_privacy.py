@@ -74,56 +74,32 @@ class TestNoDataExfiltration:
         assert result["status"] == "error"
 
 
-class TestSandboxedPythonPrivacy:
-    """CRITICAL: Sandboxed Python must not access network or filesystem."""
+class TestPythonInterpreterAliasPrivacy:
+    """CRITICAL: python_interpreter aliases run_python (one approval gate).
 
-    def test_no_network_access(self, workspace):
-        """Sandboxed Python must not have network access."""
+    The former "sandboxed" interpreter was NOT an OS sandbox - it executed
+    arbitrary Python with the full user interpreter, so urllib, absolute-
+    path file reads and subprocesses all worked from the temp cwd. Task 10
+    merges it into run_python: same schema, same approval gate, so no
+    python code ever runs without user consent.
+    """
+
+    def test_alias_requires_approval(self, workspace):
+        """The alias must be approval-gated exactly like run_python."""
         tool = PythonInterpreterTool(workspace)
-        result = tool.execute({
-            "code": "import urllib.request; urllib.request.urlopen('http://example.com')"
-        })
-        # Should fail — sandbox has no network
-        assert result.get("status") == "error"
+        assert tool.requires_approval({"code": "print(1)"}) is True
 
-    def test_no_filesystem_read(self, workspace):
-        """Sandboxed Python must not read files outside its temp dir."""
-        secret = workspace / "secret.txt"
-        secret.write_text("SECRET")
+    def test_alias_shares_run_python_schema(self, workspace):
+        """One schema for all python execution (no approval-free variant)."""
+        from ggufloader.core.agent.tool_registry import RunPythonTool
+        assert issubclass(PythonInterpreterTool, RunPythonTool)
+        assert PythonInterpreterTool.schema == RunPythonTool.schema
 
+    def test_alias_warns_deprecation(self, workspace):
+        """Calling python_interpreter steers callers to run_python."""
+        import warnings
         tool = PythonInterpreterTool(workspace)
-        result = tool.execute({
-            "code": f"print(open('{secret}').read())"
-        })
-        assert result.get("status") == "error" or "SECRET" not in result.get("result", "")
-
-    def test_no_subprocess(self, workspace):
-        """Sandboxed Python should not spawn subprocesses."""
-        tool = PythonInterpreterTool(workspace)
-        result = tool.execute({
-            "code": "import subprocess; subprocess.run(['echo', 'pwned'])"
-        })
-        # Subprocess may work but output should be capped
-        output = result.get("result", "")
-        assert "pwned" not in output or len(output) < 1000
-
-
-class TestEnvironmentIsolation:
-    """CRITICAL: Environment variables must not leak into sandbox."""
-
-    def test_sandbox_strips_env_vars(self, workspace):
-        """Sandboxed Python must not inherit proxy/HTTP env vars."""
-        os.environ["HTTP_PROXY"] = "http://evil.com"
-        os.environ["SECRET_KEY"] = "supersecret"
-
-        tool = PythonInterpreterTool(workspace)
-        result = tool.execute({
-            "code": "import os; print(os.environ.get('SECRET_KEY', 'NOT_FOUND'))"
-        })
-        # Should not have SECRET_KEY
-        output = result.get("result", "")
-        assert "supersecret" not in output
-
-        # Cleanup
-        os.environ.pop("HTTP_PROXY", None)
-        os.environ.pop("SECRET_KEY", None)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            tool.execute({"code": "print('alias')"})
+        assert any(issubclass(w.category, DeprecationWarning) for w in caught)

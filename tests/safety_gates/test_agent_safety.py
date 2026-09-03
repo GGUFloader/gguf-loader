@@ -130,11 +130,18 @@ class TestApprovalGating:
         assert tool is not None
         assert tool.requires_approval({"path": "test.txt"}) is False
 
-    def test_python_interpreter_no_approval(self, registry):
-        """python_interpreter (sandboxed) must NOT require approval."""
+    def test_python_interpreter_requires_approval(self, registry):
+        """python_interpreter is an alias of run_python → approval required.
+
+        Task 10 (one tool universe): the old "sandboxed" interpreter ran
+        arbitrary Python with the full user interpreter (no real network /
+        absolute-path isolation) and no approval - a code-exec path that
+        read-only presets could not block. It now shares run_python's
+        schema and approval gate.
+        """
         tool = registry._tools.get("python_interpreter")
         assert tool is not None
-        assert tool.requires_approval({"code": "print(1)"}) is False
+        assert tool.requires_approval({"code": "print(1)"}) is True
 
     def test_validate_tool_call_rejects_unknown(self, registry):
         """validate_tool_call must reject unknown tool names."""
@@ -155,36 +162,34 @@ class TestApprovalGating:
         assert "Missing required" in error
 
 
-class TestSandboxedPython:
-    """CRITICAL: PythonInterpreterTool must be safe by construction."""
+class TestPythonInterpreterAlias:
+    """CRITICAL: python_interpreter == run_python (one schema, approval-gated).
 
-    def test_sandbox_runs_in_temp_dir(self, sandbox_workspace):
-        """Sandboxed Python must not have access to workspace."""
+    The former PythonInterpreterTool was marketed as a sandbox but actually
+    executed arbitrary Python with the full user interpreter - the stripped
+    env and temp cwd did not stop network access or absolute-path file
+    reads. Task 10 merges it into run_python so there is exactly ONE
+    python-execution schema, one approval gate, and read-only presets can
+    block every python alias by blocking run_python.
+    """
+
+    def test_alias_is_run_python_subclass(self):
+        """python_interpreter shares run_python's implementation."""
+        assert issubclass(PythonInterpreterTool, RunPythonTool)
+        assert PythonInterpreterTool.schema == RunPythonTool.schema
+
+    def test_alias_warns_deprecation(self, sandbox_workspace):
+        """Executing the alias emits a DeprecationWarning."""
+        import warnings
         tool = PythonInterpreterTool(sandbox_workspace)
-        result = tool.execute({"code": "import os; print(os.getcwd())"})
-        # The cwd should be a temp dir, NOT the workspace
-        if result.get("status") == "success":
-            cwd = result.get("result", "").strip()
-            assert str(sandbox_workspace) not in cwd
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            tool.execute({"code": "print('hi')"})
+        assert any(issubclass(w.category, DeprecationWarning) for w in caught)
 
-    def test_sandbox_no_file_access(self, sandbox_workspace):
-        """Sandboxed Python must not read workspace files."""
-        # Create a file in workspace
-        secret = sandbox_workspace / "secret.txt"
-        secret.write_text("SECRET DATA")
-
+    def test_output_capped(self, sandbox_workspace):
+        """Python output must be capped (run_python caps at 8000)."""
         tool = PythonInterpreterTool(sandbox_workspace)
-        result = tool.execute({
-            "code": f"print(open('{secret}').read())"
-        })
-        # Should fail — sandbox has no access to workspace
-        assert result.get("status") == "error" or "SECRET" not in result.get("result", "")
-
-    def test_sandbox_output_capped(self, sandbox_workspace):
-        """Sandboxed Python output must be capped at MAX_OUTPUT."""
-        tool = PythonInterpreterTool(sandbox_workspace)
-        result = tool.execute({
-            "code": "print('A' * 100000)"
-        })
-        output = result.get("result", "")
-        assert len(output) <= tool.MAX_OUTPUT + 100  # some overhead for status
+        result = tool.execute({"code": "print('A' * 100000)"})
+        output = result.get("result", "") or ""
+        assert len(output) <= 8100  # 8000 cap + overhead

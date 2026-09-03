@@ -96,7 +96,12 @@ PRESETS: Dict[str, AgentPreset] = {
             "When done, provide a detailed analysis with file references."
         ),
         allowed_tools=["list_directory", "read_file", "search_files"],
-        blocked_tools=["write_file", "edit_file", "run_command", "run_python", "git"],
+        blocked_tools=[
+            "write_file", "edit_file", "run_command", "run_python", "git",
+            # one tool universe (Task 10): every code-exec / mutate alias
+            "python_interpreter", "batch_execute", "move_file",
+            "remember", "recall",
+        ],
         max_steps=12,
         temperature=0.1,
         auto_approve_read=True,
@@ -124,7 +129,12 @@ PRESETS: Dict[str, AgentPreset] = {
             "## Positive Notes\n<list>"
         ),
         allowed_tools=["list_directory", "read_file", "search_files"],
-        blocked_tools=["write_file", "edit_file", "run_command"],
+        blocked_tools=[
+            "write_file", "edit_file", "run_command", "run_python", "git",
+            # one tool universe (Task 10): every code-exec / mutate alias
+            "python_interpreter", "batch_execute", "move_file",
+            "remember", "recall",
+        ],
         max_steps=10,
         temperature=0.1,
         auto_verify=False,

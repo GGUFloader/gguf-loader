@@ -23,7 +23,7 @@
       "supports_system_prompt": true,
       "context_length": 128000,
       "notes": "DeepSeek V2 uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "deepseek-v3",
@@ -46,7 +46,7 @@
       "supports_system_prompt": true,
       "context_length": 128000,
       "notes": "DeepSeek V3 uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "command-r",
@@ -70,7 +70,7 @@
       "supports_system_prompt": true,
       "context_length": 128000,
       "notes": "Command R uses <|START_OF_TURN_TOKEN|> format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "qwen3",
@@ -95,7 +95,7 @@
       "supports_system_prompt": true,
       "context_length": 32768,
       "notes": "Qwen 3 uses ChatML format, supports thinking mode",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
     },
     {
       "id": "deepseek-coder",
@@ -118,7 +118,7 @@
       "supports_system_prompt": true,
       "context_length": 16384,
       "notes": "DeepSeek Coder uses lower temperature for code generation",
-      "system_prompt": "You are a helpful code assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful code assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "stablelm",
@@ -142,7 +142,7 @@
       "supports_system_prompt": false,
       "context_length": 8192,
       "notes": "StableLM uses custom format",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "internlm",
@@ -166,7 +166,7 @@
       "supports_system_prompt": true,
       "context_length": 2048,
       "notes": "InternLM uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "baichuan",
@@ -189,7 +189,7 @@
       "supports_system_prompt": false,
       "context_length": 4096,
       "notes": "Baichuan uses custom format",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "mixtral",
@@ -214,7 +214,7 @@
       "supports_system_prompt": false,
       "context_length": 32768,
       "notes": "Mixtral inherits Mistral template",
-      "system_prompt": "You are a helpful file assistant. Read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown, no explanation outside JSON):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {\"param\": \"value\"}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"findings summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Always set estimated_steps. Be concise."
+      "system_prompt": "You are a helpful file assistant. Read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown, no explanation outside JSON):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {\"param\": \"value\"}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"findings summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Always set estimated_steps. Be concise."
     },
     {
       "id": "gpt-oss",
@@ -238,7 +238,7 @@
       "supports_system_prompt": true,
       "context_length": 128000,
       "notes": "GPT-OSS uses ChatML format with harmony channels",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "gemma2",
@@ -262,7 +262,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "Gemma 2 uses <start_of_turn>user format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "gemma3",
@@ -287,7 +287,7 @@
       "supports_system_prompt": true,
       "context_length": 128000,
       "notes": "Gemma 3 supports higher temperature, long context",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "falcon",
@@ -310,7 +310,7 @@
       "supports_system_prompt": false,
       "context_length": 2048,
       "notes": "Falcon uses User:/Assistant: format",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "gemma4",
@@ -337,7 +337,7 @@
       "notes": "Gemma 4 uses thinking mode, supports very long context",
       "task_prompts": {
         "plan": "You are a task planner. Analyze the user request and decide:\n1. Does this need tools (file operations) or can it be answered from knowledge?\n2. If tools are needed, what specific tools and in what order?\n3. How many steps does this actually need?\n\nReply with ONLY a JSON object:\n{\"goal\": \"one sentence\", \"steps\": [{\"step\": 1, \"description\": \"...\", \"tool\": \"name or null\", \"parameters\": {}, \"depends_on\": []}]}\n\nRules:\n- General knowledge questions: 1 step, tool=null\n- File tasks: 2-4 steps max\n- Each step = ONE action\n- Last step is always the answer (tool=null)",
-        "action": "You are a file assistant with access to tools. Analyze the current state and decide the next action.\n\nYou have these tools: read_file, list_directory, search_files, glob, write_file, edit_file, run_command\n\nReply with ONLY a JSON object:\n{\"reasoning\": \"what you're doing and why\", \"tool_calls\": [{\"tool\": \"name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen done (no more tools needed):\n{\"reasoning\": \"\", \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Only call tools when you need file access\n- Be efficient: one tool call per step",
+        "action": "You are a file assistant with access to tools. Analyze the current state and decide the next action.\n\nReply with ONLY a JSON object:\n{\"reasoning\": \"what you're doing and why\", \"tool_calls\": [{\"tool\": \"name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen done (no more tools needed):\n{\"reasoning\": \"\", \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules:\n- tool_calls and answer are mutually exclusive\n- Only call tools when you need file access\n- Be efficient: one tool call per step",
         "answer": "You are a helpful AI assistant. Answer the user's question directly and clearly.\n\nReply with ONLY a JSON object:\n{\"reasoning\": \"\", \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules:\n- Answer from your knowledge when possible\n- Be concise and helpful\n- No tools needed for general knowledge questions",
         "synthesize": "You are given evidence from file operations. Synthesize it into a clear answer for the user.\n\nWrite a natural language response. Do NOT return JSON. Do NOT call tools. Just write the answer text.\n\nRules:\n- Use the evidence to answer the user's question\n- Be clear and concise\n- If evidence is insufficient, say so"
       }
@@ -375,7 +375,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "Llama 3 uses <|start_header_id|>system<|end_header_id|> format",
-      "system_prompt": "You are a file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "llama2",
@@ -402,7 +402,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "Llama 2 uses [INST] <<SYS>> system prompt <</SYS>> format",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "qwen1.5",
@@ -428,7 +428,7 @@
       "supports_system_prompt": true,
       "context_length": 32768,
       "notes": "Qwen uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
     },
     {
       "id": "qwen2",
@@ -452,7 +452,7 @@
       "supports_system_prompt": true,
       "context_length": 32768,
       "notes": "Qwen 2 uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
     },
     {
       "id": "qwen2.5",
@@ -478,7 +478,7 @@
       "supports_system_prompt": true,
       "context_length": 32768,
       "notes": "Qwen 2.5 uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise. Output ONLY a JSON object (no thinking, no markdown)."
     },
     {
       "id": "gemma1",
@@ -504,7 +504,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "Gemma uses <start_of_turn>user format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "codellama",
@@ -528,7 +528,7 @@
       "supports_system_prompt": true,
       "context_length": 16384,
       "notes": "CodeLlama uses very low temperature for code",
-      "system_prompt": "You are a helpful code assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful code assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "solar",
@@ -552,7 +552,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "Solar is a Llama fine-tune",
-      "system_prompt": "You are a file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "liquid-lfm",
@@ -578,7 +578,7 @@
       "supports_system_prompt": true,
       "context_length": 32768,
       "notes": "LiquidAI LFM2 needs very low temperature to avoid degeneration",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise. (no markdown, no extra text)"
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise. (no markdown, no extra text)"
     },
     {
       "id": "phi2",
@@ -602,7 +602,7 @@
       "supports_system_prompt": false,
       "context_length": 2048,
       "notes": "Phi-2 is a small model, use conservative settings",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "phi3",
@@ -626,7 +626,7 @@
       "supports_system_prompt": true,
       "context_length": 128000,
       "notes": "Phi-3 uses <|user|> format, supports long context",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "phi4",
@@ -650,7 +650,7 @@
       "supports_system_prompt": true,
       "context_length": 16384,
       "notes": "Phi-4 uses <|user|> format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "mpt",
@@ -675,7 +675,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "MPT uses <|im_start|> format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "yi",
@@ -700,7 +700,7 @@
       "supports_system_prompt": true,
       "context_length": 200000,
       "notes": "Yi uses ChatML format, supports very long context",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "mistral",
@@ -724,7 +724,7 @@
       "supports_system_prompt": false,
       "context_length": 32768,
       "notes": "Mistral uses strict [INST] alternation, no system message support",
-      "system_prompt": "You are a helpful file assistant. Read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown, no explanation outside JSON):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {\"param\": \"value\"}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"findings summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Always set estimated_steps. Be concise."
+      "system_prompt": "You are a helpful file assistant. Read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown, no explanation outside JSON):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {\"param\": \"value\"}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"findings summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Always set estimated_steps. Be concise."
     },
     {
       "id": "deepseek-r1",
@@ -746,7 +746,7 @@
       "supports_system_prompt": true,
       "context_length": 32768,
       "notes": "DeepSeek R1 uses thinking mode, higher max_tokens for reasoning",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise. Do not overthink."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise. Do not overthink."
     },
     {
       "id": "nous-hermes",
@@ -768,7 +768,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "Nous Hermes uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "openchat",
@@ -790,7 +790,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "OpenChat uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "orca",
@@ -812,7 +812,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "Orca is a Llama fine-tune",
-      "system_prompt": "You are a file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "neural-chat",
@@ -834,7 +834,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "Neural Chat is an Intel Mistral fine-tune",
-      "system_prompt": "You are a helpful file assistant. Read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown, no explanation outside JSON):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {\"param\": \"value\"}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"findings summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Always set estimated_steps. Be concise."
+      "system_prompt": "You are a helpful file assistant. Read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown, no explanation outside JSON):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {\"param\": \"value\"}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"findings summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Always set estimated_steps. Be concise."
     },
     {
       "id": "vicuna",
@@ -855,7 +855,7 @@
       "supports_system_prompt": false,
       "context_length": 4096,
       "notes": "Vicuna uses USER:/ASSISTANT: format",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "wizard",
@@ -878,7 +878,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "WizardLM uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "zephyr",
@@ -899,7 +899,7 @@
       "supports_system_prompt": true,
       "context_length": 8192,
       "notes": "Zephyr uses ChatML format",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "dolphin",
@@ -920,7 +920,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "Dolphin is uncensored, based on various architectures",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     },
     {
       "id": "codestral",
@@ -941,7 +941,7 @@
       "supports_system_prompt": false,
       "context_length": 32768,
       "notes": "Codestral is a code model, very low temperature",
-      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\nTools: read_file, list_directory, search_files, glob\nBe concise."
+      "system_prompt": "File assistant. Read files, help users.\n\nJSON only:\n{\"reasoning\":\"plan\",\"estimated_steps\":3,\"tool_calls\":[{\"tool\":\"name\",\"parameters\":{}}],\"answer\":\"\"}\n\nAnswer: use answer field, tool_calls=[].\n\nBe concise."
     },
     {
       "id": "generic",
@@ -960,7 +960,7 @@
       "supports_system_prompt": true,
       "context_length": 4096,
       "notes": "Fallback for unknown models",
-      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nAvailable tools: read_file, list_directory, search_files, glob\nRules: tool_calls and answer are mutually exclusive. Be concise."
+      "system_prompt": "You are a helpful file assistant. You read files and help users understand their content.\n\nRespond with ONLY a JSON object (no markdown):\n{\"reasoning\": \"what you plan to do\", \"estimated_steps\": 3, \"tool_calls\": [{\"tool\": \"tool_name\", \"parameters\": {}}], \"answer\": \"\"}\n\nWhen answering:\n{\"reasoning\": \"summary\", \"estimated_steps\": 0, \"tool_calls\": [], \"answer\": \"your answer\"}\n\nRules: tool_calls and answer are mutually exclusive. Be concise."
     }
   ]
 }
