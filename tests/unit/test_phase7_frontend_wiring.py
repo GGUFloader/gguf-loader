@@ -184,3 +184,50 @@ class TestSessionReplayComparison:
             comparison = replay.compare_sessions(a, b)
             assert comparison["identical_prefix"] == 3  # first 3 match (user, agent, tool_call)
             assert comparison["divergence_point"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Task 6: frontend auto-plan contract (no parallel truths in the UI)
+# ---------------------------------------------------------------------------
+
+def _read(path: str) -> str:
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def test_client_auto_contract():
+    src = _read("frontend/src/api/client.ts")
+    assert "nCtx: number | null = null" in src
+    assert "n_gpu_layers: nGpuLayers" in src
+    assert "role = 'chat'" in src
+    assert "router/plan" in src  # plan preview endpoint wired
+
+
+def test_load_dialog_has_auto_ctx_and_plan_preview():
+    src = _read("frontend/src/components/model/ModelLoadDialog.tsx")
+    assert "Auto (recommended)" in src
+    assert "Router plan" in src
+    assert "plan.reasoning" in src
+    assert "ctxLength === 0 ? null : ctxLength" in src
+
+
+def test_context_lens_uses_model_info_not_hardcoded_32k():
+    src = _read("frontend/src/components/agent/ContextLens.tsx")
+    assert "32768" not in src
+    assert "modelApi.info()" in src
+    assert "setTokenBudget" in src
+
+
+def test_settings_dialog_defaults_to_auto_ctx():
+    src = _read("frontend/src/components/settings/SettingsDialog.tsx")
+    assert "0 = Auto (router decides)" in src
+    assert "Auto (recommended)" in src
+
+
+def test_qt_sidebar_default_ctx_8192_and_real_gpu_layers():
+    src = _read("ggufloader/ui/sidebar_panel.py")
+    assert "setCurrentText(str(8192))" in src
+    assert "def set_gpu_layers" in src
+    assert "def get_gpu_layers" in src
+    mw = _read("ggufloader/ui/main_window.py")
+    assert "self.sidebar.set_gpu_layers(dlg.get_gpu_layers())" in mw

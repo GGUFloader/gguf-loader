@@ -117,7 +117,8 @@ class SettingsSidebar(QFrame):
 
         self.context_combo = QComboBox()
         self.context_combo.addItems(DEFAULT_CONTEXT_SIZES)
-        self.context_combo.setCurrentIndex(6)  # Default 32768
+        # Canonical default is 8192 (core/defaults.py) — not the 32768 max.
+        self.context_combo.setCurrentText(str(8192))
         self.context_combo.setMinimumHeight(35)
         layout.addWidget(self.context_combo)
 
@@ -144,6 +145,19 @@ class SettingsSidebar(QFrame):
         self.flash_attn_check = QCheckBox("Flash Attention")
         self.flash_attn_check.setChecked(True)
         layout.addWidget(self.flash_attn_check)
+
+        # Remember the user touched a knob manually (profile defaults below
+        # only prefill knobs the user has NOT already changed).
+        self._touched = set()
+        for w, name in (
+            (self.n_batch_spin, "n_batch"), (self.n_threads_spin, "n_threads"),
+            (self.n_keep_spin, "n_keep"),
+        ):
+            w.valueChanged.connect(lambda _v, n=name: self._touched.add(n))
+        self.context_combo.currentIndexChanged.connect(
+            lambda _i: self._touched.add("ctx"))
+        self.flash_attn_check.toggled.connect(
+            lambda _v: self._touched.add("flash_attn"))
 
         # Advanced Settings button
         self.advanced_btn = QPushButton("⚙ Advanced Settings")
@@ -399,9 +413,12 @@ class SettingsSidebar(QFrame):
         pass  # params button moved to AdvancedSettingsDialog
 
     def get_gpu_layers(self) -> int:
-        """Get GPU layers from advanced settings dialog (returns -1 = auto)."""
-        # The actual value lives in AdvancedSettingsDialog; this is a fallback
-        return -1
+        """Get GPU layers chosen in the Advanced Settings dialog (-1 = auto)."""
+        return getattr(self, "_gpu_layers", -1)
+
+    def set_gpu_layers(self, n_gpu_layers: int) -> None:
+        """Store the Advanced dialog's GPU-layer choice for the next load."""
+        self._gpu_layers = int(n_gpu_layers)
 
     def get_processing_mode(self) -> str:
         return "GPU Accelerated" if self.gpu_button.isChecked() else "CPU Only"
@@ -448,7 +465,7 @@ class SettingsSidebar(QFrame):
         try:
             return int(self.context_combo.currentText())
         except ValueError:
-            return 32768
+            return 8192  # canonical default (core/defaults.DEFAULT_CTX)
 
     def get_performance_params(self) -> dict:
         """Return n_batch / n_threads / n_keep / flash_attn from the sidebar."""
@@ -461,9 +478,13 @@ class SettingsSidebar(QFrame):
 
     def apply_profile_defaults(self, profile) -> None:
         """Prefill performance knobs from a ModelProfile (only if user hasn't touched them)."""
-        self.n_batch_spin.setValue(getattr(profile, "n_batch", 512))
-        self.n_keep_spin.setValue(getattr(profile, "n_keep", 512))
-        self.flash_attn_check.setChecked(getattr(profile, "flash_attn", True))
+        touched = getattr(self, "_touched", set())
+        if "n_batch" not in touched:
+            self.n_batch_spin.setValue(getattr(profile, "n_batch", 512))
+        if "n_keep" not in touched:
+            self.n_keep_spin.setValue(getattr(profile, "n_keep", 512))
+        if "flash_attn" not in touched:
+            self.flash_attn_check.setChecked(getattr(profile, "flash_attn", True))
 
     # ------------------------------------------------------------------
     # Chat sessions (called by the main window)

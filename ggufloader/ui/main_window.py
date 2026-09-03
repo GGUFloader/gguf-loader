@@ -779,6 +779,8 @@ class MainWindow(QMainWindow, ThemeMixin):
             self._chat_model_params["top_k"] = values["top_k"]
             self._chat_model_params["repeat_penalty"] = values["repeat_penalty"]
             self._chat_model_params["max_tokens"] = values["max_tokens"]
+            # GPU-layer choice now reaches the next model load (no placebo).
+            self.sidebar.set_gpu_layers(dlg.get_gpu_layers())
 
     def _on_model_error(self, message: str) -> None:
         self.sidebar.set_loading(False)

@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useChatStore } from '../../stores/chatStore'
+import { modelApi } from '../../api/client'
 
-const TOKEN_BUDGET = 32768 // default context length
+const DEFAULT_BUDGET = 8192 // canonical default ctx (core/defaults.DEFAULT_CTX)
 
 const SEGMENTS = [
   { key: 'system', label: 'System', color: '#6366f1' },
@@ -13,6 +14,16 @@ const SEGMENTS = [
 
 export function ContextLens() {
   const { messages } = useChatStore()
+  const [tokenBudget, setTokenBudget] = useState(DEFAULT_BUDGET)
+
+  // The lens must reflect the model's ACTUAL context, not a hardcoded max.
+  useEffect(() => {
+    modelApi.info()
+      .then((i) => {
+        if (i?.context_length && i.context_length > 0) setTokenBudget(i.context_length)
+      })
+      .catch(() => {})
+  }, [])
 
   const breakdown = useMemo(() => {
     // Estimate token usage from messages
@@ -39,8 +50,8 @@ export function ContextLens() {
     if (systemTokens === 0) systemTokens = 2048
 
     const used = systemTokens + historyTokens + toolTokens
-    const responseTokens = Math.min(4096, Math.max(0, TOKEN_BUDGET - used))
-    const free = Math.max(0, TOKEN_BUDGET - used - responseTokens)
+    const responseTokens = Math.min(4096, Math.max(0, tokenBudget - used))
+    const free = Math.max(0, tokenBudget - used - responseTokens)
 
     return {
       system: systemTokens,
@@ -48,10 +59,10 @@ export function ContextLens() {
       tools: toolTokens,
       response: responseTokens,
       free,
-      total: TOKEN_BUDGET,
+      total: tokenBudget,
       used,
     }
-  }, [messages])
+  }, [messages, tokenBudget])
 
   const usedPercent = Math.min(100, (breakdown.used / breakdown.total) * 100)
 

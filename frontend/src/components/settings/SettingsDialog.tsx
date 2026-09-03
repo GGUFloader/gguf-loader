@@ -52,7 +52,7 @@ export function SettingsDialog({ onClose }: Props) {
 
   // Model settings
   const [gpuLayers, setGpuLayers] = useState(-1)
-  const [ctxLength, setCtxLength] = useState(32768)
+  const [ctxLength, setCtxLength] = useState(0) // 0 = Auto (router decides)
   const [autoLoad, setAutoLoad] = useState(false)
 
   // Sampling params
@@ -212,6 +212,7 @@ export function SettingsDialog({ onClose }: Props) {
                   <Field label="Context Length">
                     <select value={ctxLength} onChange={(e) => { setCtxLength(Number(e.target.value)); setTimeout(saveSettings, 100) }}
                       className="bg-elevated border border-border rounded-lg px-3 py-1.5 text-sm text-text outline-none focus:border-accent">
+                      <option value={0}>Auto (recommended)</option>
                       {[2048,4096,8192,16384,32768,65536,131072].map(v => (
                         <option key={v} value={v}>{v.toLocaleString()}</option>
                       ))}

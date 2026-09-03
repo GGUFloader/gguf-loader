@@ -39,7 +39,8 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
   const [modelPath, setModelPath] = useState('')
   const [useGpu, setUseGpu] = useState(true)
   const [gpuLayers, setGpuLayers] = useState(-1)
-  const [ctxLength, setCtxLength] = useState(16384)
+  const [ctxLength, setCtxLength] = useState(0) // 0 = Auto (router decides)
+  const [plan, setPlan] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [estimating, setEstimating] = useState(false)
   const [estimate, setEstimate] = useState<MemoryEstimate | null>(null)
@@ -80,6 +81,18 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
     setEstimating(false)
   }, [])
 
+  // Router plan preview: shows recommended ctx / gpu layers + fit badges.
+  // Switching to a custom ctx re-plans so the dialog shows whether it fits.
+  useEffect(() => {
+    if (!modelPath.trim() || !modelPath.endsWith('.gguf')) { setPlan(null); return }
+    const id = setTimeout(async () => {
+      try {
+        setPlan(await modelApi.plan(modelPath, ctxLength === 0 ? null : ctxLength))
+      } catch { setPlan(null) }
+    }, 250)
+    return () => clearTimeout(id)
+  }, [modelPath, ctxLength])
+
   useEffect(() => {
     const timer = setTimeout(() => {
       debounceEstimate(modelPath)
@@ -99,7 +112,9 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
     setLoading(true); setError(null)
     try {
       if (currentModel?.loaded) await modelApi.unload()
-      const result = await modelApi.load(modelPath, useGpu, ctxLength)
+      const nCtx = ctxLength === 0 ? null : ctxLength
+      const nGpuLayers = (useGpu && gpuLayers >= 0) ? gpuLayers : (useGpu ? null : 0)
+      const result = await modelApi.load(modelPath, useGpu, nCtx, nGpuLayers)
       addToRecent(modelPath)
       toast.success(`Model loaded: ${result.filename || modelPath.split(/[/\\\\]/).pop()}`)
       onLoaded?.(result)
@@ -309,11 +324,39 @@ export function ModelLoadDialog({ onClose, onLoaded }: Props) {
             <label className="text-sm text-text-sec mb-1.5 block">Context Length</label>
             <select value={ctxLength} onChange={(e) => setCtxLength(Number(e.target.value))}
               className="w-full bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent">
+              <option value={0}>Auto (recommended)</option>
               {[2048,4096,8192,16384,32768,65536,131072].map(v => (
                 <option key={v} value={v}>{v.toLocaleString()}</option>
               ))}
             </select>
           </div>
+
+          {/* Router plan preview */}
+          {plan && (
+            <div className="px-4 py-2 bg-accent/5 border border-accent/20 rounded-lg space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-accent flex items-center gap-1.5">
+                  <Sparkles size={12} /> Router plan
+                </span>
+                <div className="flex items-center gap-2">
+                  {plan.fits_vram
+                    ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">VRAM ✓</span>
+                    : <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400">VRAM ✗</span>}
+                  {plan.fits_ram
+                    ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">RAM ✓</span>
+                    : <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">RAM ✗</span>}
+                </div>
+              </div>
+              <div className="flex gap-3 text-[11px] font-mono text-text">
+                <span>ctx {Number(plan.n_ctx).toLocaleString()}</span>
+                <span>layers {plan.n_gpu_layers === -1 ? 'all' : plan.n_gpu_layers}</span>
+                <span>batch {plan.batch_size}</span>
+              </div>
+              {plan.reasoning && (
+                <div className="text-[11px] text-text-muted leading-snug">{plan.reasoning}</div>
+              )}
+            </div>
+          )}
 
           {/* Error */}
           {error && (

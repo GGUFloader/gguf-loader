@@ -17,11 +17,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 // Model API
 export const modelApi = {
   info: () => request<any>('/model/info'),
-  load: (path: string, useGpu: boolean | null = null, nCtx = 16384) =>
+  /** Auto contract: null fields let the router decide. */
+  load: (path: string, useGpu: boolean | null = null, nCtx: number | null = null, nGpuLayers: number | null = null, role = 'chat') =>
     request<any>('/model/load', {
       method: 'POST',
-      body: JSON.stringify({ path, use_gpu: useGpu, n_ctx: nCtx, n_gpu_layers: -1 }),
+      body: JSON.stringify({ path, use_gpu: useGpu, n_ctx: nCtx, n_gpu_layers: nGpuLayers, role }),
     }),
+  /** Router plan for a path (optional n_ctx override recomputes fits). */
+  plan: (path: string, nCtx?: number | null) =>
+    request<any>(`/model/router/plan?path=${encodeURIComponent(path)}${nCtx != null ? `&n_ctx=${nCtx}` : ''}`),
   unload: () => request<any>('/model/unload', { method: 'DELETE' }),
   estimate: (path: string) => request<any>(`/model/estimate?path=${encodeURIComponent(path)}`),
   profile: (path: string) => request<any>(`/model/profile?path=${encodeURIComponent(path)}`),
