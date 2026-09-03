@@ -246,6 +246,7 @@ def _load_family_profiles() -> List[Dict[str, Any]]:
                 "label": fam.get("name", fam["id"]),
                 "archs": tuple(fam.get("arch_patterns", [])),
                 "names": tuple(fam.get("name_patterns", [])),
+                "version_patterns": tuple(fam.get("version_patterns", [])),
                 "supports_system_prompt": fam.get("supports_system_prompt", True),
                 "system_prompt": fam.get("system_prompt", ""),
                 "task_prompts": fam.get("task_prompts", {}),
@@ -272,6 +273,7 @@ FALLBACK_PROFILES = [
         "label": "LiquidAI LFM2",
         "archs": ("lfm2",),
         "names": ("lfm2", "lfm 2"),
+        "version_patterns": (),
         "supports_system_prompt": True,
         "temperature": 0.2, "top_k": 80, "top_p": 0.9,
         "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
@@ -281,6 +283,7 @@ FALLBACK_PROFILES = [
         "label": "Qwen3",
         "archs": ("qwen3", "qwen3moe"),
         "names": ("qwen3",),
+        "version_patterns": (),
         "supports_system_prompt": True,
         "temperature": 0.6, "top_k": 20, "top_p": 0.95,
         "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
@@ -290,6 +293,7 @@ FALLBACK_PROFILES = [
         "label": "Meta Llama 3.x",
         "archs": ("llama",),
         "names": ("llama-3", "llama3", "meta-llama-3"),
+        "version_patterns": ("llama-3", "llama3", "-3-", "llama4"),
         "supports_system_prompt": True,
         "temperature": 0.6, "top_k": 40, "top_p": 0.9,
         "repeat_penalty": 1.1, "min_p": 0.0, "max_tokens": 4096,
@@ -299,6 +303,7 @@ FALLBACK_PROFILES = [
         "label": "Mistral",
         "archs": (),
         "names": ("mistral",),
+        "version_patterns": (),
         "supports_system_prompt": False,
         "temperature": 0.7, "top_k": 40, "top_p": 0.9,
         "repeat_penalty": 1.1, "min_p": 0.0, "max_tokens": 4096,
@@ -308,6 +313,7 @@ FALLBACK_PROFILES = [
         "label": "OpenAI gpt-oss",
         "archs": ("gpt_oss",),
         "names": ("gpt-oss", "gptoss"),
+        "version_patterns": (),
         "supports_system_prompt": True,
         "temperature": 1.0, "top_k": 40, "top_p": 1.0,
         "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
@@ -337,32 +343,67 @@ GENERIC_PROFILE = {
 def detect_family(metadata: Dict[str, str], model_path: str | Path) -> Tuple[Dict[str, Any], str]:
     """Return ``(profile, how_detected)`` for the given model.
 
-    Detection order (Ollama-style):
-    1. GGUF architecture string (e.g. "llama", "qwen2", "gemma3")
-    2. Filename/metadata name substring match
-    3. Fallback to generic profile
+    Detection order (version-aware, Ollama-style):
+    1. Version patterns against the name+arch (e.g. llama-2 vs llama-3 both
+       share the "llama" GGUF arch - the version in the filename decides)
+    2. GGUF architecture string (e.g. "qwen2", "gemma3"), longest pattern first
+    3. Filename/metadata name substring match
+    4. Fallback to generic profile (never crashes)
     """
     arch = (metadata.get("architecture") or "").lower()
     name = (
-        metadata.get("name", "")
+        str(metadata.get("name") or "").lower()
         + " "
-        + metadata.get("basename", "")
+        + str(metadata.get("basename") or "").lower()
         + " "
         + Path(str(model_path)).name.lower()
     )
-    # 1. Try architecture match first (most reliable)
+
+    # 0. Version patterns win: llama-2-7b must NOT resolve to the llama3
+    # profile just because both expose arch "llama" (longest version hit wins
+    # so "llama-3.1" isn't swallowed by an earlier "llama-3" family).
+    # Version patterns only apply when the family's arch set is compatible
+    # (or the file has no arch at all) - "gemma-2-9b" must never match
+    # llama2's "-2-" version marker.
+    best_ver = None
+    best_len = -1
+    for prof in FAMILY_PROFILES:
+        archs = prof.get("archs", ())
+        if arch and archs and not any(a in arch for a in archs):
+            continue  # wrong arch family - never version-match across archs
+        for vp in prof.get("version_patterns", ()):
+            if vp and vp.lower() in name and len(vp) > best_len:
+                best_len, best_ver = len(vp), prof
+    if best_ver is not None:
+        return best_ver, "version match"
+
+    # 1. Architecture match, longest arch pattern first - keeps e.g. a
+    # "gemma3" arch file from matching the "gemma2" arch family just
+    # because "gemma2" is a substring of the family list order. Ties (two
+    # families sharing one arch, e.g. llama2/llama3/codellama on "llama")
+    # are broken by the family name appearing in the file name.
     if arch:
+        best_arch = None
+        best_arch_len = -1
+        best_arch_name_hit = False
         for prof in FAMILY_PROFILES:
-            archs = prof.get("archs", ())
-            if any(a in arch for a in archs):
-                return prof, f"gguf arch '{arch}'"
+            for a in prof.get("archs", ()):
+                if not (a and a in arch):
+                    continue
+                name_hit = any(n and n.lower() in name for n in prof.get("names", ()))
+                if len(a) > best_arch_len or (
+                        len(a) == best_arch_len and name_hit and not best_arch_name_hit):
+                    best_arch_len, best_arch, best_arch_name_hit = len(a), prof, name_hit
+        if best_arch is not None:
+            return best_arch, f"gguf arch '{arch}'"
+
     # 2. Try filename/name match
     for prof in FAMILY_PROFILES:
         names = prof.get("names", ())
-        if any(n in name for n in names):
+        if any(n and n.lower() in name for n in names):
             return prof, "filename match"
     # 3. Fallback
-    return GENERIC_PROFILE, "no match"
+    return GENERIC_PROFILE, "generic-fallback"
 
 
 # ---------------------------------------------------------------------------
