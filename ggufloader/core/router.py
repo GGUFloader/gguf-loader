@@ -40,6 +40,11 @@ from ggufloader.core.defaults import (
     VRAM_HEADROOM,
 )
 
+from ggufloader.core.system_probe import (  # noqa: E402
+    llama_supports_gpu_offload,
+    llama_supports_metal,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -1038,26 +1043,17 @@ def _get_vram_info() -> Tuple[float, str]:
 
 def _check_gpu_support() -> bool:
     """Check if llama-cpp-python was compiled with GPU support."""
-    try:
-        from llama_cpp import llama_cpp as _lc
-        probe = getattr(_lc, "llama_supports_gpu_offload", None)
-        return bool(probe()) if callable(probe) else False
-    except Exception:
-        return False
+    return llama_supports_gpu_offload()
 
 
 def _detect_gpu_backend() -> str:
     """Detect which GPU backend llama.cpp is using."""
-    try:
-        from llama_cpp import llama_cpp as _lc
-        # Check CUDA
-        probe = getattr(_lc, "llama_supports_gpu_offload", None)
-        if probe and callable(probe) and probe():
-            if platform.system() == "Darwin":
-                return "metal"
-            return "cuda"
-    except Exception:
-        pass
+    if llama_supports_gpu_offload():
+        if platform.system() == "Darwin":
+            return "metal"
+        return "cuda"
+    if llama_supports_metal():
+        return "metal"
     if platform.system() == "Darwin":
         # macOS — Metal is always available if compiled
         return "metal"

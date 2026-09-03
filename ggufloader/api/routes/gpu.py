@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter
 
 from ggufloader.api.deps import refresh_router_system
+from ggufloader.core.system_probe import llama_cpp_available, llama_supports_gpu_offload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -15,15 +16,13 @@ logger = logging.getLogger(__name__)
 @router.get("/status")
 async def gpu_status() -> dict:
     """Check GPU support status."""
-    try:
-        from llama_cpp import llama_cpp as _llama_cpp
-        has_gpu = hasattr(_llama_cpp, "llama_supports_gpu_offload")
-        return {
-            "gpu_available": has_gpu,
-            "status": "installed" if has_gpu else "cpu_only",
-        }
-    except ImportError:
+    if not llama_cpp_available():
         return {"gpu_available": False, "status": "not_installed"}
+    has_gpu = llama_supports_gpu_offload()
+    return {
+        "gpu_available": has_gpu,
+        "status": "installed" if has_gpu else "cpu_only",
+    }
 
 
 @router.post("/install")

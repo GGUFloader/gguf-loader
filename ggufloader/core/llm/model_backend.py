@@ -26,6 +26,21 @@ except ImportError:  # pragma: no cover - depends on environment
     LLAMA_AVAILABLE = False
 
 
+def create_llama(**kwargs: Any) -> Any:  # pragma: no cover - thin factory
+    """Construct a llama-cpp ``Llama`` instance.
+
+    ModelBackend is the single owner of the Llama constructor; legacy
+    engines that need a raw instance (e.g. the LangChain engine) go
+    through here instead of importing llama_cpp themselves.
+    """
+    if not LLAMA_AVAILABLE:
+        raise RuntimeError(
+            "llama-cpp-python is required but not installed. "
+            "Install it with: pip install llama-cpp-python"
+        )
+    return Llama(**kwargs)
+
+
 def holdback_stream(token_iter: Iterator[str], stops: List[str]) -> Iterator[str]:
     """Yield tokens while withholding a tail that could complete a stop.
 

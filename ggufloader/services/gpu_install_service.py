@@ -24,6 +24,8 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from ggufloader.core.system_probe import llama_supports_gpu_offload, llama_supports_metal
+
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from shiboken6 import isValid
 
@@ -44,23 +46,12 @@ PINNED_VERSION = "0.3.34"
 def is_gpu_support_installed() -> bool:
     """True when the installed llama-cpp-python build can offload to a GPU.
 
-    Uses the official runtime probe (``llama_supports_gpu_offload`` for
+    Uses the official runtime probes (``llama_supports_gpu_offload`` for
     CUDA, ``llama_supports_metal`` for Apple Metal), so it reflects the
     actually installed wheel - not just what the UI thinks was installed.
     Returns False if llama-cpp-python is missing entirely.
     """
-    try:
-        from llama_cpp import llama_cpp as _llama_cpp
-    except Exception:  # pragma: no cover - package missing
-        return False
-    for probe in ("llama_supports_gpu_offload", "llama_supports_metal"):
-        fn = getattr(_llama_cpp, probe, None)
-        if callable(fn):
-            try:
-                return bool(fn())
-            except Exception:  # pragma: no cover - backend init failure
-                return False
-    return False
+    return llama_supports_gpu_offload() or llama_supports_metal()
 
 
 def _get_wheel_url() -> str:

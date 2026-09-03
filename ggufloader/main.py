@@ -71,14 +71,8 @@ def _detect_ui_mode() -> str:
     if env_mode in ("qt", "pyside6"):
         return "qt"
 
-    # Check if PySide6 is available
-    try:
-        import PySide6  # noqa: F401
-        return "qt"
-    except ImportError:
-        pass
-
-    # Default to React mode
+    # The React web UI is the documented default (see --help); the Qt
+    # desktop UI stays available on request via --qt / GGUFLOADER_UI=qt.
     return "react"
 
 
@@ -143,9 +137,11 @@ def _launch_qt() -> int:
 
     from ggufloader.resource_manager import find_config_dir, find_icon, find_logs_dir
 
+    from ggufloader import __version__
+
     app = QApplication(sys.argv)
     app.setApplicationName("GGUF Loader")
-    app.setApplicationVersion("2.2.0")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("GGUF Loader Team")
 
     icon_path = find_icon("icon.ico")

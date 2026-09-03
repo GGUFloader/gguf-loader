@@ -29,10 +29,9 @@ from .protocol import ChatDelta, EngineInfo, ModelEngine
 logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - depends on environment
-    from llama_cpp import Llama
-    LLAMA_AVAILABLE = True
+    from ggufloader.core.llm.model_backend import create_llama, LLAMA_AVAILABLE
 except ImportError:  # pragma: no cover - depends on environment
-    Llama = None  # type: ignore[assignment]
+    create_llama = None  # type: ignore[assignment]
     LLAMA_AVAILABLE = False
 
 _OFFLOAD_RE = re.compile(
@@ -82,7 +81,7 @@ class LlamaCppEngine:
         # offload, not just the requested one.
         log_buffer = io.StringIO()
         with contextlib.redirect_stderr(log_buffer):
-            llama = Llama(
+            llama = create_llama(
                 model_path=path,
                 n_ctx=n_ctx,
                 n_gpu_layers=n_gpu_layers,
