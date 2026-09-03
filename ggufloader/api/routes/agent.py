@@ -106,8 +106,15 @@ async def stop_agent() -> dict:
 
 @router.post("/approve")
 async def approve_tool(req: ApprovalRequest) -> dict:
-    """Approve or deny a tool call."""
-    return {"call_id": req.call_id, "approved": req.approved}
+    """Approve or deny a tool call.
+
+    Forwards into the same ApprovalManager the WebSocket path uses, so a
+    REST approval resolves the running agent's pending request instead of
+    being a no-op echo.
+    """
+    from ggufloader.api.websocket.handler import get_approval_manager
+    resolved = get_approval_manager().resolve(req.call_id, req.approved)
+    return {"call_id": req.call_id, "approved": req.approved, "resolved": resolved}
 
 
 @router.get("/presets")

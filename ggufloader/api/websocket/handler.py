@@ -359,9 +359,28 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         # --- 4. Create GraphAgent (with checkpointing + cancellation) ---
         from ggufloader.core.agent.graph_agent import GraphAgent
 
-        # Each session gets a unique thread_id -- no history carryover.
-        # This keeps the prompt small and fast.
-        unique_thread_id = f"session_{int(time.time() * 1000)}"
+        # Stable file-backed thread per (workspace, session): agent runs in
+        # the same session resume their graph thread from disk; a fresh
+        # session (or none) starts clean so chats never leak into each other.
+        session_id = str(data.get("session_id") or "")
+        ws_sha = hashlib.sha256(
+            str(Path(workspace).resolve()).encode()).hexdigest()[:12]
+        if session_id:
+            unique_thread_id = f"agent-{ws_sha}-{session_id[:40]}"
+            checkpoint_path = None
+            try:
+                from ggufloader.resource_manager import find_cache_dir
+                ckpt_dir = Path(find_cache_dir()) / "agent_checkpoints"
+                ckpt_dir.mkdir(parents=True, exist_ok=True)
+                checkpoint_path = ckpt_dir / f"{unique_thread_id}.db"
+            except Exception:  # noqa: BLE001 - in-memory fallback
+                checkpoint_path = None
+        else:
+            # No session scope: fully isolated run (no history carryover).
+            unique_thread_id = (
+                f"agent-{ws_sha}-" + hashlib.sha256(
+                    f"{time.time()}".encode()).hexdigest()[:12])
+            checkpoint_path = None
 
         # Get actual context size from model backend
         try:
@@ -385,6 +404,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             n_ctx=actual_n_ctx,
             json_retries=2,
             thread_id=unique_thread_id,
+            checkpoint_path=checkpoint_path,
             system_prompt=full_system_prompt or None,
             task_prompts=router_task_prompts or None,
             allowed_tools=preset_allowed,

@@ -239,3 +239,34 @@ def test_router_agent_role_provides_valid_params():
     assert config.temperature <= 0.3  # agent caps temperature
     assert config.repeat_penalty >= 1.1
     assert config.role == ModelRole.AGENT
+
+
+# ---------------------------------------------------------------------------
+# Task 9: stable file-backed thread id + checkpoint path
+# ---------------------------------------------------------------------------
+
+def test_stable_thread_id_format():
+    import inspect
+    from ggufloader.api.websocket import handler
+    src = inspect.getsource(handler.handle_agent_start)
+    assert 'f"agent-{ws_sha}-{session_id[:40]}"' in src
+    assert "checkpoint_path" in src
+    assert "agent_checkpoints" in src
+
+
+def test_graph_accepts_file_checkpoint(tmp_path):
+    from ggufloader.core.agent.graph_agent import GraphAgent
+
+    class FakeLLM:
+        def __call__(self, prompt, **kw):
+            return '{"tool_calls": [], "answer": "ok"}'
+
+    ckpt = tmp_path / "agent_checkpoints" / "t.db"
+    agent = GraphAgent(
+        FakeLLM(), str(tmp_path),
+        max_tokens=512, thread_id="agent-abc-1", checkpoint_path=ckpt,
+        system_prompt="test",
+    )
+    # The saver must be file-backed (sqlite file gets created lazily on write).
+    assert str(agent._checkpoint_path) == str(ckpt)
+    assert agent.thread_id == "agent-abc-1"
