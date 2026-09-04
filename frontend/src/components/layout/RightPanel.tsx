@@ -21,7 +21,6 @@ import { BenchmarkPanel } from '../agent/BenchmarkPanel'
 import { BenchmarkChartPanel } from '../agent/BenchmarkChartPanel'
 import { CollabPanel } from '../agent/CollabPanel'
 import { PluginSandboxPanel } from '../agent/PluginSandboxPanel'
-import { ProgressSection } from '../chat/ProgressSection'
 import { ArtifactsSection } from '../chat/ArtifactsSection'
 import { ContextSection } from '../chat/ContextSection'
 import {
@@ -106,7 +105,6 @@ export function RightPanel() {
     <aside className="w-80 h-full flex flex-col bg-surface border-l border-border" aria-label="Right panel">
       {/* Collapsible sections — always visible at top */}
       <div className="border-b border-border">
-        <ProgressSection />
         <ArtifactsSection />
         <ContextSection />
       </div>

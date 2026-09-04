@@ -29,6 +29,8 @@ export interface ChatMessage {
   timestamp: number
   thinking?: string
   toolCalls?: ToolCall[]
+  /** Live progress timeline folded into the message when its run completes. */
+  steps?: ProgressStep[]
 }
 
 export interface ToolCall {
@@ -367,10 +369,12 @@ export function connectWebSocket() {
           break
         }
         case 'tool_call':
-          // Add tool call to current streaming message
-          if (store.currentStreamingId) {
+          // Add tool call to current streaming message (read live state -
+          // the module-level `store` snapshot is stale by the time a tool
+          // actually runs).
+          if (useChatStore.getState().currentStreamingId) {
             const msgs = useChatStore.getState().messages
-            const current = msgs.find(m => m.id === store.currentStreamingId)
+            const current = msgs.find(m => m.id === useChatStore.getState().currentStreamingId)
             if (current) {
               current.toolCalls = [...(current.toolCalls || []), {
                 name: data.name,
@@ -383,9 +387,9 @@ export function connectWebSocket() {
           }
           break
         case 'tool_result':
-          if (store.currentStreamingId) {
+          if (useChatStore.getState().currentStreamingId) {
             const msgs = useChatStore.getState().messages
-            const current = msgs.find(m => m.id === store.currentStreamingId)
+            const current = msgs.find(m => m.id === useChatStore.getState().currentStreamingId)
             if (current && current.toolCalls) {
               const tc = current.toolCalls.find(t => t.approvalId === data.call_id || t.name === data.tool)
               if (tc) {
@@ -503,14 +507,26 @@ export function connectWebSocket() {
             plan: { ...s.plan, phaseLog: data.phase_log || [] },
           }))
           break
-        case 'message_complete':
-          // Update streaming message with final content + plan
-          if (store.currentStreamingId) {
-            const msgs = useChatStore.getState().messages
-            const current = msgs.find(m => m.id === store.currentStreamingId)
+        case 'message_complete': {
+          // Read the CURRENT store state — `store` above is a stale zustand
+          // snapshot (state is replaced on every set), so guards on it never
+          // see the live currentStreamingId.
+          const live = useChatStore.getState()
+          const msgId = live.currentStreamingId
+
+          // Update streaming message with the final content. message_complete
+          // already carries the FULL final text, so drop the accumulated
+          // streamed tokens (stopStreaming would otherwise append them on
+          // top and double the reply).
+          if (msgId) {
+            const msgs = live.messages
+            const current = msgs.find(m => m.id === msgId)
             if (current) {
               current.content = toText(data.content) || current.content
-              useChatStore.setState({ messages: [...msgs] })
+              useChatStore.setState({
+                messages: [...msgs],
+                streamingText: '',
+              })
             }
           }
           if (data.plan) {
@@ -531,18 +547,40 @@ export function connectWebSocket() {
           if (data.duration_ms) {
             useChatStore.getState().updateAgentMetrics({ durationMs: data.duration_ms })
           }
+          // Agent runs: fold the live progress timeline into the finished
+          // assistant message so the whole process (plan/reasoning/tool
+          // rows) stays visible inline under that reply — Codebuff style —
+          // instead of vanishing when the global list resets next turn.
+          if ((data.preset || data.plan) && msgId) {
+            const st = useChatStore.getState()
+            const steps = st.progressSteps
+            useChatStore.setState((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === msgId && steps.length > 0
+                  ? { ...m, steps: [...steps] }
+                  : m
+              ),
+              progressSteps: [],
+              currentAnnouncement: '',
+            }))
+          }
           store.stopStreaming()
           break
+        }
         case 'tool_approval':
           store.addPendingApproval({ id: data.id, tool: data.tool, args: data.args })
           break
         case 'done':
           store.stopStreaming()
           break
-        case 'error':
-          store.appendToMessage(store.currentStreamingId ?? '', `\nError: ${toText(data.message)}`)
+        case 'error': {
+          const liveId = useChatStore.getState().currentStreamingId
+          if (liveId) {
+            useChatStore.getState().appendToMessage(liveId, `\nError: ${toText(data.message)}`)
+          }
           store.stopStreaming()
           break
+        }
       }
     } catch {}
   }

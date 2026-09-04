@@ -104,21 +104,18 @@ export function ChatPanel() {
             <>
               {messages.map((msg, i) => {
                 const isLast = i === messages.length - 1
-                // Show progress right after the last user message (while agent works)
-                // or after the last assistant message (while streaming)
-                const showProgressHere = (msg.role === 'user' && isLast) ||
-                  (msg.role === 'assistant' && isLast && isStreaming)
+                // Codebuff-style turns: each assistant reply carries the
+                // process that produced it. While a run is live the panel
+                // streams from the global progress list; once the run
+                // completes the steps are folded into msg.steps (see
+                // message_complete in chatStore) so they stay attached to
+                // that reply instead of living in a side panel.
+                const isLiveAssistant = msg.role === 'assistant' &&
+                  isLast && isStreaming && msg.id === useChatStore.getState().currentStreamingId
+                const hasLiveSteps = progressSteps.length > 0 || !!currentAnnouncement
 
                 return (
                   <div key={msg.id} className="space-y-2">
-                    <ChatBubble
-                      message={msg}
-                      isStreaming={isStreaming && isLast && msg.role === 'assistant'}
-                      onRetry={msg.role === 'assistant' ? () => {
-                        const lastUser = [...messages].reverse().find(m => m.role === 'user')
-                        if (lastUser) useChatStore.getState().sendMessage(lastUser.content)
-                      } : undefined}
-                    />
                     {/* Inline tool calls */}
                     {msg.toolCalls && msg.toolCalls.map((tc, j) => (
                       <ToolCallCard
@@ -127,24 +124,46 @@ export function ChatPanel() {
                         onApprove={handleApprove}
                       />
                     ))}
-                    {/* Progress steps inline with conversation */}
-                    {showProgressHere && (
-                      progressSteps.length > 0 || currentAnnouncement ? (
-                        <div className="py-1">
-                          <StepProgressPanel
-                            steps={progressSteps}
-                            isStreaming={isStreaming}
-                            currentAnnouncement={currentAnnouncement}
-                          />
-                        </div>
-                      ) : isStreaming && streamingText ? (
+                    {/* Process shown above the reply text, like Codebuff */}
+                    {msg.steps && msg.steps.length > 0 ? (
+                      <div className="py-1">
+                        <StepProgressPanel
+                          steps={msg.steps}
+                          isStreaming={false}
+                        />
+                      </div>
+                    ) : isLiveAssistant && hasLiveSteps ? (
+                      <div className="py-1">
+                        <StepProgressPanel
+                          steps={progressSteps}
+                          isStreaming={isStreaming}
+                          currentAnnouncement={currentAnnouncement}
+                        />
+                      </div>
+                    ) : null}
+
+                    {/* While a run is live: stream tokens as they arrive (the
+                        finished bubble + folded steps appear on
+                        message_complete). Never render the still-empty
+                        assistant bubble mid-run. */}
+                    {isLiveAssistant ? (
+                      streamingText ? (
                         <StreamingText content={streamingText} isStreaming={isStreaming} />
-                      ) : isStreaming ? (
+                      ) : (
                         <div className="flex items-center gap-2 py-1">
                           <Loader2 size={14} className="text-accent animate-spin" />
-                          <span className="text-sm text-text-muted">Thinking...</span>
+                          <span className="text-sm text-text-muted">Working...</span>
                         </div>
-                      ) : null
+                      )
+                    ) : (
+                      <ChatBubble
+                        message={msg}
+                        isStreaming={false}
+                        onRetry={msg.role === 'assistant' ? () => {
+                          const lastUser = [...messages].reverse().find(m => m.role === 'user')
+                          if (lastUser) useChatStore.getState().sendMessage(lastUser.content)
+                        } : undefined}
+                      />
                     )}
                   </div>
                 )

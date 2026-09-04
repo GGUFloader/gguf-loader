@@ -92,13 +92,110 @@ class AgentTransport:
         return on_tool
 
     def make_token_callback(self) -> Callable[[str], None]:
-        """Return an on_token callback suitable for GraphAgent.process()."""
+        """Return an on_token callback suitable for GraphAgent.process().
+
+        The tuned 12B occasionally opens its prose answer with a tool-call
+        envelope (``{"tool_calls": []}`` — bare or fenced) before the real
+        text, even though the answer prompt forbids JSON. The final answer is
+        scrubbed end-to-end too, but a live stream would still flash the
+        envelope while the answer is typing. This stateful filter buffers the
+        start of the stream, drops the envelope (and any fence around it) as
+        soon as it is recognized, and passes the remaining prose straight
+        through. Prose that never starts with ``{`` is never delayed.
+        """
+        state = {"buf": "", "passthrough": False, "just_dropped": False}
+
+        def _find_envelope_end(s: str) -> Optional[int]:
+            """Return the index just past the first balanced JSON object
+            starting at the first ``{`` in *s*, else None. String-aware:
+            braces inside quoted strings are ignored."""
+            start = s.find("{")
+            if start < 0:
+                return None
+            depth = 0
+            in_str = False
+            esc = False
+            i = start
+            while i < len(s):
+                c = s[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif c == "\\":
+                        esc = True
+                    elif c == '"':
+                        in_str = False
+                elif c == '"':
+                    in_str = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return i + 1
+                i += 1
+            return None
+
         def on_token(chunk: str) -> None:
-            self._send({
-                "type": "token",
-                "token": chunk,
-                "message_id": self.message_id,
-            })
+            if state["passthrough"]:
+                if state["just_dropped"]:
+                    # Clean the blank line that often follows the dropped
+                    # envelope before the prose begins.
+                    chunk = chunk.lstrip("\n").lstrip()
+                    state["just_dropped"] = False
+                    if not chunk:
+                        return
+                self._send({"type": "token", "token": chunk,
+                            "message_id": self.message_id})
+                return
+            state["buf"] += chunk
+            s = state["buf"]
+            if not s.lstrip().startswith("{") and "{" not in s:
+                # No envelope shape at all: once we have enough text to be
+                # sure, release everything and stream freely from here on.
+                if len(s) >= 32:
+                    state["passthrough"] = True
+                    if s:
+                        self._send({"type": "token", "token": s,
+                                    "message_id": self.message_id})
+                return
+            end = _find_envelope_end(s)
+            if end is None:
+                # Still inside a possible envelope - hold a little longer, but
+                # never stall the stream on malformed output.
+                if len(s) > 2000:
+                    state["passthrough"] = True
+                    if s:
+                        self._send({"type": "token", "token": s,
+                                    "message_id": self.message_id})
+                return
+            obj_text = s[s.find("{"):end]
+            rest = s[end:]
+            try:
+                import json as _json
+                obj = _json.loads(obj_text)
+                is_envelope = isinstance(obj, dict) and "tool_calls" in obj
+            except (ValueError, TypeError):
+                is_envelope = False
+            if not is_envelope:
+                state["passthrough"] = True
+                if s:
+                    self._send({"type": "token", "token": s,
+                                "message_id": self.message_id})
+                return
+            # Envelope confirmed: drop it plus any trailing fence, then
+            # stream the remaining prose live from here on.
+            rest = rest.lstrip()
+            if rest.startswith("```"):
+                nl = rest.find("\n")
+                rest = rest[nl + 1:].lstrip() if nl != -1 else ""
+            state["passthrough"] = True
+            if rest:
+                self._send({"type": "token", "token": rest,
+                            "message_id": self.message_id})
+            else:
+                state["just_dropped"] = True
+
         return on_token
 
     def make_reasoning_callback(self) -> Callable[[str], None]:

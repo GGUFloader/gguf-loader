@@ -29,6 +29,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -48,6 +49,56 @@ from .tool_registry import ToolRegistry, tool_content_for_context, validate_tool
 from .workspace_context import WorkspaceContext, PromptPrefixCache, WorkingMemory
 
 logger = logging.getLogger(__name__)
+
+
+def strip_tool_envelope(text: str) -> str:
+    """Remove a leading tool-call JSON envelope from a final answer.
+
+    The model sometimes opens its prose answer with a (possibly fenced)
+    ``{"tool_calls": []}`` object — the same envelope shape it uses for
+    tool calls — before the real text. The plan/answer prompts forbid
+    JSON, but a 12B quant frequently leaks the envelope anyway. This
+    drops the leading object (and any fence around/after it) when it
+    parses as a dict carrying a ``tool_calls`` key:
+
+    - ``{"tool_calls": []}\nBased on the files...`` -> prose only
+    - ```json block + envelope + prose`` -> prose only
+    - ``{"tool_calls": [], "answer": "..."}`` -> the ``answer`` field
+
+    Anything that does not start with such an envelope is returned
+    unchanged, so ordinary prose (or prose that merely *mentions* JSON)
+    is never touched.
+    """
+    if not text or not text.strip():
+        return text
+    s = text.strip()
+
+    # Peel one optional ``` fence that may wrap the whole reply.
+    if s.startswith("```"):
+        first_nl = s.find("\n")
+        s = s[first_nl + 1:] if first_nl != -1 else ""
+        if s.endswith("```"):
+            s = s[:-3].rstrip()
+    if not s.startswith("{"):
+        return text
+
+    try:
+        obj, end = json.JSONDecoder().raw_decode(s)
+    except (ValueError, TypeError):
+        return text  # not a leading JSON object - leave it alone
+    if not isinstance(obj, dict) or "tool_calls" not in obj:
+        return text  # not a tool-call envelope
+
+    rest = s[end:].strip()
+    # The envelope was fenced; its closing ``` may now lead the prose.
+    if rest.startswith("```"):
+        nl = rest.find("\n")
+        rest = rest[nl + 1:].strip() if nl != -1 else ""
+    if rest:
+        return rest
+    answer = obj.get("answer")
+    return answer.strip() if isinstance(answer, str) else ""
+
 
 # Phrases that mean the model dodged instead of answering. When tool
 # evidence exists, a refusal must never reach the user — fall back to a
@@ -705,6 +756,10 @@ class GraphAgent:
                 answer_prompt, writer, stream_tokens=True, purpose="answer")
             self._check_cancel()
             answer = self._clean(answer)
+            # The tuned 12B sometimes still opens its prose with a tool-call
+            # envelope ({"tool_calls": []}...) despite the "no JSON" rule -
+            # strip any leading envelope so the bubble shows clean prose.
+            answer = strip_tool_envelope(answer) or answer
 
             if not answer.strip():
                 answer = self._diagnostic("plan answer step produced empty result", step_num, len(plan), tool_results)
@@ -951,7 +1006,7 @@ class GraphAgent:
                 "_final_response (no evidence): LLM returned len=%d raw_preview=%r",
                 len(response or ""), (response or "")[:300],
             )
-            cleaned = self._clean(response)
+            cleaned = strip_tool_envelope(self._clean(response))
             if cleaned.strip():
                 return cleaned
             return self._diagnostic(
@@ -981,7 +1036,7 @@ class GraphAgent:
                 "_final_response (list-only evidence): LLM returned len=%d raw_preview=%r",
                 len(response or ""), (response or "")[:300],
             )
-            cleaned = self._clean(response)
+            cleaned = strip_tool_envelope(self._clean(response))
             if cleaned.strip() and not _looks_like_refusal(cleaned):
                 return cleaned
             if cleaned.strip():
@@ -1024,7 +1079,7 @@ class GraphAgent:
 
         # Step 4: Clean — and never ship an access-refusal when real evidence
         # exists; render the evidence deterministically instead.
-        direct_answer = self._clean(direct_answer)
+        direct_answer = strip_tool_envelope(self._clean(direct_answer))
 
         if not direct_answer.strip() or _looks_like_refusal(direct_answer):
             logger.warning(

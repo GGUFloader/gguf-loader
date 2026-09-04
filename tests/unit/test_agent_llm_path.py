@@ -222,3 +222,82 @@ def test_reasoning_callback_strips_json_fence():
     # Once live, chunks pass straight through.
     cb("tail")
     assert sent[-1]["content"] == "tail"
+
+
+def test_token_callback_strips_tool_call_envelope():
+    """A live answer stream must never flash a leading {"tool_calls": []}
+    envelope — the token callback drops it before it reaches the bubble."""
+    import asyncio
+
+    from ggufloader.core.agent.agent_transport import AgentTransport
+
+    sent: list = []
+
+    class _WS:
+        async def send_event(self, event):
+            sent.append(event)
+
+    transport = AgentTransport(_WS(), asyncio.new_event_loop(),
+                               message_id="m1", preset_id="p")
+    cb = transport.make_token_callback()
+    # Envelope split across chunks like real generation, then prose.
+    cb('{"tool')
+    cb('_calls": ')
+    cb('[]}\n\n')
+    cb("Based on the files, this is a loader.")
+
+    tokens = [e.get("token") for e in sent if e.get("type") == "token"]
+    joined = "".join(tokens)
+    assert "tool_calls" not in joined, repr(joined)
+    assert joined == "Based on the files, this is a loader.", repr(joined)
+
+    # After the envelope is dropped, remaining chunks stream straight.
+    cb(" More detail.")
+    assert sent[-1]["token"] == " More detail."
+
+
+def test_token_callback_never_delays_plain_prose():
+    """Prose with no envelope must stream immediately (no "{...}" prefix)."""
+    import asyncio
+
+    from ggufloader.core.agent.agent_transport import AgentTransport
+
+    sent: list = []
+
+    class _WS:
+        async def send_event(self, event):
+            sent.append(event)
+
+    transport = AgentTransport(_WS(), asyncio.new_event_loop(),
+                               message_id="m1", preset_id="p")
+    cb = transport.make_token_callback()
+    cb("This project is a local GGUF runtime.")
+
+    tokens = [e.get("token") for e in sent if e.get("type") == "token"]
+    assert "".join(tokens) == "This project is a local GGUF runtime."
+
+
+def test_token_callback_strips_fenced_envelope():
+    """A ```json-fenced envelope at the start of the answer is dropped whole,
+    fence included, and the prose after it streams."""
+    import asyncio
+
+    from ggufloader.core.agent.agent_transport import AgentTransport
+
+    sent: list = []
+
+    class _WS:
+        async def send_event(self, event):
+            sent.append(event)
+
+    transport = AgentTransport(_WS(), asyncio.new_event_loop(),
+                               message_id="m1", preset_id="p")
+    cb = transport.make_token_callback()
+    cb("```json")
+    cb('\n{"tool_calls": []}\n```')
+    cb('\n\nThe README explains the app.')
+
+    tokens = [e.get("token") for e in sent if e.get("type") == "token"]
+    joined = "".join(tokens)
+    assert "tool_calls" not in joined and "```" not in joined
+    assert joined == "The README explains the app.", repr(joined)

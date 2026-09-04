@@ -616,3 +616,59 @@ def test_answer_step_uses_all_completed_step_evidence(tmp_path: Path) -> None:
     assert "Step 1 (read_file):" in answer_prompt, "middle-step evidence missing"
     assert "GPU offloading" in answer_prompt, "README content missing from answer evidence"
     assert "Step 2 (search_files):" in answer_prompt
+
+
+# ---------------------------------------------------------------------------
+# Tool-call envelope scrubbing in final answers
+# ---------------------------------------------------------------------------
+
+def test_strip_tool_envelope_bare_prefix() -> None:
+    """A leading {"tool_calls": []} before prose is dropped; prose kept."""
+    from ggufloader.core.agent.graph_agent import strip_tool_envelope
+    text = '{"tool_calls": []}\n\nBased on the files, this project is a loader.'
+    assert strip_tool_envelope(text) == "Based on the files, this project is a loader."
+
+
+def test_strip_tool_envelope_fenced() -> None:
+    """A fenced ```json envelope before prose is dropped with its fence."""
+    from ggufloader.core.agent.graph_agent import strip_tool_envelope
+    text = '```json\n{"tool_calls": []}\n```\n\nThe README explains the app.'
+    assert strip_tool_envelope(text) == "The README explains the app."
+
+
+def test_strip_tool_envelope_whole_json_with_answer() -> None:
+    """An envelope that IS the whole answer unwraps its 'answer' field."""
+    from ggufloader.core.agent.graph_agent import strip_tool_envelope
+    text = '{"tool_calls": [], "answer": "This is the real answer."}'
+    assert strip_tool_envelope(text) == "This is the real answer."
+
+
+def test_strip_tool_envelope_leaves_prose_alone() -> None:
+    """Ordinary prose (even prose mentioning JSON) is untouched."""
+    from ggufloader.core.agent.graph_agent import strip_tool_envelope
+    assert strip_tool_envelope("This project is a loader.") == "This project is a loader."
+    assert strip_tool_envelope(
+        "Here is a sample: {\"not_tool_calls\": true}") == \
+        "Here is a sample: {\"not_tool_calls\": true}"
+    assert strip_tool_envelope("") == ""
+    assert strip_tool_envelope(" ") == " "
+
+
+def test_answer_step_strips_tool_envelope_from_response(tmp_path: Path) -> None:
+    """A leak of {"tool_calls": []} at the start of the answer synthesis
+    must never reach the user: the final answer is the prose after it."""
+    prompts: list[str] = []
+
+    def llm(prompt, **kwargs):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            return _plan_json([])
+        # Answer synthesis leaks a tool-call envelope before real prose.
+        return '{"tool_calls": []}\n\nThis project is a local GGUF runtime.'
+
+    agent = GraphAgent(llm, tmp_path, max_steps=3,
+                       system_prompt="You are a test assistant.")
+    out = agent.process("what is this project?")
+    agent.close()
+
+    assert out["response"] == "This project is a local GGUF runtime.", out["response"]
