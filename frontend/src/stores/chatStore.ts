@@ -333,6 +333,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }))
 
+/** Pure waiting indicators ("Planning...") are transient status — they may
+ *  show live while the planner runs but must never become permanent rows in
+ *  the folded timeline once the plan lands. Everything else the backend
+ *  announces is real work worth keeping (Goal, plan steps, tool rows). */
+function isTransientAnnouncement(text: string | undefined | null): boolean {
+  const t = (text || '').trim()
+  return t === 'Planning...'
+}
+
 // WebSocket connection singleton
 export function connectWebSocket() {
   if (ws && ws.readyState === WebSocket.OPEN) return
@@ -405,20 +414,20 @@ export function connectWebSocket() {
             toolSuccesses: useChatStore.getState().agentMetrics.toolSuccesses + (data.success ? 1 : 0),
           })
           break
-        case 'progress_announce':
-          // Agent announces what it's about to do.
-          // If there's already a pending announcement, commit it first.
-          {
-            const prev = useChatStore.getState().currentAnnouncement
-            if (prev) {
-              useChatStore.getState().addProgressStep({
-                type: 'announce',
-                content: prev,
-              })
-            }
+        case 'progress_announce': {
+          // Agent announces what it's about to do. Commit the previous
+          // pending announcement first — but drop transient wait-statuses
+          // ("Planning...") instead of persisting them as timeline rows.
+          const prev = useChatStore.getState().currentAnnouncement
+          if (prev && !isTransientAnnouncement(prev)) {
+            useChatStore.getState().addProgressStep({
+              type: 'announce',
+              content: prev,
+            })
           }
           useChatStore.getState().setCurrentAnnouncement(data.content)
           break
+        }
         case 'progress_tool_call':
           // Agent is executing a tool
           useChatStore.getState().addProgressStep({
@@ -453,17 +462,19 @@ export function connectWebSocket() {
           // Commit announcement when first tool starts
           {
             const announcement = useChatStore.getState().currentAnnouncement
-            if (announcement) {
+            if (announcement && !isTransientAnnouncement(announcement)) {
               useChatStore.getState().addProgressStep({
                 type: 'announce',
                 content: announcement,
               })
-              useChatStore.getState().setCurrentAnnouncement('')
             }
+            useChatStore.getState().setCurrentAnnouncement('')
           }
           break
         case 'progress_step_complete':
-          // A high-level step is done
+          // A high-level step is done — but never persist transient
+          // wait-statuses ("Planning...") as timeline rows.
+          if (isTransientAnnouncement(toText(data.content))) break
           useChatStore.getState().addProgressStep({
             type: 'message',
             content: toText(data.content),
@@ -535,13 +546,13 @@ export function connectWebSocket() {
           // Commit any remaining announcement as final message
           {
             const announcement = useChatStore.getState().currentAnnouncement
-            if (announcement) {
+            if (announcement && !isTransientAnnouncement(announcement)) {
               useChatStore.getState().addProgressStep({
                 type: 'announce',
                 content: announcement,
               })
-              useChatStore.getState().setCurrentAnnouncement('')
             }
+            useChatStore.getState().setCurrentAnnouncement('')
           }
           // Update duration metric
           if (data.duration_ms) {
@@ -553,7 +564,11 @@ export function connectWebSocket() {
           // instead of vanishing when the global list resets next turn.
           if ((data.preset || data.plan) && msgId) {
             const st = useChatStore.getState()
-            const steps = st.progressSteps
+            // Never let a transient "Planning..." wait-status survive into
+            // the message's permanent inline timeline.
+            const steps = st.progressSteps.filter(
+              (s) => !isTransientAnnouncement(s.content)
+            )
             useChatStore.setState((s) => ({
               messages: s.messages.map((m) =>
                 m.id === msgId && steps.length > 0

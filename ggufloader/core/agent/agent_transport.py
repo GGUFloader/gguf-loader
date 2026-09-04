@@ -326,7 +326,12 @@ class AgentTransport:
             self._send({"type": "progress_announce", "content": stripped})
         elif stripped.startswith("> Step "):
             self._send({"type": "progress_step_complete", "content": stripped})
-        elif stripped.startswith("Plan") or stripped.startswith("All plan") or stripped.startswith("Verif"):
+        # "Plan (N steps):" is a completed plan header — a permanent step row.
+        # But "Planning..." merely STARTS with "Plan"; it is a transient wait
+        # status that must never become a permanent row, so route it to the
+        # announce (transient) branch below instead.
+        elif (stripped.startswith("Plan") and not stripped.startswith("Planning")) \
+                or stripped.startswith("All plan") or stripped.startswith("Verif"):
             self._send({"type": "progress_step_complete", "content": stripped})
         # Bare "Step N/M" counters (no "> " prefix) are legacy reactive-loop
         # messages whose total is max_steps, not the plan length. The plan

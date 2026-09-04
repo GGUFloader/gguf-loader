@@ -214,6 +214,29 @@ def test_transport_keeps_bare_step_without_total(transport):
     assert any("Step 3" == (e.get("content") or "").strip() for e in announces), ws.sent
 
 
+def test_transport_planning_wait_is_transient_not_plan_step(transport):
+    """'Planning...' starts with 'Plan' but is a wait status, not a plan
+    header — it must never become a permanent progress_step_complete row
+    (the old 'Plan' prefix branch caught it and the UI showed 'Planning...'
+    forever). Route it to the transient announce branch instead."""
+    agent, ws = transport
+    agent._handle_status("Planning...")
+
+    completes = [e for e in ws.sent if e.get("type") == "progress_step_complete"]
+    announces = [e for e in ws.sent if e.get("type") == "progress_announce"]
+    assert not completes, ws.sent
+    assert any("Planning..." in (e.get("content") or "") for e in announces), ws.sent
+
+
+def test_transport_plan_header_is_a_plan_step(transport):
+    """The real plan header still lands as a permanent step row."""
+    agent, ws = transport
+    agent._handle_status("Plan (4 steps):")
+
+    completes = [e for e in ws.sent if e.get("type") == "progress_step_complete"]
+    assert any("Plan (4 steps):" in (e.get("content") or "") for e in completes), ws.sent
+
+
 # ---------------------------------------------------------------------------
 # End-to-end: a full GraphAgent.process() run never shows max_steps as total
 # ---------------------------------------------------------------------------
