@@ -15,7 +15,8 @@ Schema (version 1):
       "mode": "chat" | "agent",
       "workspace": str | null,
       "messages": [
-        {"role": "user" | "assistant", "content": str, "ts": ts},
+        {"role": "user" | "assistant", "content": str, "ts": ts,
+         "steps": [...] (optional - assistant inline process timeline)},
         {"role": "tool", "tool_result": {...}, "ts": ts}
       ]
     }
@@ -147,9 +148,18 @@ class SessionStore:
         self.save(session)
         return True
 
-    def append_message(self, session: Dict[str, Any], role: str, content: str) -> None:
-        """Append a user/assistant message to an in-memory session."""
-        session["messages"].append({"role": role, "content": content, "ts": _now()})
+    def append_message(self, session: Dict[str, Any], role: str, content: str,
+                       extra: Optional[Dict[str, Any]] = None) -> None:
+        """Append a user/assistant message to an in-memory session.
+
+        *extra* is merged into the stored message - used for the assistant's
+        inline process timeline (``steps``) so reloading a session restores
+        the plan/tool rows, not just the reply text.
+        """
+        message = {"role": role, "content": content, "ts": _now()}
+        if extra:
+            message.update(extra)
+        session["messages"].append(message)
         if role == "user" and not session.get("title"):
             session["title"] = derive_title(content)
 

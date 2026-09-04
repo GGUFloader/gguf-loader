@@ -131,6 +131,19 @@ const DEFAULT_METRICS: AgentMetrics = {
   preset: '',
 }
 
+/** Append a finished assistant reply to the active session so history can be
+ *  reloaded later. The assistant placeholder created at send time has no
+ *  content (and is therefore skipped by addMessage's auto-save), so this is
+ *  the only place a reply ever reaches the session store. */
+function persistAssistantReply(content: string, steps?: unknown[]) {
+  const st = useChatStore.getState()
+  if (st.activeSessionId && content) {
+    import('../api/client').then(({ sessionApi }) =>
+      sessionApi.appendMessage(st.activeSessionId!, 'assistant', content, steps).catch(() => {})
+    )
+  }
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isStreaming: false,
@@ -324,6 +337,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         })
         const data = await res.json()
         store.appendToMessage(msgId, data.response)
+        persistAssistantReply(toText(data.response))
       } catch (e: any) {
         store.appendToMessage(msgId, `Error: ${e.message}`)
       } finally {
@@ -578,6 +592,19 @@ export function connectWebSocket() {
               progressSteps: [],
               currentAnnouncement: '',
             }))
+          }
+          // Persist the finished assistant reply - including its folded
+          // inline process timeline (plan/reasoning/tool rows) - so reloading
+          // the session restores the full Codebuff-style process, not just
+          // the reply text.
+          if (msgId) {
+            const finalMsg = useChatStore.getState().messages.find(m => m.id === msgId)
+            if (finalMsg?.content) {
+              const steps = (finalMsg.steps && finalMsg.steps.length > 0)
+                ? finalMsg.steps.map((s: any) => ({ ...s }))
+                : undefined
+              persistAssistantReply(finalMsg.content, steps)
+            }
           }
           store.stopStreaming()
           break

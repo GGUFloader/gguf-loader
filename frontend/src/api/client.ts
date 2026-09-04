@@ -105,10 +105,10 @@ export const sessionApi = {
   search: (query: string) => request<any[]>(`/sessions/search/${encodeURIComponent(query)}`),
   export: (id: string, format: 'json' | 'markdown' | 'html' = 'json') =>
     request<any>(`/sessions/${id}/export?format=${format}`),
-  appendMessage: (id: string, role: string, content: string) =>
+  appendMessage: (id: string, role: string, content: string, steps?: unknown[]) =>
     request<any>(`/sessions/${id}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ role, content }),
+      body: JSON.stringify({ role, content, ...(steps ? { steps } : {}) }),
     }),
 }
 

@@ -18,7 +18,7 @@ import {
   Loader2,
   Zap,
 } from 'lucide-react'
-import { sessionApi, modelApi } from '../../api/client'
+import { sessionApi, modelApi, appApi } from '../../api/client'
 import { useModelStore } from '../../stores/modelStore'
 import { useChatStore } from '../../stores/chatStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
@@ -45,6 +45,14 @@ export function LeftPanel() {
   const [folderModels, setFolderModels] = useState<any[]>([])
   const [folderLoading, setFolderLoading] = useState(false)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState('')
+
+  const loadAppInfo = useCallback(async () => {
+    try {
+      const info = await appApi.info()
+      if (info?.version) setAppVersion(info.version)
+    } catch { /* offline - leave version blank */ }
+  }, [])
 
   const loadSessions = useCallback(async () => {
     try {
@@ -64,7 +72,8 @@ export function LeftPanel() {
   useEffect(() => {
     loadSessions()
     loadModelInfo()
-  }, [loadSessions, loadModelInfo])
+    loadAppInfo()
+  }, [loadSessions, loadModelInfo, loadAppInfo])
 
   async function handleNewChat() {
     try {
@@ -152,6 +161,31 @@ export function LeftPanel() {
       setLoadingModel(null)
     } catch {}
     setLoadingModel(null)
+  }
+
+  // Fill the chat view from a stored session WITHOUT going through
+  // addMessage - addMessage auto-saves to the active session, so replaying
+  // history through it would duplicate every stored message on each load.
+  function hydrateSessionMessages(full: any) {
+    const mapped = (full?.messages || [])
+      .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+      .filter((m: any) => (m.content || '').length > 0)
+      .map((m: any) => {
+        const msg: any = {
+          id: `${m.role}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          role: m.role,
+          content: m.content || '',
+          timestamp: Date.now(),
+        }
+        // Restore the assistant's inline process timeline (plan, tool calls,
+        // results) that was persisted with the reply.
+        if (m.role === 'assistant' && Array.isArray(m.steps) && m.steps.length > 0) {
+          msg.steps = m.steps
+        }
+        return msg
+      })
+    clearMessages()
+    useChatStore.setState({ messages: mapped })
   }
 
   function formatDate(dateStr: string) {
@@ -346,19 +380,7 @@ export function LeftPanel() {
                     try {
                       const full = await sessionApi.get(session.id)
                       clearMessages()
-                      if (full && full.messages) {
-                        const chatStore = useChatStore.getState()
-                        for (const msg of full.messages) {
-                          if (msg.role === 'user' || msg.role === 'assistant') {
-                            chatStore.addMessage({
-                              id: `${msg.role}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                              role: msg.role,
-                              content: msg.content || '',
-                              timestamp: Date.now(),
-                            })
-                          }
-                        }
-                      }
+                      if (full && full.messages) hydrateSessionMessages(full)
                     } catch {}
                   }}
                   onContextMenu={(e) => {
@@ -398,8 +420,11 @@ export function LeftPanel() {
                     <span className="text-[10px] text-text-muted">
                       {session.message_count} msgs
                     </span>
-                    <span className="text-[10px] text-text-muted">
-                      {formatDate(session.updated)}
+                    <span
+                      className="text-[10px] text-text-muted"
+                      title={session.created || session.updated}
+                    >
+                      {formatDate(session.created || session.updated)}
                     </span>
                   </div>
                 </button>
@@ -487,19 +512,7 @@ export function LeftPanel() {
                   try {
                     const full = await sessionApi.get(s.id)
                     clearMessages()
-                    if (full && full.messages) {
-                      const chatStore = useChatStore.getState()
-                      for (const msg of full.messages) {
-                        if (msg.role === 'user' || msg.role === 'assistant') {
-                          chatStore.addMessage({
-                            id: `${msg.role}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                            role: msg.role,
-                            content: msg.content || '',
-                            timestamp: Date.now(),
-                          })
-                        }
-                      }
-                    }
+                    if (full && full.messages) hydrateSessionMessages(full)
                   } catch {}
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-elevated transition-colors text-left group"
@@ -509,7 +522,9 @@ export function LeftPanel() {
                   <div className="text-xs text-text-sec truncate">{s.title || 'Untitled'}</div>
                   <div className="flex items-center gap-2 text-[10px] text-text-muted">
                     <span>{s.message_count || 0} msgs</span>
-                    <span>{formatDate(s.updated)}</span>
+                    <span title={s.created || s.updated}>
+                      {formatDate(s.created || s.updated)}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -528,7 +543,7 @@ export function LeftPanel() {
       <div className="px-3 py-2 border-t border-border">
         <div className="flex items-center gap-2 text-[10px] text-text-muted">
           <Bot size={11} />
-          <span>GGUF Loader v1.0</span>
+          <span>GGUF Loader{appVersion ? ` v${appVersion}` : ''}</span>
         </div>
       </div>
     </div>

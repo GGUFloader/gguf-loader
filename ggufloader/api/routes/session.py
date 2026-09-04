@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -61,7 +61,14 @@ async def create_session(req: SessionCreate) -> dict:
         if req.title:
             session["title"] = req.title
         store.save(session)
-        return {"id": session["id"], "status": "created"}
+        return {
+            "id": session["id"],
+            "title": session.get("title"),
+            "created": session.get("created", ""),
+            "updated": session.get("updated", ""),
+            "mode": session.get("mode", "chat"),
+            "message_count": len(session.get("messages", [])),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -69,6 +76,7 @@ async def create_session(req: SessionCreate) -> dict:
 class MessageAppend(BaseModel):
     role: str
     content: str
+    steps: Optional[List[Any]] = None
 
 
 @router.post("/{session_id}/messages")
@@ -80,7 +88,12 @@ async def append_message(session_id: str, req: MessageAppend) -> dict:
         session = store.load(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
-        store.append_message(session, req.role, req.content)
+        store.append_message(
+            session,
+            req.role,
+            req.content,
+            extra={"steps": req.steps} if req.steps is not None else None,
+        )
         store.save(session)
         return {"status": "appended", "title": session.get("title")}
     except HTTPException:
@@ -153,8 +166,15 @@ async def fork_session(session_id: str) -> dict:
         new_session["title"] = f"Fork of {session.get('title', session_id)}"
         new_session["messages"] = session.get("messages", []).copy()
         store.save(new_session)
-        new_id = new_session["id"]
-        return {"id": new_id, "status": "forked"}
+        return {
+            "id": new_session["id"],
+            "title": new_session.get("title"),
+            "created": new_session.get("created", ""),
+            "updated": new_session.get("updated", ""),
+            "mode": new_session.get("mode", "chat"),
+            "message_count": len(new_session.get("messages", [])),
+            "status": "forked",
+        }
     except HTTPException:
         raise
     except Exception as e:
