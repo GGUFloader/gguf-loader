@@ -222,7 +222,10 @@ def test_graph_agent_has_lightweight_core(tmp_path):
 def test_graph_agent_processes_lightweight(tmp_path):
     """GraphAgent should process messages in lightweight mode."""
     def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "Hello!"}'
+        fake_llm.n = getattr(fake_llm, "n", 0) + 1
+        if fake_llm.n == 1:
+            return '{"goal": "g", "steps": [{"step": 1, "description": "Answer", "tool": null, "parameters": {}, "depends_on": []}]}'
+        return "Hello!"
 
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2, system_prompt='You are a test assistant for unit tests.')
     result = agent.process(user_message="Hi")

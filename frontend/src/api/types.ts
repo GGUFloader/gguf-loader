@@ -9,6 +9,24 @@ export interface ModelInfo {
   parameters?: string
   context_length?: number
   gpu: boolean
+  auto_load?: string
+  auto_load_message?: string | null
+  models_dir?: string | null
+  compatible?: boolean | null
+  compatible_error?: string | null
+}
+
+// App-level identity (GET /api/app/info) — single-model build banner.
+export interface AppInfo {
+  name: string
+  version: string
+  label: string
+  tagline: string
+  pinned: {
+    arch: string
+    quant: string
+    size: string
+  }
 }
 
 export interface MemoryEstimate {

@@ -8,6 +8,8 @@ Python (no Qt) so it can be unit tested in isolation.
 
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -416,17 +418,72 @@ class GitTool(Tool):
 
 class SearchFilesTool(Tool):
     name = "search_files"
-    description = "Search for text inside files under the workspace"
+    description = ("Search the text CONTENT of files under the workspace (scans the "
+                   "first 256 KB of each file; binary/generated files are skipped). "
+                   "To find a file BY NAME or path, use glob instead")
     schema = {
         "type": "object",
         "properties": {
             "pattern": {"type": "string",
-                         "description": "Text to search for (case-insensitive)"},
+                         "description": "Plain text to search for (case-insensitive). "
+                                        "Separate several alternatives with | to match any of them "
+                                        "(e.g. 'purpose|overview' matches files containing either word). "
+                                        "This is NOT a regular expression - no other regex syntax is supported."},
             "path": {"type": "string",
                       "description": "Directory to search, relative to the workspace (defaults to .)"},
         },
         "required": ["pattern"],
     }
+
+    #: Directory names never worth searching: dependency caches, build
+    #: artifacts, version-control internals. Pruned during the walk so a
+    #: repo with node_modules/.git never stalls the agent for minutes.
+    _SKIP_DIRS = frozenset({
+        ".git", ".hg", ".svn", "__pycache__", "node_modules", "bower_components",
+        ".venv", "venv", "env", ".tox", ".nox", "dist", "build", ".next",
+        ".nuxt", ".svelte-kit", ".cache", ".pytest_cache", ".mypy_cache",
+        ".ruff_cache", ".hypothesis", ".idea", ".vscode", ".turbo", ".parcel-cache",
+        ".egg-info", ".yarn", ".pnpm-store", "site-packages", "coverage",
+    })
+    #: Safety valves: even after pruning, stop after this many files scanned
+    #: (or matches found) and say so explicitly instead of hanging forever.
+    _MAX_FILES_SCANNED = 20000
+    _MAX_MATCHES = 300
+    #: Suffixes never worth searching: binary formats, archives, media, and
+    #: generated build artifacts (source maps, bytecode, compiled resources).
+    #: Skipping them by extension avoids reading megabytes per file (a 1 MB
+    #: PNG or a 5 MB source map costs nothing to skip this way).
+    _SKIP_EXTS = frozenset({
+        # images / media
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".tif",
+        ".tiff", ".avif", ".svgz", ".mp3", ".mp4", ".avi", ".mkv", ".mov",
+        ".wav", ".flac", ".ogg", ".webm", ".m4a", ".ttf", ".otf", ".woff",
+        ".woff2", ".eot",
+        # documents / archives
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt",
+        ".epub", ".zip", ".gz", ".tar", ".7z", ".rar", ".bz2", ".xz", ".zst",
+        ".whl", ".egg", ".iso", ".dmg",
+        # binaries / executables
+        ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".lib",
+        ".bin", ".dat", ".sys", ".pdb", ".exp", ".mod",
+        # models / tensors
+        ".gguf", ".safetensors", ".pt", ".pth", ".onnx", ".ckpt", ".npy",
+        ".npz", ".h5", ".hdf5", ".parquet", ".arrow", ".pb", ".tflite",
+        # bytecode / compiled / generated
+        ".pyc", ".pyo", ".pyd", ".class", ".jar", ".wasm", ".pak", ".qm",
+        ".qph", ".qmlc", ".map", ".tsbuildinfo",
+        # databases / caches
+        ".db", ".sqlite", ".sqlite3", ".mdb", ".idx", ".cache",
+    })
+    #: Filename markers for generated/minified artifacts whose extension is
+    #: still a text one (.min.js, .bundle.js, .chunk.js...).
+    _SKIP_NAME_SUFFIXES = (".min.js", ".min.css", ".bundle.js", ".chunk.js",
+                           ".vendor.js", ".d.ts.map")
+    #: Read only the first chunk of each file. Nearly all matches an agent
+    #: cares about live in the head of a source/doc file; this caps the cost
+    #: of minified bundles, generated JSON dumps and giant logs at one short
+    #: read instead of reading the whole file into memory.
+    _HEAD_BYTES = 256 * 1024
 
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -436,111 +493,61 @@ class SearchFilesTool(Tool):
             path = self.resolve(params.get("path", "."))
             if not path.is_dir():
                 return {"status": "error", "error": "Directory not found", "tool_name": self.name}
+            # Literal (case-insensitive) match. Models routinely write
+            # 'one|two' as a regex-style alternation; treat | as a union of
+            # plain-text terms instead of searching for the literal pipe.
+            needles = [q.strip().lower() for q in query.split("|") if q.strip()]
+            if not needles:
+                needles = [query.lower()]
             results = []
-            for file_path in path.rglob("*"):
-                if file_path.is_file():
+            files_scanned = 0
+            truncated = False
+            for root, dirs, files in os.walk(path):
+                # Prune ignored and hidden directories in place (os.walk honors
+                # the mutation); keep dotfiles but not dot-directories.
+                dirs[:] = sorted(
+                    d for d in dirs
+                    if not d.startswith(".") and d not in self._SKIP_DIRS
+                )
+                for name in sorted(files):
+                    if files_scanned >= self._MAX_FILES_SCANNED:
+                        truncated = True
+                        break
+                    file_path = Path(root) / name
+                    if (file_path.suffix.lower() in self._SKIP_EXTS
+                            or name.endswith(self._SKIP_NAME_SUFFIXES)):
+                        continue  # binary/generated - never worth reading
+                    files_scanned += 1
                     try:
-                        raw = file_path.read_bytes()
-                        if is_binary(raw):
-                            continue  # skip PDFs/DOCX/images - no clean keyword text
-                        text = raw.decode("utf-8", errors="ignore")
-                        if query.lower() in text.lower():
+                        # Head-only read: one bounded read per file, then a
+                        # NUL sniff (identical semantics to the old full-file
+                        # sniff - the first 4 KB decide either way).
+                        with file_path.open("rb") as fh:
+                            head = fh.read(self._HEAD_BYTES)
+                        if is_binary(head):
+                            continue  # no clean keyword text
+                        text = head.decode("utf-8", errors="ignore")
+                        hay = text.lower()
+                        if any(n in hay for n in needles):
                             results.append(str(file_path.relative_to(self.workspace)))
+                            if len(results) >= self._MAX_MATCHES:
+                                truncated = True
+                                break
                     except Exception:
                         continue
-            return {"status": "success", "result": results,
-                    "total_matches": len(results), "tool_name": self.name}
+                if truncated:
+                    break
+            result: Dict[str, Any] = {
+                "status": "success", "result": results,
+                "total_matches": len(results), "tool_name": self.name,
+            }
+            if truncated:
+                result["truncated"] = True
+                result["note"] = (f"Search stopped after {self._MAX_FILES_SCANNED} files / "
+                                  f"{self._MAX_MATCHES} matches; results are partial.")
+            return result
         except Exception as e:
             return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
-class PythonInterpreterTool(RunPythonTool):
-    """Deprecated alias of :class:`RunPythonTool` (Task 10: one tool universe).
-
-    The old "sandboxed" interpreter promised no filesystem/network access but
-    executed arbitrary Python with the full user interpreter - an approval-free
-    code-execution path that read-only presets could not block (they blocked
-    ``run_python`` only). It now shares ``run_python``'s schema and approval
-    gate, so blocking ``run_python`` blocks every python alias.
-    """
-
-    name = "python_interpreter"
-    description = (
-        "Deprecated alias of run_python - use run_python instead. "
-        "Execute Python code inside the workspace (approval required "
-        "before it runs)."
-    )
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        import warnings
-        warnings.warn(
-            "python_interpreter is deprecated, use run_python",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return super().execute(params)
-
-
-
-class BatchExecuteTool(Tool):
-    """Execute multiple tool calls in sequence (CodeMode adaptation).
-
-    Collapses N tool calls into one LLM round-trip. The model writes a
-    list of {tool, parameters} pairs and this tool executes them in order.
-    """
-
-    name = "batch_execute"
-    description = "Execute multiple tool calls in sequence. Reduces LLM round-trips."
-    schema = {
-        "type": "object",
-        "properties": {
-            "calls": {
-                "type": "array",
-                "description": "List of tool calls to execute in order",
-            }
-        },
-        "required": ["calls"],
-    }
-
-    def __init__(self, workspace: Path) -> None:
-        super().__init__(workspace)
-        self._registry: Optional["ToolRegistry"] = None
-
-    def set_registry(self, registry: "ToolRegistry") -> None:
-        self._registry = registry
-
-    def requires_approval(self, params: Dict[str, Any]) -> bool:
-        """Batch requires approval if any call needs it."""
-        if not self._registry:
-            return True
-        for call in params.get("calls", []):
-            if not isinstance(call, dict):
-                continue
-            tool_name = call.get("tool", "")
-            tool_params = call.get("parameters", {})
-            if self._registry.requires_approval(tool_name, tool_params):
-                return True
-        return False
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        if not self._registry:
-            return {"status": "error", "error": "No registry set", "tool_name": self.name}
-        calls = params.get("calls", [])
-        if not calls:
-            return {"status": "error", "error": "No calls provided", "tool_name": self.name}
-        results = []
-        for call in calls:
-            if not isinstance(call, dict):
-                results.append({"status": "error", "error": "Invalid call format"})
-                continue
-            tool_name = call.get("tool", "")
-            tool_params = call.get("parameters", {})
-            result = self._registry.execute(tool_name, tool_params)
-            results.append(result)
-            # Stop on error
-            if result.get("status") == "error":
-                break
-        return {"status": "success", "results": results, "tool_name": self.name}
 
 
 def _decode_bytes(raw_data: bytes, encoding: str) -> tuple[str, str]:
@@ -594,24 +601,31 @@ def tool_content_for_context(result: Dict[str, Any], max_chars: int = 1000) -> O
         paths = ", ".join(str(p) for p in payload[:50])
         return f"{paths} ({len(payload)} matches)"
     if tool == "glob" and isinstance(payload, list):
+        if not payload:
+            # Zero matches: surface the tool's note so the answer step
+            # knows the glob RAN and found nothing (instead of empty).
+            return result.get("note") or "No files matched"
         paths = ", ".join(str(p) for p in payload[:50])
         return f"{paths} ({len(payload)} files)"
     if tool == "move_file" and isinstance(payload, str):
-        return payload
-    if tool == "remember" and isinstance(payload, str):
-        return payload
-    if tool == "recall" and isinstance(payload, str):
-        return payload[:2000]
-    if tool == "forget" and isinstance(payload, str):
         return payload
     return None
 
 
 class GlobTool(Tool):
-    """Find files matching a glob pattern under the workspace."""
+    """Find files matching a glob pattern under the workspace.
+
+    Walks the tree with the same pruning and caps as ``search_files`` —
+    otherwise a ``**`` pattern crawls ``node_modules``/``.venv``/``.git`` and
+    freezes the graph for seconds. An empty match is reported explicitly
+    (with a hint) instead of as a silent success, so the answer step knows
+    the tool actually ran and found nothing.
+    """
 
     name = "glob"
-    description = "Find files matching a glob pattern (e.g. **/*.py, src/**/*.ts)"
+    description = ("Find files BY NAME or path pattern (e.g. **/*.py, src/**/*.ts) — "
+                   "use when the user wants to locate a file. Scans only source "
+                   "files; dependency/build/vendor directories are skipped.")
     schema = {
         "type": "object",
         "properties": {
@@ -627,21 +641,92 @@ class GlobTool(Tool):
         "required": ["pattern"],
     }
 
+    #: Same safety valves as SearchFilesTool — shared semantics so a repo
+    #: with node_modules/.git can never stall the agent on a glob.
+    _SKIP_DIRS = SearchFilesTool._SKIP_DIRS
+    _MAX_FILES_SCANNED = SearchFilesTool._MAX_FILES_SCANNED
+    _MAX_MATCHES = 300
+
+    @staticmethod
+    def _glob_to_regex(pattern: str) -> "re.Pattern[str]":
+        """Translate a glob pattern into an anchored regex.
+
+        ``**`` matches zero or more path segments, ``*`` matches within a
+        segment, ``?`` matches a single character. ``/`` is the only
+        separator (paths are normalized to POSIX form before matching).
+        """
+        parts = [p for p in pattern.replace("\\", "/").split("/") if p != ""]
+        out: List[str] = []
+        for part in parts:
+            if part == "**":
+                out.append("(?:[^/]+/)*")
+            else:
+                chunk: List[str] = []
+                i = 0
+                while i < len(part):
+                    c = part[i]
+                    if c == "*":
+                        chunk.append("[^/]*")
+                    elif c == "?":
+                        chunk.append("[^/]")
+                    else:
+                        chunk.append(re.escape(c))
+                    i += 1
+                out.append("".join(chunk))
+                out.append("/")
+        if out and out[-1] == "/":
+            out.pop()
+        return re.compile("^" + "".join(out) + "$")
+
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         try:
             pattern = params.get("pattern", "")
-            if not pattern:
+            if not pattern or not pattern.strip():
                 return {"status": "error", "error": "pattern is required", "tool_name": self.name}
             base = self.resolve(params.get("path", "."))
             if not base.is_dir():
                 return {"status": "error", "error": "Directory not found", "tool_name": self.name}
-            matches = sorted(str(p.relative_to(self.workspace)) for p in base.glob(pattern) if p.is_file())
-            return {
+            regex = self._glob_to_regex(pattern)
+            matches: List[str] = []
+            files_scanned = 0
+            truncated = False
+            for root, dirs, files in os.walk(base):
+                dirs[:] = sorted(
+                    d for d in dirs
+                    if not d.startswith(".") and d not in self._SKIP_DIRS
+                )
+                for name in sorted(files):
+                    if files_scanned >= self._MAX_FILES_SCANNED:
+                        truncated = True
+                        break
+                    files_scanned += 1
+                    rel = (Path(root) / name).relative_to(base).as_posix()
+                    if regex.match(rel):
+                        matches.append((Path(root) / name).relative_to(self.workspace).as_posix())
+                        if len(matches) >= self._MAX_MATCHES:
+                            truncated = True
+                            break
+                if truncated:
+                    break
+            result: Dict[str, Any] = {
                 "status": "success",
                 "result": matches[:200],
                 "total_matches": len(matches),
                 "tool_name": self.name,
             }
+            if not matches:
+                base_rel = base.relative_to(self.workspace).as_posix() or "."
+                result["note"] = (
+                    f"No files matched pattern {pattern!r} under {base_rel}. "
+                    f"Try a different pattern (e.g. '**/*.py' or '**/*.md')."
+                )
+            elif truncated:
+                result["truncated"] = True
+                result["note"] = (
+                    f"Glob stopped after {self._MAX_FILES_SCANNED} files / "
+                    f"{self._MAX_MATCHES} matches; results are partial."
+                )
+            return result
         except Exception as e:
             return {"status": "error", "error": str(e), "tool_name": self.name}
 
@@ -680,238 +765,15 @@ class MoveFileTool(Tool):
             return {"status": "error", "error": str(e), "tool_name": self.name}
 
 
-class RememberTool(Tool):
-    """Store a fact or preference in long-term memory."""
-
-    name = "remember"
-    description = "Store a fact, preference, or observation in long-term memory (persists across sessions)"
-    schema = {
-        "type": "object",
-        "properties": {
-            "key": {"type": "string", "description": "Short label for the memory (e.g. 'project structure', 'user prefers tests')"},
-            "value": {"type": "string", "description": "The fact or preference to remember"},
-            "category": {
-                "type": "string",
-                "description": "Category: fact, preference, pattern, correction, context",
-                "enum": ["fact", "preference", "pattern", "correction", "context"],
-            },
-        },
-        "required": ["key", "value"],
-    }
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            key = params.get("key", "")
-            value = params.get("value", "")
-            category = params.get("category", "fact")
-            if not key or not value:
-                return {"status": "error", "error": "key and value are required", "tool_name": self.name}
-            # Import here to avoid circular imports
-            from .memory_persistence import MemoryPersistence
-            mem = MemoryPersistence(self.workspace)
-            mem.remember(key, value, category=category)
-            return {
-                "status": "success",
-                "result": f"Remembered: {key} = {value[:200]}",
-                "tool_name": self.name,
-            }
-        except Exception as e:
-            return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
-class RecallTool(Tool):
-    """Search long-term memory for relevant facts."""
-
-    name = "recall"
-    description = "Search long-term memory for facts, preferences, or past observations"
-    schema = {
-        "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "Search query (matches against memory keys and values)"},
-        },
-        "required": ["query"],
-    }
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            query = params.get("query", "")
-            if not query:
-                return {"status": "error", "error": "query is required", "tool_name": self.name}
-            from .memory_persistence import MemoryPersistence
-            mem = MemoryPersistence(self.workspace)
-            results = mem.recall(query, limit=10)
-            if not results:
-                return {"status": "success", "result": "No matching memories found", "tool_name": self.name}
-            lines = [f"- [{e.category}] {e.key}: {e.value}" for e in results]
-            return {
-                "status": "success",
-                "result": "\n".join(lines),
-                "total_matches": len(results),
-                "tool_name": self.name,
-            }
-        except Exception as e:
-            return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
-class ForgetTool(Tool):
-    """Remove a memory by key."""
-
-    name = "forget"
-    description = "Remove a previously stored memory by its key"
-    schema = {
-        "type": "object",
-        "properties": {
-            "key": {"type": "string", "description": "The key of the memory to forget"},
-        },
-        "required": ["key"],
-    }
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            key = params.get("key", "")
-            if not key:
-                return {"status": "error", "error": "key is required", "tool_name": self.name}
-            from .memory_persistence import MemoryPersistence
-            mem = MemoryPersistence(self.workspace)
-            removed = mem.forget(key)
-            if removed:
-                return {"status": "success", "result": f"Forgot: {key}", "tool_name": self.name}
-            return {"status": "success", "result": f"No memory found with key: {key}", "tool_name": self.name}
-        except Exception as e:
-            return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
-class RecordCorrectionTool(Tool):
-    """Record a correction so the agent learns from mistakes."""
-
-    name = "record_correction"
-    description = "Record a correction: what the agent did wrong and what it should have done. Used for self-improvement."
-    schema = {
-        "type": "object",
-        "properties": {
-            "context": {"type": "string", "description": "What was being done (e.g. 'Editing main.py')"},
-            "agent_action": {"type": "string", "description": "What the agent did incorrectly"},
-            "correct_action": {"type": "string", "description": "What it should have done instead"},
-            "category": {
-                "type": "string",
-                "description": "Category: style, correctness, performance, security",
-                "enum": ["style", "correctness", "performance", "security"],
-            },
-        },
-        "required": ["context", "agent_action", "correct_action"],
-    }
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            from .self_improve import SelfImprove
-            improve = SelfImprove(self.workspace)
-            improve.record_correction(
-                context=params.get("context", ""),
-                agent_action=params.get("agent_action", ""),
-                correct_action=params.get("correct_action", ""),
-                category=params.get("category", "correctness"),
-            )
-            return {
-                "status": "success",
-                "result": f"Recorded correction: {params.get('agent_action', '')} → {params.get('correct_action', '')}",
-                "tool_name": self.name,
-            }
-        except Exception as e:
-            return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
-class GenerateAgentsMdTool(Tool):
-    """Auto-generate AGENTS.md from workspace analysis."""
-
-    name = "generate_agents_md"
-    description = "Scan the workspace and generate/update AGENTS.md with project structure, conventions, and agent instructions"
-    schema = {
-        "type": "object",
-        "properties": {
-            "force": {
-                "type": "boolean",
-                "description": "Overwrite existing AGENTS.md (default: false)",
-            },
-        },
-    }
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            from .agents_md import AgentsMdGenerator
-            gen = AgentsMdGenerator(self.workspace)
-            force = params.get("force", False)
-            written = gen.write(force=force)
-            if written:
-                content = gen.generate()
-                return {
-                    "status": "success",
-                    "result": f"Generated AGENTS.md ({len(content)} chars)",
-                    "content_preview": content[:500],
-                    "tool_name": self.name,
-                }
-            return {
-                "status": "success",
-                "result": "AGENTS.md already exists (use force=true to overwrite)",
-                "tool_name": self.name,
-            }
-        except Exception as e:
-            return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
-class ExportSessionTool(Tool):
-    """Export the current session as Markdown or JSON."""
-
-    name = "export_session"
-    description = "Export the current agent session as a Markdown or JSON file"
-    requires_approval = True
-    schema = {
-        "type": "object",
-        "properties": {
-            "format": {
-                "type": "string",
-                "description": "Export format: markdown or json",
-                "enum": ["markdown", "json"],
-            },
-            "filename": {
-                "type": "string",
-                "description": "Output filename (optional)",
-            },
-        },
-    }
-
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            from .session_export import SessionExport
-            exporter = SessionExport(self.workspace)
-            fmt = params.get("format", "markdown")
-            session_data = {
-                "title": "Agent Session Export",
-                "mode": "agent",
-                "messages": [],
-            }
-            if fmt == "markdown":
-                content = exporter.export_markdown(session_data)
-            else:
-                content = exporter.export_json(session_data)
-            filepath = exporter.save(session_data, params.get("filename"))
-            return {
-                "status": "success",
-                "result": f"Exported to {filepath.name}",
-                "path": str(filepath),
-                "tool_name": self.name,
-            }
-        except Exception as e:
-            return {"status": "error", "error": str(e), "tool_name": self.name}
-
-
+# Default tool universe for the pinned single-model build: file/dev tools
+# only. The memory/meta tools (remember, recall, forget, record_correction,
+# generate_agents_md, export_session, batch_execute and the python_interpreter
+# alias of run_python) were removed — a 12B model should never be offered a
+# catalog it can't use well.
 ALL_TOOL_CLASSES = (
     ListDirectoryTool, ReadFileTool, WriteFileTool, EditFileTool,
     SearchFilesTool, RunCommandTool, RunPythonTool, GitTool,
-    PythonInterpreterTool, BatchExecuteTool,
     GlobTool, MoveFileTool,
-    RememberTool, RecallTool, ForgetTool,
-    RecordCorrectionTool,
-    GenerateAgentsMdTool, ExportSessionTool,
 )
 
 

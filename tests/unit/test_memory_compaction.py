@@ -178,56 +178,12 @@ def test_compactor_over_limit():
 # Memory tools
 # ---------------------------------------------------------------------------
 
-def test_remember_tool(tmp_path):
-    """RememberTool stores a memory."""
-    from ggufloader.core.agent.tool_registry import RememberTool
-    tool = RememberTool(tmp_path)
-    result = tool.execute({"key": "test_key", "value": "test_value", "category": "fact"})
-    assert result["status"] == "success"
-    assert "Remembered" in result["result"]
-
-
-def test_recall_tool(tmp_path):
-    """RecallTool retrieves memories."""
-    from ggufloader.core.agent.tool_registry import RememberTool, RecallTool
-    RememberTool(tmp_path).execute({"key": "my_fact", "value": "42"})
-    
-    tool = RecallTool(tmp_path)
-    result = tool.execute({"query": "my_fact"})
-    assert result["status"] == "success"
-    assert "42" in result["result"]
-
-
-def test_forget_tool(tmp_path):
-    """ForgetTool removes a memory."""
-    from ggufloader.core.agent.tool_registry import RememberTool, ForgetTool
-    RememberTool(tmp_path).execute({"key": "temp", "value": "data"})
-    
-    tool = ForgetTool(tmp_path)
-    result = tool.execute({"key": "temp"})
-    assert result["status"] == "success"
-    assert "Forgot" in result["result"]
-
-
-def test_memory_tools_in_registry(tmp_path):
-    """Remember/recall/forget tools should be registered."""
-    registry = ToolRegistry(tmp_path)
-    names = registry.names()
-    assert "remember" in names
-    assert "recall" in names
-    assert "forget" in names
-
-
-# ---------------------------------------------------------------------------
-# GraphAgent with memory
-# ---------------------------------------------------------------------------
-
 def test_graph_agent_has_context_budget(tmp_path):
     """GraphAgent should have a ContextBudget instance."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False, system_prompt='You are a test assistant for unit tests.')
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     assert hasattr(agent, '_context_budget')
     assert isinstance(agent._context_budget, ContextBudget)
     agent.close()
@@ -238,7 +194,7 @@ def test_graph_agent_requires_router_system_prompt(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False)
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, )
     with pytest.raises(RuntimeError, match="No system prompt provided"):
         agent._system_prompt()
     agent.close()
@@ -249,8 +205,7 @@ def test_graph_agent_uses_router_system_prompt(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False,
-                       system_prompt="You are a test assistant for unit tests.")
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path,                        system_prompt="You are a test assistant for unit tests.")
     prompt = agent._system_prompt()
     assert prompt.startswith("You are a test assistant for unit tests.")
     agent.close()
@@ -261,7 +216,7 @@ def test_graph_agent_compacts_on_long_history(tmp_path):
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, plan=False, system_prompt='You are a test assistant for unit tests.')
+    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, system_prompt='You are a test assistant for unit tests.')
     # Set a very small budget
     agent._context_budget.set_budget(total=500, system_tokens=50)
     
@@ -283,31 +238,3 @@ def test_graph_agent_compacts_on_long_history(tmp_path):
     agent.close()
 
 
-def test_graph_agent_uses_remember_tool(tmp_path):
-    """Agent should be able to use the remember tool via graph."""
-    responses = [
-        json.dumps({
-            "reasoning": "Storing a fact",
-            "tool_calls": [{"tool": "remember", "parameters": {"key": "api_port", "value": "8080", "category": "fact"}}],
-        }),
-        json.dumps({"reasoning": "Done", "tool_calls": [], "answer": "Remembered that the API runs on port 8080"}),
-    ]
-    
-    call_count = [0]
-    def fake_llm(prompt, **kwargs):
-        idx = call_count[0]
-        call_count[0] += 1
-        return responses[min(idx, len(responses) - 1)]
-    
-    from ggufloader.core.agent.tool_registry import ToolRegistry as TR
-    agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=3, tools=TR(tmp_path), plan=False, system_prompt='You are a test assistant for unit tests.')
-    result = agent.process(user_message="Remember that the API runs on port 8080")
-    
-    assert "8080" in result["response"]
-    
-    # Verify memory was persisted
-    mem = MemoryPersistence(tmp_path)
-    results = mem.recall("api_port")
-    assert len(results) == 1
-    assert results[0].value == "8080"
-    agent.close()

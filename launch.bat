@@ -131,13 +131,9 @@ if not exist "electron\dist\main.js" (
     echo [OK] Electron compiled.
 )
 
-REM Start backend first
-echo [1/2] Starting backend (FastAPI on :8000)...
-start "GGUFLoader-Backend" cmd /c "cd /d "%~dp0" && .venv\Scripts\python.exe -m uvicorn ggufloader.api.app:create_app --factory --port 8000"
-timeout /t 3 /nobreak >nul
-
-REM Launch Electron (directly, no nested cmd)
-echo [2/2] Launching Electron window...
+REM Electron spawns and owns its own backend on :8000 (see electron/main.ts).
+REM Do NOT pre-start one here - a second uvicorn would fail to bind :8000.
+echo [1/1] Launching Electron window (Electron starts the backend itself)...
 cd /d "%~dp0electron"
 start "" node_modules\.bin\electron.cmd .
 cd /d "%~dp0"
@@ -226,9 +222,11 @@ echo.
 REM Kill any existing backend on port 8000
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
 
-REM Build frontend if needed
-if not exist "frontend\dist\index.html" (
-    echo [BUILD] Building frontend...
+REM Build frontend if missing OR stale (any frontend\src file newer than
+REM dist\index.html) - otherwise production mode silently serves an old UI.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=Get-ChildItem 'frontend\src' -Recurse -File -ErrorAction SilentlyContinue|Sort-Object LastWriteTime -Descending|Select-Object -First 1; $d=Get-Item 'frontend\dist\index.html' -ErrorAction SilentlyContinue; if (-not $d -or ($s -and $s.LastWriteTime -gt $d.LastWriteTime)) { exit 1 } else { exit 0 }" >nul 2>&1
+if errorlevel 1 (
+    echo [BUILD] Building frontend (missing or source newer than dist)...
     if not exist "frontend\node_modules" (
         cd /d "%~dp0frontend"
         call npm install

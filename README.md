@@ -8,11 +8,12 @@
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 
 A privacy-first, beginner-friendly desktop application for running large
-language models **fully locally** on Windows, Linux, and macOS. Load any
-GGUF model (Mistral, LLaMA, DeepSeek, Qwen, and thousands more from Hugging
-Face) and chat with it — with a built-in **agentic mode** that can read,
-create, edit, and organize files in a workspace you choose. No data ever
-leaves your computer.
+language models **fully locally** on Windows, Linux, and macOS. This build is
+**optimized for a single model — Google Gemma 4 12B Instruct (Q4_K_M)** — with
+per-model detection and family tuning removed so everything just works for
+that target. It ships with a built-in **agentic mode** that can read, create,
+edit, and organize files in a workspace you choose. No data ever leaves your
+computer.
 
 > 📦 **Also available as a Python package** — install it in seconds with
 > `pip install ggufloader` and launch it with `ggufloader`.
@@ -250,15 +251,15 @@ For manual control you can also run the bundled scripts:
 
 ---
 
-## 📥 Recommended Models
+## 📥 Supported Model
 
 | Model | Size | Notes |
 |---|---|---|
-| **Mistral-7B Instruct** | ~4.2 GB | ⭐ Best balance — excellent reasoning, great for agentic mode |
-| **LLaMA 3 8B Instruct** | ~4.7 GB | Strong reasoning and code understanding |
-| **GPT-OSS 20B** | ~7.3 GB | More powerful for complex refactoring |
+| **Gemma 4 12B Instruct (Q4_K_M)** | ~8 GB | The only model this build loads — sampling, context and prompts are tuned for it |
 
-Find thousands more on [Hugging Face](https://huggingface.co/models?library=gguf).
+Other GGUF files are rejected at load time with a clear message. Grab the
+Gemma 4 12B Instruct Q4_K_M GGUF from
+[Hugging Face](https://huggingface.co/models?library=gguf&query=gemma+4+12b).
 
 ---
 

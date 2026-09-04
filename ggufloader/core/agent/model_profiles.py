@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,22 +18,9 @@ class ModelProfile:
     json_retries: int
 
 
-_FAMILY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("gemma4", re.compile(r"gemma[-_]?4|gemma4", re.IGNORECASE)),
-    ("gemma3", re.compile(r"gemma[-_]?3|gemma3", re.IGNORECASE)),
-    ("qwen2.5", re.compile(r"qwen2\.?5|qwen[-_]?2\.?5", re.IGNORECASE)),
-    ("llama3", re.compile(r"llama[-_]?3|llama3", re.IGNORECASE)),
-    ("phi3", re.compile(r"phi[-_]?3|phi3", re.IGNORECASE)),
-    ("mistral", re.compile(r"mistral|mixtral", re.IGNORECASE)),
-]
-
-
-def _detect_family(model_path: str | Path) -> str:
-    name = Path(model_path).stem.lower()
-    for family, pat in _FAMILY_PATTERNS:
-        if pat.search(name):
-            return family
-    return "default"
+# Single-model app: one profile for the pinned Gemma 4 12B Q4_K_M target.
+# Multi-family detection and per-family registries were removed.
+_TARGET = "gemma4"
 
 
 def _clamp_ctx(n_ctx_train: int, target: int) -> int:
@@ -44,71 +30,21 @@ def _clamp_ctx(n_ctx_train: int, target: int) -> int:
 
 
 def _make_profile(family: str, n_ctx_train: int) -> ModelProfile:
-    if family == "gemma4":
-        n_ctx = _clamp_ctx(n_ctx_train, 8192)
-        return ModelProfile(
-            max_tokens=4096, max_steps=20, temperature=0.1,
-            n_ctx_target=n_ctx, n_batch=512, n_threads=8, n_keep=512,
-            use_mmap=True, flash_attn=True, json_retries=2,
-        )
-    if family == "gemma3":
-        n_ctx = _clamp_ctx(n_ctx_train, 8192)
-        return ModelProfile(
-            max_tokens=4096, max_steps=16, temperature=0.1,
-            n_ctx_target=n_ctx, n_batch=512, n_threads=8, n_keep=512,
-            use_mmap=True, flash_attn=True, json_retries=2,
-        )
-    if family == "qwen2.5":
-        n_ctx = _clamp_ctx(n_ctx_train, 16384)
-        return ModelProfile(
-            max_tokens=4096, max_steps=20, temperature=0.1,
-            n_ctx_target=n_ctx, n_batch=1024, n_threads=8, n_keep=512,
-            use_mmap=True, flash_attn=True, json_retries=2,
-        )
-    if family == "llama3":
-        n_ctx = _clamp_ctx(n_ctx_train, 8192)
-        return ModelProfile(
-            max_tokens=4096, max_steps=20, temperature=0.1,
-            n_ctx_target=n_ctx, n_batch=512, n_threads=8, n_keep=512,
-            use_mmap=True, flash_attn=True, json_retries=2,
-        )
-    if family == "phi3":
-        n_ctx = _clamp_ctx(n_ctx_train, 4096)
-        return ModelProfile(
-            max_tokens=2048, max_steps=12, temperature=0.1,
-            n_ctx_target=n_ctx, n_batch=256, n_threads=8, n_keep=256,
-            use_mmap=True, flash_attn=True, json_retries=3,
-        )
-    if family == "mistral":
-        n_ctx = _clamp_ctx(n_ctx_train, 8192)
-        return ModelProfile(
-            max_tokens=4096, max_steps=20, temperature=0.1,
-            n_ctx_target=n_ctx, n_batch=512, n_threads=8, n_keep=512,
-            use_mmap=True, flash_attn=True, json_retries=2,
-        )
+    """Gemma 4 12B agent profile (sampling for reliable structured output)."""
+    if family != _TARGET:
+        family = _TARGET  # anything else is unsupported - use the target anyway
     n_ctx = _clamp_ctx(n_ctx_train, 8192)
     return ModelProfile(
-        max_tokens=4096, max_steps=16, temperature=0.1,
+        max_tokens=4096, max_steps=20, temperature=0.1,
         n_ctx_target=n_ctx, n_batch=512, n_threads=8, n_keep=512,
         use_mmap=True, flash_attn=True, json_retries=2,
     )
 
 
-AGENT_PROFILE_REGISTRY: dict[str, ModelProfile] = {
-    "gemma4": _make_profile("gemma4", 8192),
-    "gemma3": _make_profile("gemma3", 8192),
-    "qwen2.5": _make_profile("qwen2.5", 16384),
-    "llama3": _make_profile("llama3", 8192),
-    "phi3": _make_profile("phi3", 4096),
-    "mistral": _make_profile("mistral", 8192),
-    "default": _make_profile("default", 8192),
-}
-
-
 def get_profile(model_path: str | Path, n_ctx_train: int = 0) -> ModelProfile:
-    family = _detect_family(model_path)
-    if family == "default" and n_ctx_train > 0:
-        return _make_profile("default", n_ctx_train)
-    if family in AGENT_PROFILE_REGISTRY and n_ctx_train <= 0:
-        return AGENT_PROFILE_REGISTRY[family]
-    return _make_profile(family, n_ctx_train)
+    """Return the pinned Gemma 4 agent profile for any model path.
+
+    ``n_ctx_train`` (from GGUF metadata) clamps the context target when the
+    file's trained context is smaller than the 8K agent target.
+    """
+    return _make_profile(_TARGET, n_ctx_train)

@@ -37,6 +37,7 @@ from ggufloader.core.defaults import (
     CTX_OPTIONS,
     CUDA_RESERVE_GB,
     RAM_HEADROOM,
+    REPEAT_PENALTY_FLOOR,
     VRAM_HEADROOM,
 )
 
@@ -52,13 +53,15 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class ModelRole(str, Enum):
-    """What the model is being used for."""
+    """What the model is being used for.
+
+    Single-model build: only the two roles this app actually uses remain —
+    CHAT (default load/answer role) and AGENT (the planner/tool loop). The
+    former CODE / EMBED / REASONING / MULTIMODAL roles belonged to the
+    multi-model era and were removed.
+    """
     CHAT = "chat"
     AGENT = "agent"
-    CODE = "code"
-    EMBED = "embed"
-    REASONING = "reasoning"
-    MULTIMODAL = "multimodal"
 
 
 class SizeTier(str, Enum):
@@ -130,7 +133,7 @@ class ModelProfile:
     file_size_gb: float = 0.0
 
     # Architecture
-    architecture: str = ""          # "llama", "qwen3", "lfm2", etc.
+    architecture: str = ""          # GGUF arch ("gemma4" for the pinned model)
     family: str = ""                # detected family ID
     family_label: str = ""          # human-readable family name
     detected_via: str = ""          # how we detected it
@@ -530,44 +533,25 @@ class ModelRouter:
             notes=role_config.notes,
         )
 
-        # Role-specific adjustments
+        # Role-specific adjustments (only the two live roles)
         if role == ModelRole.AGENT:
-            # Agent needs structured output — lower temperature, more deterministic
+            # Agent needs structured output — lower temperature, more
+            # deterministic. The repeat floor is the Q4_K_M anti-degeneration
+            # guard (Gemma 4 tuned, see core/defaults.py): quantized models
+            # repeat JSON keys/actions at the family default of 1.0.
             merged.temperature = min(merged.temperature, 0.3)
             merged.top_k = min(merged.top_k, 40)
-            merged.repeat_penalty = max(merged.repeat_penalty, 1.1)
-            merged.notes = "Agent mode: low temperature for reliable JSON output"
-
-        elif role == ModelRole.CODE:
-            # Code generation benefits from higher creativity
-            merged.temperature = max(merged.temperature, 0.4)
-            merged.repeat_penalty = 1.0  # code has natural repetition
-            merged.notes = "Code mode: moderate temperature, reduced repetition penalty"
-
-        elif role == ModelRole.REASONING:
-            # Thinking models need room to reason
-            merged.temperature = 0.6  # not too high, not too low
-            merged.top_k = 40
-            merged.notes = "Reasoning mode: balanced for chain-of-thought"
-
-        elif role == ModelRole.EMBED:
-            # Embedding models don't use sampling
-            merged.temperature = 0.0
-            merged.notes = "Embedding mode: deterministic"
-
-        elif role == ModelRole.CHAT:
+            merged.repeat_penalty = max(merged.repeat_penalty, REPEAT_PENALTY_FLOOR)
+            merged.notes = "Agent mode: low temperature, Q4_K_M repeat floor"
+        else:
             merged.notes = "Chat mode: family defaults"
-
-        elif role == ModelRole.MULTIMODAL:
-            merged.temperature = max(merged.temperature, 0.5)
-            merged.notes = "Multimodal: moderate temperature for vision tasks"
 
         # Cap max_tokens to trained context (with safety margin)
         if profile.trained_context > 0 and merged.max_tokens > profile.trained_context - 256:
             merged.max_tokens = max(256, profile.trained_context - 256)
 
         # Thinking models get larger token budgets
-        if profile.is_thinking_model and role in (ModelRole.CHAT, ModelRole.REASONING):
+        if profile.is_thinking_model:
             merged.max_tokens = max(merged.max_tokens, 16384)
             merged.notes += " (thinking model — extended token budget)"
 
@@ -688,33 +672,6 @@ class ModelRouter:
         ))
         return steps
 
-    # ------------------------------------------------------------------
-    # Model switching
-    # ------------------------------------------------------------------
-
-    def suggest_role(self, profile: ModelProfile) -> ModelRole:
-        """Auto-suggest the best role for a model based on its profile."""
-        if profile.is_embedding_model:
-            return ModelRole.EMBED
-        if profile.is_thinking_model:
-            return ModelRole.REASONING
-        if profile.supports_vision:
-            return ModelRole.MULTIMODAL
-        if _is_code_model(profile):
-            return ModelRole.CODE
-        return ModelRole.CHAT
-
-    def can_serve_role(self, profile: ModelProfile, role: ModelRole) -> bool:
-        """Check if a model is suitable for a given role."""
-        if role == ModelRole.EMBED:
-            return profile.is_embedding_model
-        if role == ModelRole.MULTIMODAL:
-            return profile.supports_vision
-        if role == ModelRole.CODE:
-            return not profile.is_embedding_model
-        # Chat, Agent, Reasoning all work with any instruct model
-        return not profile.is_embedding_model
-
     def quick_profile(self, path: str) -> Dict[str, Any]:
         """Fast, lightweight profile — just enough for a file picker / catalog.
 
@@ -758,32 +715,8 @@ _ROLE_DEFAULTS: Dict[ModelRole, RoleConfig] = {
     ModelRole.AGENT: RoleConfig(
         role=ModelRole.AGENT,
         temperature=0.2, top_k=40, top_p=0.9, min_p=0.0,
-        repeat_penalty=1.1, max_tokens=2048,
-        notes="Agent mode: structured JSON output",
-    ),
-    ModelRole.CODE: RoleConfig(
-        role=ModelRole.CODE,
-        temperature=0.5, top_k=40, top_p=0.95, min_p=0.0,
-        repeat_penalty=1.0, max_tokens=4096,
-        notes="Code generation",
-    ),
-    ModelRole.EMBED: RoleConfig(
-        role=ModelRole.EMBED,
-        temperature=0.0, top_k=0, top_p=1.0, min_p=0.0,
-        repeat_penalty=1.0, max_tokens=0,
-        notes="Embedding (no sampling)",
-    ),
-    ModelRole.REASONING: RoleConfig(
-        role=ModelRole.REASONING,
-        temperature=0.6, top_k=40, top_p=0.9, min_p=0.0,
-        repeat_penalty=1.05, max_tokens=16384,
-        notes="Chain-of-thought reasoning",
-    ),
-    ModelRole.MULTIMODAL: RoleConfig(
-        role=ModelRole.MULTIMODAL,
-        temperature=0.5, top_k=40, top_p=0.9, min_p=0.0,
-        repeat_penalty=1.05, max_tokens=4096,
-        notes="Vision/multimodal tasks",
+        repeat_penalty=REPEAT_PENALTY_FLOOR, max_tokens=2048,
+        notes="Agent mode: structured JSON output, Q4_K_M repeat floor",
     ),
 }
 
@@ -932,14 +865,6 @@ def _is_thinking_model(arch: str, name: str, filename: str) -> bool:
     name_blob = f"{name} {filename}".lower()
     thinking_markers = ["r1", "reason", "think", "deepseek-r1", "qwq", "o1", "o3"]
     return any(m in name_blob for m in thinking_markers)
-
-
-def _is_code_model(profile: ModelProfile) -> bool:
-    """Heuristic: is this primarily a code model?"""
-    name = profile.filename.lower()
-    code_markers = ["code", "coder", "starcoder", "codellama", "deepseek-coder",
-                    "qwen2.5-coder", "wizard-coder", "CodeGemma"]
-    return any(m in name for m in code_markers)
 
 
 # -- Memory estimation --

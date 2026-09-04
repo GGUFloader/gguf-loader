@@ -46,15 +46,17 @@ class PromptBuilder:
         workspace: Path,
         tools: ToolRegistry,
         system_prompt_override: Optional[str] = None,
+        preset_override: Optional[str] = None,
     ) -> None:
         self.workspace = workspace
         self.tools = tools
         self._system_prompt_override = system_prompt_override
+        self._preset_override = preset_override or ""
         self._prefix_cache = PromptPrefixCache()
 
     # ── Public API ────────────────────────────────────────────────────────
 
-    def system_prompt(self) -> str:
+    def system_prompt(self, with_tools: bool = True, with_mode: bool = True) -> str:
         """Build the system prompt with workspace and tool descriptions.
 
         The prompt MUST come from the model router (model_families.json).
@@ -63,6 +65,20 @@ class PromptBuilder:
         used to have). If the router failed to provide one, we fail loudly
         so the misconfiguration is visible instead of the agent quietly
         misbehaving.
+
+        Composition: family identity/rules first, then the preset mode
+        block (when ``with_mode``), then the tool catalog (when
+        ``with_tools``).
+
+        ``with_tools=False`` skips the appended tool catalog — used by the
+        plan/answer paths, which either carry their own tool list (the plan
+        prompt) or should not be flooded with tool schemas at all (pure
+        answer synthesis).
+
+        ``with_mode=False`` skips the preset block ("MODE: Full Stack —
+        commit changes, run tests"). Mode text tells the model HOW to act
+        with tools; it must never front a pure general-knowledge answer,
+        where it reads as noise and biases the reply.
         """
         if not self._system_prompt_override:
             raise RuntimeError(
@@ -74,9 +90,11 @@ class PromptBuilder:
             )
         base = self._system_prompt_override
         base = base.replace("__WORKSPACE__", str(self.workspace))
+        if with_mode and self._preset_override:
+            base = base.rstrip() + "\n\n" + self._preset_override
         if "__TOOLS__" in base:
             base = base.replace("__TOOLS__", self.tools.describe())
-        else:
+        elif with_tools:
             # Task 10 (one tool universe): the prompt must always list the
             # LIVE registry tool set (preset-filtered), never a hardcoded
             # subset. Family prompts no longer enumerate tools themselves.
@@ -84,52 +102,6 @@ class PromptBuilder:
             if described:
                 base = base.rstrip() + "\n\nAvailable tools:\n" + described
         return base
-
-    def action_prompt(
-        self,
-        messages: List[Dict[str, str]],
-        tool_results: List[Dict[str, Any]],
-        repair: str = "",
-        directive: str = "",
-    ) -> str:
-        """Build the full action prompt using cached prefix.
-
-        The prefix (system prompt) is cached across turns; only the
-        variable suffix (transcript + tool results) is rebuilt.
-        """
-        prefix = self._get_prefix()
-        parts = [prefix, ""]
-
-        # Last 4 messages of transcript
-        for msg in messages[-4:]:
-            parts.append(f"{msg['role'].capitalize()}: {msg['content']}")
-            parts.append("")
-
-        # Tool results (last 3)
-        if tool_results:
-            parts.append("Tool results:")
-            parts.extend(self._format_tool_results(tool_results))
-            parts.append("")
-
-        # Repair prompt (for malformed JSON retries)
-        if repair:
-            parts.append(
-                "Your previous response was not valid JSON. Reply with ONLY the JSON "
-                "object described above - no markdown fences, no extra text."
-            )
-            parts.append("")
-            parts.append("Your previous (invalid) response was:")
-            parts.append(repair[:1500])
-            parts.append("")
-
-        # Directive (e.g. read-coverage for summarize requests)
-        if directive:
-            parts.append("IMPORTANT - follow this instruction before replying:")
-            parts.append(directive)
-            parts.append("")
-
-        parts.append("Assistant:")
-        return "\n".join(parts)
 
     def fix_prompt(
         self,
@@ -162,7 +134,9 @@ class PromptBuilder:
             f"User asked: {user_question}\n\n"
             f"Here is what I found:\n{direct_answer}\n\n"
             "IMPORTANT: Write a clear, natural-language answer for the user. "
-            "Do NOT call any tools. Do NOT return JSON. Just write text."
+            "Do NOT call any tools. Do NOT return JSON. Just write text. "
+            "Answer truthfully from the findings above: if nothing matched or an "
+            "error occurred, say so — never invent file names or paths."
         )
 
     # ── Internal ────────────────────────────────────────────────────────

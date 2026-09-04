@@ -247,4 +247,9 @@ class ToolOrchestrator:
             return f"Found {len(result.get('result', []))} items"
         if tool == "search_files":
             return f"Found {result.get('total_matches', 0)} matches" if result.get("total_matches") else "No matches"
+        if tool == "glob":
+            total = result.get("total_matches", 0)
+            if total:
+                return f"Found {total} files"
+            return result.get("note") or "No files matched"
         return "Done"

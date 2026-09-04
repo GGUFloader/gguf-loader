@@ -86,11 +86,19 @@ tests/unit/                # pytest suite (headless)
 
 **Agent Mode is a LangGraph StateGraph** — `ggufloader/core/agent/graph_agent.py`:
 
-- Graph: `START → agent → (continue: tools → agent | end: END)`. The `agent`
-  node asks the LLM for the next JSON action (schemas + few-shot, with
-  malformed-JSON repair), the `tools` node executes calls (one corrective
-  retry per failure), and `_router` continues while work remains. A step
-  budget (`max_steps`) caps each run; the final answer streams tokens.
+- Graph: `START → planner → agent → (continue: tools → agent | end: END)`.
+  The `planner` node is the first node of the graph: it asks the LLM whether
+  tools are needed and writes the step plan (or decides the question needs
+  no tools), storing it in graph state — the whole turn is one graph run.
+  The `agent` node then follows that plan **step by step**; there is **no
+  reactive ReAct loop** — the plan is the only driver. Malformed plan JSON
+  is retried with a repair hint (the planner is the only gate to tool
+  execution); if the planner still produces nothing, the run ends with a
+  deterministic wrap-up instead of switching to another agent. Every plan
+  is normalized to end with an answer step, so the final answer always
+  comes from the plan's answer step. The `tools` node executes calls (one
+  corrective retry per failure), and `_router` continues while work remains.
+  The final answer streams tokens.
 - **Checkpointing**: `langgraph.checkpoint.sqlite.SqliteSaver` — one SQLite
   DB per thread. The thread id is derived from the workspace path
   (`agent-<sha>`), so the same folder resumes the same conversation across

@@ -13,11 +13,24 @@ from ggufloader.core.agent.tool_registry import tool_content_for_context
 def _full_tools(ws):
     return ToolRegistry(ws)
 
-RUN_CMD = ('{"tool_calls": [{"tool": "run_command", "parameters": '
-           '{"command": "echo approved > marker.txt"}}]}')
-GIT_COMMIT = ('{"tool_calls": [{"tool": "git", "parameters": '
-              '{"args": ["commit", "-m", "test"]}}]}')
 DONE = '{"tool_calls": [], "answer": "All done."}'
+
+
+def _plan_json(steps, goal="approval"):
+    """Build plan JSON from (tool, params) tuples; the planner appends the
+    final answer step automatically."""
+    import json as _json
+    plan_steps = [
+        {
+            "step": i,
+            "description": f"Step {i}",
+            "tool": tool,
+            "parameters": params,
+            "depends_on": [],
+        }
+        for i, (tool, params) in enumerate(steps, 1)
+    ]
+    return _json.dumps({"goal": goal, "steps": plan_steps})
 
 
 class FakeLLM:
@@ -91,8 +104,11 @@ def test_requires_approval_defaults(tmp_path: Path) -> None:
 # ----------------------------------------------------------------------
 def test_approval_approved_runs_command(tmp_path: Path) -> None:
     approvals: list[dict] = []
-    llm = FakeLLM([RUN_CMD, DONE])
-    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
+    llm = FakeLLM([
+        _plan_json([("run_command", {"command": "echo approved > marker.txt"})]),
+        "All done.",
+    ])
+    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     out = engine.process(
         "Create marker.txt via shell",
         on_approval=lambda payload: (approvals.append(payload), True)[1],
@@ -109,8 +125,11 @@ def test_approval_approved_runs_command(tmp_path: Path) -> None:
 
 def test_approval_denied_skips_command(tmp_path: Path) -> None:
     approvals: list[dict] = []
-    llm = FakeLLM([RUN_CMD, DONE])
-    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
+    llm = FakeLLM([
+        _plan_json([("run_command", {"command": "echo approved > marker.txt"})]),
+        "All done.",
+    ])
+    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     out = engine.process(
         "Create marker.txt via shell",
         on_approval=lambda payload: (approvals.append(payload), False)[1],
@@ -133,8 +152,11 @@ def test_approval_git_write_is_gated(tmp_path: Path) -> None:
     )
 
     approvals: list[dict] = []
-    llm = FakeLLM([GIT_COMMIT, DONE])
-    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
+    llm = FakeLLM([
+        _plan_json([("git", {"args": ["commit", "-m", "test"]})]),
+        "All done.",
+    ])
+    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     engine.process("Commit the changes", on_approval=lambda p: (approvals.append(p), True)[1])
     assert len(approvals) == 1
     assert approvals[0]["call"]["tool"] == "git"
@@ -142,9 +164,12 @@ def test_approval_git_write_is_gated(tmp_path: Path) -> None:
 
 def test_interrupt_does_not_run_untouched(tmp_path: Path) -> None:
     """Non-sensitive runs never suspend for approval."""
-    llm = FakeLLM(['{"tool_calls": [{"tool": "write_file", "parameters": {"path": "n.txt", "content": "hi"}}]}', DONE])
+    llm = FakeLLM([
+        _plan_json([("write_file", {"path": "n.txt", "content": "hi"})]),
+        "All done.",
+    ])
     approvals: list[dict] = []
-    engine = GraphAgent(llm, tmp_path, plan=False, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
+    engine = GraphAgent(llm, tmp_path, tools=_full_tools(tmp_path), system_prompt='You are a test assistant for unit tests.')
     out = engine.process(
         "Write n.txt",
         on_approval=lambda p: (approvals.append(p), True)[1],

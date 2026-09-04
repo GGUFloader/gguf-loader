@@ -4,6 +4,8 @@ import { RightPanel } from './RightPanel'
 import { MobileNav } from './MobileNav'
 import { ChatPanel } from '../chat/ChatPanel'
 import { CommandPalette } from '../ui/CommandPalette'
+import { VersionBanner } from '../ui/VersionBanner'
+import { CompatibilityDialog } from '../model/CompatibilityDialog'
 import { AriaLive } from '../ui/AriaLive'
 import { OfflineIndicator } from '../ui/OfflineIndicator'
 import { UpdatePanel } from '../ui/UpdatePanel'
@@ -29,6 +31,7 @@ export function AppLayout() {
     <div className="h-screen flex flex-col bg-bg">
       <AriaLive />
       <Header />
+      <VersionBanner />
       <div className="flex-1 flex overflow-hidden" id="main-content" role="main">
         {/* Left panel: hidden on mobile, visible on tablet+ */}
         {leftPanelOpen && !isMobile && <LeftPanel />}
@@ -41,6 +44,7 @@ export function AppLayout() {
       {/* Mobile bottom navigation */}
       <MobileNav />
       <CommandPalette />
+      <CompatibilityDialog />
       <OfflineIndicator />
       <NotificationPanel />
       <UpdatePanel />

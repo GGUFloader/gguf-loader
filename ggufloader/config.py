@@ -26,6 +26,25 @@ CHAT_MIN_P = 0.0
 CHAT_REPEAT_PENALTY = 1.05
 
 
+# --- Pinned single-model build identity ---
+# This build is optimized for exactly one model (Gemma 4 12B Q4_K_M).
+# Shown in the app-level version banner and the first-launch compatibility
+# dialog; the load gate rejects any other GGUF (see api/routes/model.py).
+APP_NAME = "GGUF Loader"
+PINNED_MODEL_LABEL = "Gemma 4 12B Q4_K_M"
+PINNED_TAGLINE = "Optimized for Gemma 4 12B Q4_K_M"
+PINNED_ARCH = "gemma4"
+PINNED_QUANT = "Q4_K_M"
+PINNED_SIZE = "12B"
+# Community GGUF source for the pinned model (bartowski quantization,
+# matches the Q4_K_M load gate). Used by the in-app download option.
+PINNED_MODEL_FILENAME = "gemma-4-12B-it-Q4_K_M.gguf"
+PINNED_MODEL_URL = (
+    "https://huggingface.co/bartowski/gemma-4-12B-it-GGUF/resolve/main/"
+    + PINNED_MODEL_FILENAME
+)
+
+
 # Style Constants
 FONT_FAMILY = "Vazirmatn, Segoe UI, Arial"
 BUBBLE_FONT_SIZE = 18

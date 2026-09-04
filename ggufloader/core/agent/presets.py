@@ -98,9 +98,8 @@ PRESETS: Dict[str, AgentPreset] = {
         allowed_tools=["list_directory", "read_file", "search_files"],
         blocked_tools=[
             "write_file", "edit_file", "run_command", "run_python", "git",
-            # one tool universe (Task 10): every code-exec / mutate alias
-            "python_interpreter", "batch_execute", "move_file",
-            "remember", "recall",
+            # one tool universe: the only remaining mutate alias to also block
+            "move_file",
         ],
         max_steps=12,
         temperature=0.1,
@@ -131,9 +130,8 @@ PRESETS: Dict[str, AgentPreset] = {
         allowed_tools=["list_directory", "read_file", "search_files"],
         blocked_tools=[
             "write_file", "edit_file", "run_command", "run_python", "git",
-            # one tool universe (Task 10): every code-exec / mutate alias
-            "python_interpreter", "batch_execute", "move_file",
-            "remember", "recall",
+            # one tool universe: the only remaining mutate alias to also block
+            "move_file",
         ],
         max_steps=10,
         temperature=0.1,

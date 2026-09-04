@@ -294,6 +294,16 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
     message_id = f"agent_{int(time.time() * 1000)}"
     start_time = time.time()
 
+    # Per-run transport created early so the LLM callable can stream token
+    # deltas straight to the UI as they are generated (via build_llm's
+    # on_token) — otherwise the frontend sits frozen on "Synthesizing
+    # answer..." for the whole generation and only receives the finished
+    # reply at the end.
+    loop = asyncio.get_event_loop()
+    from ggufloader.core.agent.agent_transport import AgentTransport
+    ws_transport = WSTransport(manager, websocket)
+    transport = AgentTransport(ws_transport, loop, message_id, preset_id)
+
     try:
         # --- 1. Load preset ---
         from ggufloader.core.agent.presets import PresetManager
@@ -354,6 +364,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 "repeat_penalty": agent_repeat_penalty,
             },
             purpose="action",
+            on_token=transport.make_token_callback(),
         )
 
         # --- 4. Create GraphAgent (with checkpointing + cancellation) ---
@@ -390,11 +401,20 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
         except Exception:
             actual_n_ctx = agent_max_tokens
 
-        # Combine router prompt + preset addition
-        full_system_prompt = router_system_prompt or system_prompt or ""
-        if preset_prompt_addition:
-            full_system_prompt = full_system_prompt + chr(10) + chr(10) + preset_prompt_addition
-        
+        # Router prompt (family identity/rules) and preset addition (mode
+        # text) travel separately: the agent composes mode text into tool
+        # planning/execution prompts only, so pure general-knowledge answers
+        # never get "MODE: Full Stack — commit changes" in front of them.
+        base_prompt = router_system_prompt or system_prompt or ""
+        if base_prompt and preset_prompt_addition:
+            agent_system_prompt = base_prompt
+            agent_preset_prompt = preset_prompt_addition
+        else:
+            # Legacy fallback: with no router/user prompt, keep the preset
+            # text as the base so the agent still has some framing.
+            agent_system_prompt = base_prompt or preset_prompt_addition
+            agent_preset_prompt = None
+
         from ggufloader.core.agent.token_cleaner import get_cleaner
         arch = (router_info.get("architecture") or "") if router_info else ""
         agent = GraphAgent(
@@ -406,7 +426,8 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             json_retries=2,
             thread_id=unique_thread_id,
             checkpoint_path=checkpoint_path,
-            system_prompt=full_system_prompt or None,
+            system_prompt=agent_system_prompt or None,
+            preset_prompt=agent_preset_prompt,
             task_prompts=router_task_prompts or None,
             allowed_tools=preset_allowed,
             blocked_tools=preset_blocked,
@@ -420,12 +441,6 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
             agent._context_budget.set_budget(actual_n_ctx)
         if backend_ref is not None and hasattr(backend_ref, "count_tokens"):
             agent._context_budget.set_tokenizer(backend_ref.count_tokens)
-
-        # --- 5. Wire callbacks via AgentTransport (3 lines instead of 150+) ---
-        loop = asyncio.get_event_loop()
-        from ggufloader.core.agent.agent_transport import AgentTransport
-        ws_transport = WSTransport(manager, websocket)
-        transport = AgentTransport(ws_transport, loop, message_id, preset_id)
 
         # --- 6. Run the graph agent in a thread ---
         def on_plan_update(phase: str, plan: list):
@@ -453,6 +468,7 @@ async def handle_agent_start(websocket: WebSocket, data: dict):
                 on_token=transport.make_token_callback(),
                 on_approval=transport.make_approval_callback(workspace),
                 on_plan=on_plan_update,
+                on_plan_stream=transport.make_reasoning_callback(),
             ),
         )
 

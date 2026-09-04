@@ -95,8 +95,6 @@ across {len(counts['by_phase'])} implementation phases.
 - **run_command** — Execute shell commands (requires approval)
 - **run_python** — Execute Python code (requires approval)
 - **git** — Git operations (writes require approval)
-- **batch_execute** — Run multiple tools in sequence
-- **python_interpreter** — Sandboxed Python execution
 
 ## Slash Commands
 

@@ -18,7 +18,6 @@ from ggufloader.core.agent.tool_registry import (
     RunCommandTool,
     RunPythonTool,
     GitTool,
-    PythonInterpreterTool,
     validate_tool_call,
 )
 
@@ -130,16 +129,11 @@ class TestApprovalGating:
         assert tool is not None
         assert tool.requires_approval({"path": "test.txt"}) is False
 
-    def test_python_interpreter_requires_approval(self, registry):
-        """python_interpreter is an alias of run_python → approval required.
-
-        Task 10 (one tool universe): the old "sandboxed" interpreter ran
-        arbitrary Python with the full user interpreter (no real network /
-        absolute-path isolation) and no approval - a code-exec path that
-        read-only presets could not block. It now shares run_python's
-        schema and approval gate.
-        """
-        tool = registry._tools.get("python_interpreter")
+    def test_no_python_alias_remains(self, registry):
+        """The deprecated python_interpreter alias is gone; run_python is
+        the single python path and stays approval-gated."""
+        assert "python_interpreter" not in registry.names()
+        tool = registry._tools.get("run_python")
         assert tool is not None
         assert tool.requires_approval({"code": "print(1)"}) is True
 
@@ -162,34 +156,30 @@ class TestApprovalGating:
         assert "Missing required" in error
 
 
-class TestPythonInterpreterAlias:
-    """CRITICAL: python_interpreter == run_python (one schema, approval-gated).
+class TestPythonUniverse:
+    """CRITICAL: there is exactly ONE python-execution path (run_python),
+    approval-gated.
 
     The former PythonInterpreterTool was marketed as a sandbox but actually
-    executed arbitrary Python with the full user interpreter - the stripped
-    env and temp cwd did not stop network access or absolute-path file
-    reads. Task 10 merges it into run_python so there is exactly ONE
-    python-execution schema, one approval gate, and read-only presets can
-    block every python alias by blocking run_python.
+    executed arbitrary Python with the full user interpreter — an
+    approval-free code-exec path that read-only presets could not block.
+    It has been removed from the registry entirely; only run_python remains.
     """
 
-    def test_alias_is_run_python_subclass(self):
-        """python_interpreter shares run_python's implementation."""
-        assert issubclass(PythonInterpreterTool, RunPythonTool)
-        assert PythonInterpreterTool.schema == RunPythonTool.schema
+    def test_registry_has_no_python_alias(self, registry):
+        """python_interpreter / batch_execute are gone from the catalog."""
+        names = registry.names()
+        assert "python_interpreter" not in names
+        assert "batch_execute" not in names
 
-    def test_alias_warns_deprecation(self, sandbox_workspace):
-        """Executing the alias emits a DeprecationWarning."""
-        import warnings
-        tool = PythonInterpreterTool(sandbox_workspace)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            tool.execute({"code": "print('hi')"})
-        assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+    def test_executing_alias_is_unknown_tool(self, registry):
+        """Calling the removed alias fails loudly (unknown tool)."""
+        result = registry.execute("python_interpreter", {"code": "print(1)"})
+        assert result["status"] == "error"
 
-    def test_output_capped(self, sandbox_workspace):
+    def test_run_python_output_capped(self, sandbox_workspace):
         """Python output must be capped (run_python caps at 8000)."""
-        tool = PythonInterpreterTool(sandbox_workspace)
+        tool = RunPythonTool(sandbox_workspace)
         result = tool.execute({"code": "print('A' * 100000)"})
         output = result.get("result", "") or ""
         assert len(output) <= 8100  # 8000 cap + overhead

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useChatStore, connectWebSocket } from '../../stores/chatStore'
+import { startModelRefresh, stopModelRefresh } from '../../stores/modelStore'
 import { useUIStore } from '../../stores/uiStore'
 import { ChatBubble } from './ChatBubble'
 import { StreamingText } from './StreamingText'
@@ -30,6 +31,9 @@ export function ChatPanel() {
   // Connect WebSocket on mount
   useEffect(() => {
     connectWebSocket()
+    // Poll model info so the header chip reflects the startup auto-load.
+    startModelRefresh()
+    return () => stopModelRefresh()
   }, [])
 
   // Sync agent mode from UI store to chat store

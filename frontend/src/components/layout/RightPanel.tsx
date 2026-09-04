@@ -7,8 +7,6 @@ import { SettingsDialog } from '../settings/SettingsDialog'
 import { SessionReplayPanel } from '../agent/SessionReplayPanel'
 import { WorkspaceDashboard } from '../agent/WorkspaceDashboard'
 import { ProfilingPanel } from '../agent/ProfilingPanel'
-import { ModelCatalogPanel } from '../model/ModelCatalogPanel'
-import { ModelComparePanel } from '../model/ModelComparePanel'
 import { AgentConfigPanel } from '../agent/AgentConfigPanel'
 import { PluginMarketplacePanel } from '../agent/PluginMarketplacePanel'
 import { TemplatePanel } from '../agent/TemplatePanel'
@@ -45,8 +43,6 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   dashboard: WorkspaceDashboard,
   config: AgentConfigPanel,
   settings: SettingsDialog,
-  catalog: ModelCatalogPanel,
-  compare: ModelComparePanel,
   templates: TemplatePanel,
   diff: DiffViewerPanel,
   analytics: AnalyticsDashboard,

@@ -10,7 +10,7 @@ from ggufloader.core.agent.graph_agent import GraphAgent
 from ggufloader.core.agent.plugin_manager import PluginManager
 from ggufloader.core.agent.error_patterns import ErrorPatternDetector
 from ggufloader.core.agent.self_improve import SelfImprove
-from ggufloader.core.agent.tool_registry import ToolRegistry, RecordCorrectionTool
+from ggufloader.core.agent.tool_registry import ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -142,29 +142,6 @@ def test_self_improve_persistence(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# RecordCorrectionTool
-# ---------------------------------------------------------------------------
-
-def test_record_correction_tool(tmp_path):
-    """RecordCorrectionTool should store corrections."""
-    tool = RecordCorrectionTool(tmp_path)
-    result = tool.execute({
-        "context": "Editing main.py",
-        "agent_action": "Used os.remove()",
-        "correct_action": "Used pathlib.Path.unlink()",
-        "category": "style",
-    })
-    assert result["status"] == "success"
-    assert "Recorded" in result["result"]
-
-
-def test_record_correction_tool_in_registry(tmp_path):
-    """RecordCorrectionTool should be registered."""
-    registry = ToolRegistry(tmp_path)
-    assert "record_correction" in registry.names()
-
-
-# ---------------------------------------------------------------------------
 # GraphAgent wiring
 # ---------------------------------------------------------------------------
 
@@ -234,24 +211,22 @@ def test_graph_agent_system_prompt_has_workspace(tmp_path):
 
 
 def test_graph_agent_tool_count_includes_plugins(tmp_path):
-    """GraphAgent should have all built-in + memory + correction tools."""
+    """GraphAgent exposes the single-model tool catalog only."""
     def fake_llm(prompt, **kwargs):
         return '{"tool_calls": [], "answer": "ok"}'
     
     from ggufloader.core.agent.tool_registry import ToolRegistry as TR
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path), system_prompt='You are a test assistant for unit tests.')
     names = agent.tools.names()
-    # Built-in tools
+    # Core file/dev tools
     assert "list_directory" in names
     assert "read_file" in names
     assert "write_file" in names
-    # Memory tools
-    assert "remember" in names
-    assert "recall" in names
-    assert "forget" in names
-    # Correction tool
-    assert "record_correction" in names
-    # New tools from phase 2
     assert "glob" in names
     assert "move_file" in names
+    # Memory/meta tools were removed from the single-model catalog
+    assert "remember" not in names
+    assert "recall" not in names
+    assert "forget" not in names
+    assert "record_correction" not in names
     agent.close()

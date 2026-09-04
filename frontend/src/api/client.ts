@@ -1,5 +1,7 @@
 // REST API client for GGUFLoader backend
 
+import type { AppInfo } from './types'
+
 const BASE_URL = '/api'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -27,12 +29,14 @@ export const modelApi = {
   plan: (path: string, nCtx?: number | null) =>
     request<any>(`/model/router/plan?path=${encodeURIComponent(path)}${nCtx != null ? `&n_ctx=${nCtx}` : ''}`),
   unload: () => request<any>('/model/unload', { method: 'DELETE' }),
+  /** Download the pinned Gemma 4 12B Q4_K_M GGUF into the models folder (background). */
+  downloadPinned: () => request<any>('/model/download', { method: 'POST' }),
+  downloadStatus: () => request<any>('/model/download/status'),
   estimate: (path: string) => request<any>(`/model/estimate?path=${encodeURIComponent(path)}`),
-  profile: (path: string) => request<any>(`/model/profile?path=${encodeURIComponent(path)}`),
+  /** Deep profile (arch/quant/size) used for pinned-target compatibility checks. */
+  inspect: (path: string) => request<any>(`/model/router/inspect?path=${encodeURIComponent(path)}`),
   catalog: (directory?: string, recursive = true) =>
     request<any>(`/model/catalog${directory ? `?directory=${encodeURIComponent(directory)}&recursive=${recursive}` : ''}`),
-  compare: (paths: string[]) =>
-    request<any>(`/model/compare?paths=${encodeURIComponent(paths.join(','))}`),
 }
 
 // Chat API
@@ -221,6 +225,11 @@ export const diffApi = {
 // Health check
 export const healthApi = {
   check: () => request<any>('/health'),
+}
+
+// App identity (version banner + first-launch compatibility)
+export const appApi = {
+  info: () => request<AppInfo>('/app/info'),
 }
 
 // MCP API

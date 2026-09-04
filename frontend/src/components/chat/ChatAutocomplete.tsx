@@ -1,19 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { FileText, Zap, Wrench, Brain } from 'lucide-react'
-import { templatesApi, modelApi } from '../../api/client'
+import { Zap, Wrench } from 'lucide-react'
 
 interface AutocompleteItem {
   id: string
   label: string
   description: string
-  category: 'template' | 'file' | 'tool' | 'model' | 'command'
+  category: 'tool'
   icon: any
   insert: string // text to insert into input
 }
 
 interface ChatAutocompleteProps {
   query: string // current input text after trigger character
-  trigger: string // '@' or '/' or '#'
+  trigger: string // '/' (tool autocomplete)
   onSelect: (item: AutocompleteItem) => void
   onClose: () => void
 }
@@ -27,11 +26,7 @@ const TOOL_NAMES = [
 ]
 
 const CATEGORY_INFO: Record<string, { icon: any; color: string }> = {
-  template: { icon: FileText, color: 'text-blue-400' },
-  file: { icon: FileText, color: 'text-green-400' },
   tool: { icon: Wrench, color: 'text-amber-400' },
-  model: { icon: Brain, color: 'text-purple-400' },
-  command: { icon: Zap, color: 'text-accent' },
 }
 
 export function ChatAutocomplete({ query, trigger, onSelect, onClose }: ChatAutocompleteProps) {
@@ -46,20 +41,7 @@ export function ChatAutocomplete({ query, trigger, onSelect, onClose }: ChatAuto
     const result: AutocompleteItem[] = []
 
     try {
-      if (trigger === '@') {
-        // Templates
-        const templates = await templatesApi.list()
-        for (const t of templates) {
-          result.push({
-            id: `template:${t.id}`,
-            label: t.name,
-            description: t.description,
-            category: 'template',
-            icon: FileText,
-            insert: `@${t.id}`,
-          })
-        }
-      } else if (trigger === '/') {
+      if (trigger === '/') {
         // Tools
         for (const tool of TOOL_NAMES) {
           result.push({
@@ -71,21 +53,6 @@ export function ChatAutocomplete({ query, trigger, onSelect, onClose }: ChatAuto
             insert: `/${tool}`,
           })
         }
-      } else if (trigger === '#') {
-        // Models
-        try {
-          const catalog = await modelApi.catalog()
-          for (const m of catalog.models || []) {
-            result.push({
-              id: `model:${m.path}`,
-              label: m.filename,
-              description: `${m.family || 'Unknown'} · ${m.size_human}`,
-              category: 'model',
-              icon: Brain,
-              insert: `#${m.filename}`,
-            })
-          }
-        } catch {}
       }
     } catch {}
 
@@ -185,8 +152,8 @@ export function ChatAutocomplete({ query, trigger, onSelect, onClose }: ChatAuto
  * Returns { trigger, query } or null if no trigger.
  */
 export function detectTrigger(text: string): { trigger: string; query: string } | null {
-  // Match @, /, or # at start of word (after space or at beginning)
-  const match = text.match(/(^|\s)([@/#])(\w*)$/)
+  // Match / at start of word (after space or at beginning)
+  const match = text.match(/(^|\s)(\/)(\w*)$/)
   if (match) {
     return { trigger: match[2], query: match[3] }
   }

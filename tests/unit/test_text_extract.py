@@ -165,3 +165,79 @@ def test_search_files_skips_binary(tmp_path: Path) -> None:
     result = registry.execute("search_files", {"pattern": "gpu"})
     assert result["status"] == "success"
     assert result["result"] == ["notes.txt"]
+
+
+def test_search_files_pipe_is_alternation(tmp_path: Path) -> None:
+    """'one|two' must match files containing EITHER term - models pass
+    regex-style alternations, not literal pipes."""
+    registry = ToolRegistry(tmp_path)
+    (tmp_path / "a.txt").write_text("purpose statement here", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("overview section", encoding="utf-8")
+    (tmp_path / "c.txt").write_text("alpha|beta literal pipe only", encoding="utf-8")
+    (tmp_path / "d.txt").write_text("unrelated", encoding="utf-8")
+
+    result = registry.execute("search_files", {"pattern": "purpose|overview"})
+    assert result["status"] == "success"
+    paths = {Path(x).name for x in result["result"]}
+    assert paths == {"a.txt", "b.txt"}, paths
+
+
+def test_search_files_head_only_and_ext_skips(tmp_path: Path) -> None:
+    """Head-only scanning + extension/name skips must not cost matches an
+    agent cares about: hits in the readable head are found, hits beyond the
+    head or inside binary/generated files are (deliberately) not."""
+    registry = ToolRegistry(tmp_path)
+    # 1) match inside the readable head -> found
+    (tmp_path / "a.txt").write_text("needle near the top", encoding="utf-8")
+    # 2) match only beyond the 256 KB head -> not found (documented trade-off)
+    big = tmp_path / "b.txt"
+    big.write_bytes(b"padding" * 60000 + b" needle far below", )  # > 256 KB
+    # 3) binary extension containing the needle -> skipped by ext, no read
+    (tmp_path / "img.png").write_bytes(b"needle inside png bytes")
+    # 4) minified JS containing the needle -> skipped by name marker
+    (tmp_path / "app.min.js").write_text("needle in bundle", encoding="utf-8")
+
+    result = registry.execute("search_files", {"pattern": "needle"})
+    assert result["status"] == "success"
+    paths = {Path(x).name for x in result["result"]}
+    assert paths == {"a.txt"}, paths
+
+
+def test_glob_prunes_vendor_dirs_and_reports_empty(tmp_path: Path) -> None:
+    """Glob must prune dependency/build dirs (like search_files) so a **
+    pattern never stalls on node_modules/.git, and a zero-match glob must
+    say so explicitly instead of returning silent success."""
+    registry = ToolRegistry(tmp_path)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("x", encoding="utf-8")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "dep.py").write_text("x", encoding="utf-8")
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "site.py").write_text("x", encoding="utf-8")
+
+    result = registry.execute("glob", {"pattern": "**/*.py"})
+    assert result["status"] == "success"
+    assert result["result"] == ["src/main.py"], result
+    assert "node_modules" not in "\n".join(result["result"])
+    assert "site.py" not in "\n".join(result["result"])
+
+    empty = registry.execute("glob", {"pattern": "**/*.rs"})
+    assert empty["status"] == "success"
+    assert empty["result"] == []
+    assert "No files matched" in empty["note"]
+
+
+def test_glob_recursive_and_nested_patterns(tmp_path: Path) -> None:
+    """** crosses directories; a plain prefix pattern is scoped to it."""
+    registry = ToolRegistry(tmp_path)
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "deep.py").write_text("x", encoding="utf-8")
+    (tmp_path / "pkg" / "nested").mkdir()
+    (tmp_path / "pkg" / "nested" / "deep.py").write_text("x", encoding="utf-8")
+
+    recursive = registry.execute("glob", {"pattern": "**/*.py"})
+    assert set(recursive["result"]) == {"a.py", "pkg/deep.py", "pkg/nested/deep.py"}
+
+    scoped = registry.execute("glob", {"pattern": "pkg/**/*.py"})
+    assert set(scoped["result"]) == {"pkg/deep.py", "pkg/nested/deep.py"}

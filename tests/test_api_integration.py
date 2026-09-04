@@ -26,12 +26,29 @@ class TestHealthEndpoint:
         assert "version" in data
 
 
+class TestAppInfoEndpoint:
+    def test_app_info_returns_pinned_identity(self, client):
+        resp = client.get("/api/app/info")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "GGUF Loader"
+        assert "version" in data
+        assert data["label"] == "Gemma 4 12B Q4_K_M"
+        assert data["tagline"] == "Optimized for Gemma 4 12B Q4_K_M"
+        assert data["pinned"] == {"arch": "gemma4", "quant": "Q4_K_M", "size": "12B"}
+
+
 class TestModelEndpoints:
     def test_model_info_no_model(self, client):
         resp = client.get("/api/model/info")
         assert resp.status_code == 200
         data = resp.json()
         assert "loaded" in data
+        assert data["loaded"] is False
+        # Auto-load status + pinned compatibility surface even when empty
+        assert "auto_load" in data
+        assert "models_dir" in data
+        assert data.get("compatible") is None
 
     def test_model_estimate(self, client):
         resp = client.get("/api/model/estimate?path=test.gguf")
@@ -42,6 +59,23 @@ class TestModelEndpoints:
         resp = client.delete("/api/model/unload")
         # Should succeed or return not-loaded error
         assert resp.status_code in (200, 400)
+
+    def test_model_download_status_shape(self, client):
+        resp = client.get("/api/model/download/status")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "status" in data
+        assert "progress" in data
+        assert "message" in data
+
+    def test_model_download_never_streams_in_test_env(self, client):
+        # The pinned model is ~8 GB — under pytest the endpoint must
+        # report disabled instead of actually downloading.
+        resp = client.post("/api/model/download")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "disabled"
+        assert data["progress"] == 0.0
 
 
 class TestSessionEndpoints:

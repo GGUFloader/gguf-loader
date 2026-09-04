@@ -216,7 +216,6 @@ class AgentService(QObject):
             max_steps=profile.max_steps,
             json_retries=profile.json_retries,
             n_ctx=n_ctx_val,
-            max_directive_rounds=3,
             cleaner=cleaner,
             system_prompt=family_system_prompt,
         )

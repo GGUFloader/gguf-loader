@@ -10,8 +10,12 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from ggufloader.api.auto_load import (
+    auto_load_status,
+    pinned_download_status,
+    start_pinned_download,
+)
 from ggufloader.api.deps import get_model_backend, set_model_backend, get_router
-from ggufloader.core.llm.model_backend import ModelBackend
 from ggufloader.core.llm.model_profiles import resolve_chat_config, read_gguf_general_metadata
 from ggufloader.core.router import ModelRole
 
@@ -40,14 +44,71 @@ class ModelInfo(BaseModel):
     context_length: Optional[int] = None
     gpu: bool = False
     chat_config: Optional[dict] = None
+    # Startup auto-load state (see api/auto_load.py): idle|scanning|loading|
+    # loaded|not_found|error|disabled plus a human message and the folder
+    # the app scans for the pinned GGUF.
+    auto_load: Optional[str] = None
+    auto_load_message: Optional[str] = None
+    models_dir: Optional[str] = None
+    # Pinned-target compatibility of the currently loaded model. False when
+    # a model somehow got loaded despite the gate (e.g. older session state);
+    # None when nothing is loaded.
+    compatible: Optional[bool] = None
+    compatible_error: Optional[str] = None
+
+
+PINNED_ARCH = "gemma4"
+
+
+def pinned_target_error(profile) -> Optional[str]:
+    """Return a human message if profile is NOT the pinned target, else None.
+
+    Single source of truth shared by the load gate below and the startup
+    auto-loader (api/auto_load.py). Multi-model auto-detection was removed;
+    any other GGUF is rejected loudly instead of running with mismatched
+    sampling or prompts.
+    """
+    arch = (profile.architecture or "").lower()
+    quant_blob = ((profile.quantization or "") + " " + profile.filename).upper()
+    param_blob = ((profile.param_count_estimate or "") + " " + profile.filename).upper()
+    if arch != PINNED_ARCH:
+        return (
+            f"Unsupported model: architecture '{profile.architecture}'. "
+            "This build is pinned to Gemma 4 12B Instruct (Q4_K_M) only."
+        )
+    if "Q4_K_M" not in quant_blob:
+        return (
+            f"Unsupported quantization: '{profile.quantization}'. "
+            "This build is pinned to Gemma 4 12B Instruct Q4_K_M only."
+        )
+    if "12B" not in param_blob:
+        return (
+            f"Unsupported size: '{profile.param_count_estimate}'. "
+            "This build is pinned to Gemma 4 12B Instruct (Q4_K_M) only."
+        )
+    return None
+
+
+def _require_pinned_target(profile) -> None:
+    """HTTP load gate: raise 400 unless profile is the pinned target."""
+    err = pinned_target_error(profile)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
 
 
 @router.get("/info")
 async def model_info() -> ModelInfo:
-    """Get info about the currently loaded model."""
+    """Get info about the currently loaded model + startup auto-load state."""
+    auto = auto_load_status()
+
     backend = get_model_backend()
     if backend is None:
-        return ModelInfo(loaded=False)
+        return ModelInfo(
+            loaded=False,
+            auto_load=auto.get("status"),
+            auto_load_message=auto.get("message"),
+            models_dir=auto.get("models_dir"),
+        )
 
     path = getattr(backend, "model_path", None)
     filename = os.path.basename(path) if path else None
@@ -57,7 +118,24 @@ async def model_info() -> ModelInfo:
     family = None
     family_label = None
     detected_via = None
+    architecture = getattr(backend, "architecture", None)
+    quantization = getattr(backend, "quantization", None)
+    parameters = getattr(backend, "parameters", None)
+    compatible = None
+    compatible_error = None
     if path:
+        # Pinned-target verdict comes from the cached router inspect (single
+        # source shared with the load gate).
+        try:
+            profile = get_router().inspect(path)
+            architecture = profile.architecture
+            quantization = profile.quantization
+            parameters = profile.param_count_estimate
+            err = pinned_target_error(profile)
+            compatible = err is None
+            compatible_error = err
+        except Exception as e:
+            logger.warning("Failed to inspect loaded model: %s", e)
         try:
             chat_config = resolve_chat_config(path)
             family = chat_config.get("family")
@@ -73,12 +151,17 @@ async def model_info() -> ModelInfo:
         family=family,
         family_label=family_label,
         detected_via=detected_via,
-        architecture=getattr(backend, "architecture", None),
-        quantization=getattr(backend, "quantization", None),
-        parameters=getattr(backend, "parameters", None),
+        architecture=architecture,
+        quantization=quantization,
+        parameters=parameters,
         context_length=getattr(backend, "n_ctx", None),
         gpu=getattr(backend, "use_gpu", False),
         chat_config=chat_config,
+        auto_load=auto.get("status"),
+        auto_load_message=auto.get("message"),
+        models_dir=auto.get("models_dir"),
+        compatible=compatible,
+        compatible_error=compatible_error,
     )
 
 
@@ -100,6 +183,8 @@ async def load_model(req: LoadRequest) -> dict:
             raise HTTPException(status_code=400, detail=f"Unknown role: {req.role}")
 
         router = get_router()
+        # Single-model gate (metadata-only inspect, cached).
+        _require_pinned_target(router.inspect(req.path))
         backend, profile, strategy, _config = router.load(
             req.path,
             role,
@@ -138,16 +223,20 @@ async def unload_model() -> dict:
     return {"status": "unloaded"}
 
 
-@router.get("/profile")
-async def model_profile(path: str) -> dict:
-    """Get auto-detected chat config for a model file (without loading it)."""
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
-    try:
-        return resolve_chat_config(path)
-    except Exception as e:
-        logger.warning("Profile detection failed: %s", e)
-        return {"family": "unknown", "label": "Unknown", "params": {}, "supports_system_prompt": True}
+@router.post("/download")
+async def download_pinned_model() -> dict:
+    """Start (or report state of) the pinned Gemma 4 12B Q4_K_M download.
+
+    Downloads into the default models folder in the background; the file
+    is auto-loaded once complete. Idempotent — safe to call repeatedly.
+    """
+    return start_pinned_download()
+
+
+@router.get("/download/status")
+async def download_pinned_status() -> dict:
+    """Poll download progress: idle|downloading|done|error|disabled + 0..1 progress."""
+    return pinned_download_status()
 
 
 @router.get("/estimate")
@@ -229,7 +318,6 @@ async def router_inspect(path: str) -> dict:
             "kv_memory_gb": profile.kv_memory_gb,
             "total_memory_gb": profile.total_memory_gb,
             "family_params": profile.family_params,
-            "suggested_role": router.suggest_role(profile).value,
         }
     except Exception as e:
         logger.error("Router inspect failed: %s", e)
@@ -278,124 +366,6 @@ async def router_plan(
         }
     except Exception as e:
         logger.error("Router plan failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/router/route")
-async def router_route(path: str, role: str = "chat") -> dict:
-    """Get sampling params tuned for a specific role (chat/agent/code/embed/reasoning)."""
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
-    router = get_router()
-    try:
-        profile = router.inspect(path)
-        try:
-            model_role = ModelRole(role)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Unknown role: {role}")
-        config = router.route(profile, model_role)
-        return {
-            "role": config.role.value,
-            "temperature": config.temperature,
-            "top_k": config.top_k,
-            "top_p": config.top_p,
-            "min_p": config.min_p,
-            "repeat_penalty": config.repeat_penalty,
-            "max_tokens": config.max_tokens,
-            "notes": config.notes,
-            "can_serve": router.can_serve_role(profile, model_role),
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Router route failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/router/quick")
-async def router_quick(path: str) -> dict:
-    """Quick lightweight profile for file picker / catalog (no deep analysis)."""
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
-    router = get_router()
-    try:
-        return router.quick_profile(path)
-    except Exception as e:
-        logger.error("Router quick profile failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/router/system")
-async def router_system() -> dict:
-    """Get system capabilities (RAM, VRAM, GPU, CPU)."""
-    router = get_router()
-    s = router.system
-    return {
-        "ram_gb": s.ram_gb,
-        "vram_gb": s.vram_gb,
-        "gpu_name": s.gpu_name,
-        "gpu_backend": s.gpu_backend,
-        "cpu_cores": s.cpu_cores,
-        "has_gpu_support": s.has_gpu_support,
-    }
-
-
-@router.post("/router/auto-load")
-async def router_auto_load(req: dict) -> dict:
-    """Load a model with full router optimization: inspect → plan → load.
-
-    Accepts: {"path": str, "role"?: str, "n_ctx"?: int, "use_gpu"?: bool, "n_gpu_layers"?: int}
-    """
-    path = req.get("path", "")
-    if not path or not os.path.exists(path):
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
-    role_str = req.get("role", "chat")
-    try:
-        model_role = ModelRole(role_str)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Unknown role: {role_str}")
-
-    router = get_router()
-    try:
-        backend, profile, strategy, config = router.load(
-            path, model_role,
-            n_ctx=req.get("n_ctx"),
-            use_gpu=req.get("use_gpu"),
-            n_gpu_layers=req.get("n_gpu_layers"),
-        )
-        set_model_backend(backend)
-        return {
-            "status": "loaded",
-            "path": path,
-            "role": model_role.value,
-            "profile": {
-                "family": profile.family,
-                "family_label": profile.family_label,
-                "size_tier": profile.size_tier.value,
-                "architecture": profile.architecture,
-                "total_layers": profile.total_layers,
-                "quantization": profile.quantization,
-                "total_memory_gb": profile.total_memory_gb,
-            },
-            "strategy": {
-                "n_ctx": strategy.n_ctx,
-                "n_gpu_layers": strategy.n_gpu_layers,
-                "use_gpu": strategy.use_gpu,
-                "batch_size": strategy.batch_size,
-                "reasoning": strategy.reasoning,
-                "fallback_chain": strategy.fallback_chain,
-            },
-            "config": {
-                "temperature": config.temperature,
-                "top_k": config.top_k,
-                "top_p": config.top_p,
-                "repeat_penalty": config.repeat_penalty,
-                "max_tokens": config.max_tokens,
-                "notes": config.notes,
-            },
-        }
-    except Exception as e:
-        logger.error("Router auto-load failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -482,83 +452,3 @@ async def model_catalog(
     }
 
 
-# ---------------------------------------------------------------------------
-# Model comparison: side-by-side deep profiles
-# ---------------------------------------------------------------------------
-
-@router.get("/compare")
-async def model_compare(paths: str) -> dict:
-    """Compare two or more GGUF models side-by-side.
-
-    paths: comma-separated list of model file paths
-    Returns deep profiles for each model plus a diff summary.
-    """
-    path_list = [p.strip() for p in paths.split(",") if p.strip()]
-    if len(path_list) < 2:
-        raise HTTPException(status_code=400, detail="Provide at least 2 comma-separated paths")
-
-    profiles = []
-    router = get_router()
-
-    for path in path_list[:5]:  # max 5 models
-        if not os.path.exists(path):
-            profiles.append({"path": path, "error": "File not found"})
-            continue
-        try:
-            profile = router.inspect(path)
-            strategy = router.plan(profile)
-            profiles.append({
-                "path": profile.path,
-                "filename": profile.filename,
-                "file_size_gb": profile.file_size_gb,
-                "architecture": profile.architecture,
-                "family": profile.family,
-                "family_label": profile.family_label,
-                "size_tier": profile.size_tier.value,
-                "param_estimate": profile.param_count_estimate,
-                "total_layers": profile.total_layers,
-                "quantization": profile.quantization,
-                "quant_tier": profile.quant_tier.value,
-                "trained_context": profile.trained_context,
-                "max_context": profile.max_context,
-                "supports_system_prompt": profile.supports_system_prompt,
-                "supports_vision": profile.supports_vision,
-                "is_embedding_model": profile.is_embedding_model,
-                "is_thinking_model": profile.is_thinking_model,
-                "model_memory_gb": profile.model_memory_gb,
-                "kv_memory_gb": profile.kv_memory_gb,
-                "total_memory_gb": profile.total_memory_gb,
-                "strategy": {
-                    "n_ctx": strategy.n_ctx,
-                    "n_gpu_layers": strategy.n_gpu_layers,
-                    "use_gpu": strategy.use_gpu,
-                    "batch_size": strategy.batch_size,
-                    "fits_vram": strategy.fits_vram,
-                    "fits_ram": strategy.fits_ram,
-                    "reasoning": strategy.reasoning,
-                },
-            })
-        except Exception as e:
-            profiles.append({"path": path, "error": str(e)})
-
-    # Build comparison summary
-    valid = [p for p in profiles if "error" not in p]
-    comparison = {}
-    if len(valid) >= 2:
-        comparison = {
-            "size_diff_gb": round(valid[0].get("file_size_gb", 0) - valid[1].get("file_size_gb", 0), 2),
-            "memory_diff_gb": round(valid[0].get("total_memory_gb", 0) - valid[1].get("total_memory_gb", 0), 2),
-            "same_family": valid[0].get("family") == valid[1].get("family"),
-            "same_architecture": valid[0].get("architecture") == valid[1].get("architecture"),
-            "smaller_model": valid[0].get("filename") if valid[0].get("file_size_gb", 0) < valid[1].get("file_size_gb", 0) else valid[1].get("filename"),
-            "higher_context": valid[0].get("filename") if valid[0].get("trained_context", 0) > valid[1].get("trained_context", 0) else valid[1].get("filename"),
-        }
-
-    return {
-        "models": profiles,
-        "comparison": comparison,
-        "system": {
-            "ram_gb": router.system.ram_gb,
-            "vram_gb": router.system.vram_gb,
-        },
-    }

@@ -14,7 +14,6 @@ import pytest
 
 from ggufloader.core.agent.tool_registry import (
     ToolRegistry,
-    PythonInterpreterTool,
     RunCommandTool,
 )
 
@@ -74,32 +73,21 @@ class TestNoDataExfiltration:
         assert result["status"] == "error"
 
 
-class TestPythonInterpreterAliasPrivacy:
-    """CRITICAL: python_interpreter aliases run_python (one approval gate).
+class TestSinglePythonPath:
+    """CRITICAL: only run_python executes Python, and it requires approval.
 
-    The former "sandboxed" interpreter was NOT an OS sandbox - it executed
-    arbitrary Python with the full user interpreter, so urllib, absolute-
-    path file reads and subprocesses all worked from the temp cwd. Task 10
-    merges it into run_python: same schema, same approval gate, so no
-    python code ever runs without user consent.
+    The former "sandboxed" interpreter was NOT an OS sandbox — it executed
+    arbitrary Python with the full user interpreter. It has been removed;
+    the registry exposes exactly one python tool (run_python), so no python
+    code ever runs without user consent.
     """
 
-    def test_alias_requires_approval(self, workspace):
-        """The alias must be approval-gated exactly like run_python."""
-        tool = PythonInterpreterTool(workspace)
-        assert tool.requires_approval({"code": "print(1)"}) is True
+    def test_no_python_alias_registered(self, registry):
+        """No approval-free python alias exists in the catalog."""
+        names = registry.names()
+        assert "python_interpreter" not in names
+        assert "run_python" in names
 
-    def test_alias_shares_run_python_schema(self, workspace):
-        """One schema for all python execution (no approval-free variant)."""
-        from ggufloader.core.agent.tool_registry import RunPythonTool
-        assert issubclass(PythonInterpreterTool, RunPythonTool)
-        assert PythonInterpreterTool.schema == RunPythonTool.schema
-
-    def test_alias_warns_deprecation(self, workspace):
-        """Calling python_interpreter steers callers to run_python."""
-        import warnings
-        tool = PythonInterpreterTool(workspace)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            tool.execute({"code": "print('alias')"})
-        assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+    def test_run_python_requires_approval(self, registry):
+        """run_python stays approval-gated."""
+        assert registry.requires_approval("run_python", {"code": "print(1)"}) is True

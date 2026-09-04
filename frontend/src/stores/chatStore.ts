@@ -1,5 +1,27 @@
 import { create } from 'zustand'
 
+/**
+ * Coerce a wire payload into display text. Non-string JSON values become JSON
+ * (never the literal "[object Object]"), null/undefined become ''.
+ */
+function toText(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'object') {
+    try {
+      return JSON.stringify(v)
+    } catch {
+      return String(v)
+    }
+  }
+  return String(v)
+}
+
+/** Token events must carry strings; anything else is protocol drift — drop it. */
+function toTokenText(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -170,10 +192,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setStreamingText: (text) => set({ streamingText: text }),
 
-  appendStreamingText: (token) => set((s) => ({
-    streamingText: s.streamingText + token,
-    agentMetrics: { ...s.agentMetrics, tokenCount: s.agentMetrics.tokenCount + 1 },
-  })),
+  appendStreamingText: (token) => set((s) => {
+    const t = toTokenText(token)
+    if (!t) return s
+    return {
+      streamingText: s.streamingText + t,
+      agentMetrics: { ...s.agentMetrics, tokenCount: s.agentMetrics.tokenCount + 1 },
+    }
+  }),
 
   addReasoningBlock: (content) => set((s) => ({
     reasoningBlocks: [...s.reasoningBlocks, content],
@@ -317,16 +343,29 @@ export function connectWebSocket() {
       const data = JSON.parse(event.data)
       switch (data.type) {
         case 'token':
-          store.appendStreamingText(data.token)
+          store.appendStreamingText(toTokenText(data.token))
           break
-        case 'reasoning':
-          // Add as a thinking step in the progress timeline,
-          // not as a separate reasoning block (which would all pile up at top)
-          useChatStore.getState().addProgressStep({
-            type: 'thinking',
-            content: data.content,
-          })
+        case 'reasoning': {
+          // Live planner deltas: append into the latest thinking step so the
+          // streamed plan reasoning accumulates in ONE sidebar card instead
+          // of creating a new card per chunk.
+          const st = useChatStore.getState()
+          const lastThinking = [...st.progressSteps].reverse().find(
+            (s) => s.type === 'thinking'
+          )
+          const content = toText(data.content)
+          if (lastThinking) {
+            useChatStore.getState().updateProgressStep(lastThinking.id, {
+              content: lastThinking.content + content,
+            })
+          } else {
+            useChatStore.getState().addProgressStep({
+              type: 'thinking',
+              content,
+            })
+          }
           break
+        }
         case 'tool_call':
           // Add tool call to current streaming message
           if (store.currentStreamingId) {
@@ -351,7 +390,7 @@ export function connectWebSocket() {
               const tc = current.toolCalls.find(t => t.approvalId === data.call_id || t.name === data.tool)
               if (tc) {
                 tc.status = data.success ? 'completed' : 'failed'
-                tc.result = data.result || data.error
+                tc.result = toText(data.result) || toText(data.error)
                 useChatStore.setState({ messages: [...msgs] })
               }
             }
@@ -380,7 +419,7 @@ export function connectWebSocket() {
           // Agent is executing a tool
           useChatStore.getState().addProgressStep({
             type: 'tool_call',
-            content: data.content || data.name,
+            content: toText(data.content) || toText(data.name),
             toolName: data.name,
             toolArgs: data.args,
             active: true,
@@ -401,9 +440,9 @@ export function connectWebSocket() {
             }
             useChatStore.getState().addProgressStep({
               type: 'tool_result',
-              content: data.result || data.error || 'Done',
+              content: toText(data.result) || toText(data.error) || 'Done',
               toolName: data.tool,
-              toolResult: data.result || data.error,
+              toolResult: toText(data.result) || toText(data.error),
               success: data.success,
             })
           }
@@ -423,7 +462,7 @@ export function connectWebSocket() {
           // A high-level step is done
           useChatStore.getState().addProgressStep({
             type: 'message',
-            content: data.content,
+            content: toText(data.content),
           })
           break
         case 'agent_phase':
@@ -434,8 +473,9 @@ export function connectWebSocket() {
           )
           // Add thinking content as progress steps in the timeline
           // instead of separate reasoning blocks (which pile up at top)
-          if (data.status) {
-            const s = data.status.trim()
+          const statusText = toText(data.status)
+          if (statusText) {
+            const s = statusText.trim()
             if (s.startsWith('💡') || s.startsWith('🤔') || s.startsWith('💭')) {
               const clean = s.replace(/^[🤔💡💭]\s*/, '')
               if (clean) {
@@ -469,7 +509,7 @@ export function connectWebSocket() {
             const msgs = useChatStore.getState().messages
             const current = msgs.find(m => m.id === store.currentStreamingId)
             if (current) {
-              current.content = data.content || current.content
+              current.content = toText(data.content) || current.content
               useChatStore.setState({ messages: [...msgs] })
             }
           }
@@ -500,7 +540,7 @@ export function connectWebSocket() {
           store.stopStreaming()
           break
         case 'error':
-          store.appendToMessage(store.currentStreamingId ?? '', `\nError: ${data.message}`)
+          store.appendToMessage(store.currentStreamingId ?? '', `\nError: ${toText(data.message)}`)
           store.stopStreaming()
           break
       }

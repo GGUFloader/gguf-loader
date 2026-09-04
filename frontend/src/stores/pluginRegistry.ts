@@ -29,10 +29,6 @@ const DEFAULT_PLUGINS: SidebarPlugin[] = [
   { id: 'config', label: 'Config', icon: 'Sliders', category: 'core', description: 'Agent configuration and presets', enabled: true, order: 2 },
   { id: 'settings', label: 'Settings', icon: 'Settings', category: 'core', description: 'Application settings', enabled: true, order: 3 },
 
-  // Model
-  { id: 'catalog', label: 'Models', icon: 'Brain', category: 'model', description: 'Browse and search GGUF model catalog', enabled: false, order: 10 },
-  { id: 'compare', label: 'Compare', icon: 'GitCompare', category: 'model', description: 'Compare model specs side by side', enabled: false, order: 11 },
-
   // Agent
   { id: 'templates', label: 'Prompts', icon: 'Copy', category: 'agent', description: 'Prompt templates and management', enabled: false, order: 20 },
   { id: 'diff', label: 'Diff', icon: 'FileCode', category: 'agent', description: 'File diff viewer for agent changes', enabled: false, order: 21 },

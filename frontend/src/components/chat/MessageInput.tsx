@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import { Send, Square, Plus, ChevronDown, Loader2, HardDrive, Zap, FolderOpen } from 'lucide-react'
+import { Send, Square, Plus, ChevronDown, Loader2, HardDrive, Zap, FolderOpen, Download, CheckCircle2 } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { modelApi } from '../../api/client'
 import { useModelStore } from '../../stores/modelStore'
+import { useDownloadStore } from '../../stores/downloadStore'
 import { FileMentionPopup } from './FileMentionPopup'
 import { ChatAutocomplete, detectTrigger } from './ChatAutocomplete'
 
@@ -36,6 +37,10 @@ export function MessageInput() {
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
+  // Download lifecycle lives in the shared store so the header chip can
+  // render progress even while this picker is closed.
+  const dl = useDownloadStore((s) => s.dl)
+  const startDownload = useDownloadStore((s) => s.startDownload)
 
   // Workspace state (shared with LeftPanel)
   const workspace = useWorkspaceStore((s) => s.workspace)
@@ -52,6 +57,25 @@ export function MessageInput() {
       }
     } catch {}
   }, [])
+
+  // When the shared download finishes, re-point the picker at the models
+  // folder so the freshly downloaded file shows up in the list.
+  const dlDoneHandled = useRef(false)
+  useEffect(() => {
+    if (dl?.status === 'done') {
+      if (dlDoneHandled.current) return
+      dlDoneHandled.current = true
+      const dir = String(dl.path || '').replace(/(\\|\/)[^\\/]+\.gguf$/i, '')
+      if (dir) {
+        setModelFolder(dir)
+        localStorage.setItem('ggufloader_model_folder', dir)
+        loadModelsFromFolder(dir)
+      }
+      setSelectedModel(dl.path || '')
+    } else {
+      dlDoneHandled.current = false
+    }
+  }, [dl])
 
   async function loadModelsFromFolder(folder: string) {
     if (!folder) return
@@ -90,6 +114,13 @@ export function MessageInput() {
     } catch {}
     setLoadingModel(null)
     setShowModelPicker(false)
+  }
+
+  // Download the pinned Gemma 4 12B Q4_K_M when no model is present. The
+  // store owns the background poll so progress keeps updating in the
+  // header chip even with the picker closed.
+  async function handleDownloadPinned() {
+    await startDownload()
   }
 
   function handleWorkspaceChange(newWorkspace: string) {
@@ -160,7 +191,7 @@ export function MessageInput() {
     const cursorPos = textareaRef.current?.selectionStart ?? input.length
     const textBeforeCursor = input.slice(0, cursorPos)
     const textAfterCursor = input.slice(cursorPos)
-    const triggerIdx = textBeforeCursor.search(/[@/#]\w*$/)
+    const triggerIdx = textBeforeCursor.search(/\/\w*$/)
     const newText = textBeforeCursor.slice(0, triggerIdx) + item.insert + ' ' + textAfterCursor
     setInput(newText)
     setShowAutocomplete(false)
@@ -320,18 +351,6 @@ export function MessageInput() {
                 )}
 
                 {/* Model list */}
-                {!folderLoading && folderModels.length === 0 && modelFolder && (
-                  <div className="px-3 py-3 text-xs text-text-muted">
-                    No GGUF models found in this folder
-                  </div>
-                )}
-
-                {!folderLoading && folderModels.length === 0 && !modelFolder && (
-                  <div className="px-3 py-3 text-xs text-text-muted">
-                    Select a folder containing GGUF models
-                  </div>
-                )}
-
                 {folderModels.map((model) => (
                   <button
                     key={model.path}
@@ -359,6 +378,51 @@ export function MessageInput() {
                     <Zap size={10} className="text-accent flex-shrink-0 opacity-0 group-hover:opacity-100" />
                   </button>
                 ))}
+
+                {/* No model present → offer the pinned download */}
+                {!folderLoading && folderModels.length === 0 && (
+                  <div className="border-t border-border px-3 py-3 space-y-2">
+                    <p className="text-[11px] text-text-muted leading-snug">
+                      {modelFolder
+                        ? 'No GGUF models found in this folder.'
+                        : 'No model folder selected.'}{' '}
+                      Download the pinned Gemma 4 12B Q4_K_M instead:
+                    </p>
+                    {(!dl || dl.status === 'idle' || dl.status === 'disabled') && (
+                      <button onClick={handleDownloadPinned}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-accent/10 border border-accent/25 rounded-lg text-[11px] font-medium text-accent hover:bg-accent/20 transition-colors">
+                        <Download size={11} /> Download Gemma 4 12B Q4_K_M (~8 GB)
+                      </button>
+                    )}
+                    {dl?.status === 'downloading' && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
+                          <Loader2 size={10} className="animate-spin" />
+                          <span>Downloading...</span>
+                          <span className="ml-auto font-mono text-text-sec">{Math.round(dl.progress * 100)}%</span>
+                        </div>
+                        <div className="h-1.5 bg-elevated border border-border rounded-full overflow-hidden">
+                          <div className="h-full bg-accent transition-all duration-500"
+                            style={{ width: `${Math.min(100, Math.max(0, Math.round(dl.progress * 100)))}%` }} />
+                        </div>
+                      </div>
+                    )}
+                    {dl?.status === 'done' && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-green-400">
+                        <CheckCircle2 size={11} /> Downloaded — loading model...
+                      </div>
+                    )}
+                    {dl?.status === 'error' && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-red-400 leading-snug">{dl.message || 'Download failed'}</p>
+                        <button onClick={handleDownloadPinned}
+                          className="w-full px-3 py-1.5 bg-elevated border border-border rounded-lg text-[11px] text-text-sec hover:border-accent transition-colors">
+                          Retry download
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -18,6 +18,15 @@ from fastapi.responses import FileResponse
 
 from ggufloader.api.routes import agent, chat, files, files_render, gpu, model, session, mcp, tools, workflows, plugins, templates, branching, workspaces, search, benchmark, sandbox
 from ggufloader.api.websocket.handler import websocket_endpoint
+from ggufloader._version import __version__
+from ggufloader.config import (
+    APP_NAME,
+    PINNED_ARCH,
+    PINNED_MODEL_LABEL,
+    PINNED_QUANT,
+    PINNED_SIZE,
+    PINNED_TAGLINE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +39,15 @@ FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup/shutdown lifecycle."""
     logger.info("GGUFLoader API starting...")
+    # Background scan + load of the pinned Gemma 4 12B Q4_K_M GGUF from the
+    # models folder (start_auto_load spawns a daemon thread and returns
+    # immediately; it is a no-op under pytest / GGUFLOADER_SKIP_AUTOLOAD).
+    from ggufloader.api.auto_load import start_auto_load
+    try:
+        status = start_auto_load()
+        logger.info("Auto-load at startup: %s", status.get("status"))
+    except Exception as e:  # noqa: BLE001 - never block boot on scan failures
+        logger.warning("Auto-load startup check failed: %s", e)
     yield
     logger.info("GGUFLoader API shutting down...")
 
@@ -81,7 +99,23 @@ def create_app() -> FastAPI:
     # Health check
     @app.get("/api/health")
     async def health():
-        return {"status": "ok", "version": "1.0.0"}
+        return {"status": "ok", "version": __version__}
+
+    # App-level identity: drives the version banner and the
+    # first-launch model-compatibility dialog in the React UI.
+    @app.get("/api/app/info")
+    async def app_info():
+        return {
+            "name": APP_NAME,
+            "version": __version__,
+            "label": PINNED_MODEL_LABEL,
+            "tagline": PINNED_TAGLINE,
+            "pinned": {
+                "arch": PINNED_ARCH,
+                "quant": PINNED_QUANT,
+                "size": PINNED_SIZE,
+            },
+        }
 
     # Serve built React frontend in production
     if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():

@@ -40,15 +40,7 @@ DISABLED_TOOLS: Set[str] = {
     "run_command",
     "run_python",
     "git",
-    "batch_execute",
-    "python_interpreter",
     "move_file",
-    "remember",
-    "recall",
-    "forget",
-    "record_correction",
-    "generate_agents_md",
-    "export_session",
 }
 
 # Tool categories for the frontend plugin registry
@@ -62,15 +54,7 @@ TOOL_CATEGORIES = {
     "run_command": {"category": "dev", "label": "Run Command", "risk": "high"},
     "run_python": {"category": "dev", "label": "Run Python", "risk": "high"},
     "git": {"category": "dev", "label": "Git", "risk": "high"},
-    "batch_execute": {"category": "dev", "label": "Batch Execute", "risk": "medium"},
-    "python_interpreter": {"category": "dev", "label": "Python Sandbox", "risk": "low"},
     "move_file": {"category": "dev", "label": "Move File", "risk": "medium"},
-    "remember": {"category": "agent", "label": "Remember", "risk": "low"},
-    "recall": {"category": "agent", "label": "Recall Memory", "risk": "low"},
-    "forget": {"category": "agent", "label": "Forget Memory", "risk": "low"},
-    "record_correction": {"category": "agent", "label": "Record Correction", "risk": "low"},
-    "generate_agents_md": {"category": "agent", "label": "Generate AGENTS.md", "risk": "low"},
-    "export_session": {"category": "agent", "label": "Export Session", "risk": "low"},
 }
 
 

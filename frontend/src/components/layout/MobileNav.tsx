@@ -1,4 +1,4 @@
-import { MessageSquare, FolderOpen, Brain, Settings, Bot } from 'lucide-react'
+import { MessageSquare, FolderOpen, Settings, Bot } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 
 interface NavItem {
@@ -13,7 +13,6 @@ export function MobileNav() {
 
   const items: NavItem[] = [
     { id: 'chat', label: 'Chat', icon: MessageSquare, action: () => setRightPanelTab('files') },
-    { id: 'models', label: 'Models', icon: Brain, action: () => setRightPanelTab('catalog') },
     { id: 'agent', label: 'Agent', icon: Bot, action: () => toggleAgentMode() },
     { id: 'files', label: 'Files', icon: FolderOpen, action: () => setRightPanelTab('files') },
     { id: 'settings', label: 'More', icon: Settings, action: () => setRightPanelTab('settings') },

@@ -1,4 +1,11 @@
-from ggufloader.core.agent.model_profiles import get_profile, AGENT_PROFILE_REGISTRY
+"""Single-model tests: the app is pinned to Gemma 4 12B Instruct (Q4_K_M).
+
+Multi-family detection was removed. The agent-side profile is always the
+gemma4 profile, and the router-side detector only ever recognizes gemma4
+files (everything else resolves to generic and is rejected at the load gate).
+"""
+
+from ggufloader.core.agent.model_profiles import get_profile
 
 
 def test_gemma4_profile_has_safe_defaults():
@@ -11,62 +18,53 @@ def test_gemma4_profile_has_safe_defaults():
     assert p.flash_attn is True
 
 
-def test_default_profile_exists():
-    assert "default" in AGENT_PROFILE_REGISTRY
-    p = AGENT_PROFILE_REGISTRY["default"]
-    assert p.max_tokens == 4096
-    assert p.max_steps == 16
+def test_any_model_path_gets_pinned_gemma4_profile():
+    """Agent-side profiles are no longer detected per file - one target."""
+    for name in ("gemma-4-12b-it-Q4_K_M.gguf", "mystery-99b-F16.gguf"):
+        p = get_profile(name)
+        assert p.max_tokens == 4096
+        assert p.max_steps == 20
+        assert p.temperature == 0.1
 
 
-def test_unknown_model_uses_default():
-    p = get_profile("mystery-99b-F16.gguf", n_ctx_train=32768)
-    default = AGENT_PROFILE_REGISTRY["default"]
-    assert p.max_tokens == default.max_tokens
-    assert p.max_steps == default.max_steps
-    assert p.n_ctx_target == min(8192, 32768)
+def test_ctx_clamped_by_trained_context():
+    p = get_profile("gemma-4-12b-it-Q4_K_M.gguf", n_ctx_train=4096)
+    assert p.n_ctx_target == 4096  # clamped to the file's trained context
+    p2 = get_profile("gemma-4-12b-it-Q4_K_M.gguf")  # no ctx info -> target
+    assert p2.n_ctx_target == 8192
+
 
 # ---------------------------------------------------------------------------
-# Robust detection (Task 11): version-aware family detection for arbitrary
-# user files. Detection order must be: version patterns > name > bare arch,
-# with the longest arch substring winning.
+# Router-side detection: gemma4 is the ONLY family that exists
 # ---------------------------------------------------------------------------
 
-def test_version_patterns_distinguish_llama2_from_llama3():
+def test_gemma4_arch_resolves_to_pinned_family():
     from ggufloader.core.llm.model_profiles import detect_family
-    # Both share GGUF arch "llama" - the version in the name decides.
-    prof2, via2 = detect_family(
-        {"architecture": "llama", "name": "Meta Llama 2 7B Chat"},
-        "Meta-Llama-2-7B-Chat.Q4_K_M.gguf")
-    assert prof2["family"] == "llama2", prof2["family"]
-    assert "version" in via2 or "name" in via2, via2
+    prof, via = detect_family(
+        {"architecture": "gemma4", "name": "gemma-4-12b-it"},
+        "gemma-4-12b-it-Q4_K_M.gguf")
+    assert prof["family"] == "gemma4", prof["family"]
+    assert "gemma4" in via or "arch" in via, via
 
-    prof3, via3 = detect_family(
+
+def test_gemma4_name_match_without_arch():
+    from ggufloader.core.llm.model_profiles import detect_family
+    prof, via = detect_family({}, "gemma-4-12b-it-Q4_K_M.gguf")
+    assert prof["family"] == "gemma4", prof["family"]
+
+
+def test_non_gemma_models_fall_to_generic():
+    """llama / gemma3 / qwen files no longer resolve to their own tuning."""
+    from ggufloader.core.llm.model_profiles import detect_family
+    cases = [
         {"architecture": "llama", "name": "Meta Llama 3 8B Instruct"},
-        "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf")
-    assert prof3["family"] == "llama3", prof3["family"]
-
-
-def test_name_beats_ambiguous_arch():
-    from ggufloader.core.llm.model_profiles import detect_family
-    # Codellama reports arch "llama" (shared with llama2/3); its name must win.
-    prof, via = detect_family(
-        {"architecture": "llama", "name": "Code Llama 7B"},
-        "codellama-7b-instruct.Q4_K_M.gguf")
-    assert prof["family"] == "codellama", prof["family"]
-
-
-def test_gemma_3_8b_keeps_gemma3_family():
-    from ggufloader.core.llm.model_profiles import detect_family
-    # llama.cpp reports Gemma-3 8B under the gemma3 arch; a "gemma-3-8b"
-    # filename that resolves via name must not collapse to plain gemma2.
-    prof, via = detect_family(
         {"architecture": "gemma3", "name": "gemma-3-8b-it"},
-        "gemma-3-8b-it-Q4_K_M.gguf")
-    assert prof["family"] in ("gemma3", "gemma4"), prof["family"]
-    prof2, via2 = detect_family(
-        {"architecture": "gemma2", "name": "gemma-2-9b-it"},
-        "gemma-2-9b-it-Q4_K_M.gguf")
-    assert prof2["family"] == "gemma2", prof2["family"]
+        {"architecture": "qwen2", "name": "Qwen2.5-7B-Instruct"},
+    ]
+    for meta in cases:
+        prof, via = detect_family(meta, "model.gguf")
+        assert prof["family"] == "generic", (meta, prof["family"])
+        assert via  # non-empty explanation
 
 
 def test_unknown_file_never_crashes_returns_generic():

@@ -34,8 +34,6 @@ export function CommandPalette() {
       // Navigation
       { id: 'nav:files', label: 'Open Documents', description: 'Switch to file explorer', category: 'Navigation', icon: FileText, action: () => setRightPanelTab('files'), keywords: ['files', 'documents', 'explorer'] },
       { id: 'nav:dashboard', label: 'Open Dashboard', description: 'Workspace dashboard', category: 'Navigation', icon: LayoutDashboard, action: () => setRightPanelTab('dashboard'), keywords: ['dashboard', 'workspace', 'overview'] },
-      { id: 'nav:catalog', label: 'Open Model Catalog', description: 'Browse GGUF models', category: 'Navigation', icon: Brain, action: () => setRightPanelTab('catalog'), keywords: ['models', 'catalog', 'browse'] },
-      { id: 'nav:compare', label: 'Compare Models', description: 'Side-by-side comparison', category: 'Navigation', icon: GitCompare, action: () => setRightPanelTab('compare'), keywords: ['compare', 'models', 'diff'] },
       { id: 'nav:templates', label: 'Open Templates', description: 'Prompt templates', category: 'Navigation', icon: FileText, action: () => setRightPanelTab('templates'), keywords: ['templates', 'prompts'] },
       { id: 'nav:diff', label: 'Open Diff Viewer', description: 'Code diff viewer', category: 'Navigation', icon: GitCompare, action: () => setRightPanelTab('diff'), keywords: ['diff', 'viewer', 'code'] },
       { id: 'nav:profiling', label: 'Open Profiling', description: 'Performance profiling', category: 'Navigation', icon: Zap, action: () => setRightPanelTab('profiling'), keywords: ['profiling', 'performance', 'metrics'] },

@@ -1,13 +1,13 @@
 """Per-model chat parameter overrides.
 
-Some models need non-default sampling to behave (LiquidAI LFM2.5 needs
-temperature 0.2; creative models may want 0.8). Overrides live in an
-optional ``model_params.json`` looked up in the config dir first, then
-next to the package root:
+The app is pinned to Gemma 4 12B Instruct Q4_K_M, but a user may still
+want to hand-tune sampling for their own taste (lower temperature for
+coding, higher for creative writing). Overrides live in an optional
+``model_params.json`` looked up in the config dir first, then next to
+the package root:
 
     {
-      "lfm2.5": {"temperature": 0.2, "top_k": 80, "repeat_penalty": 1.05},
-      "qwen3": {"temperature": 0.6}
+      "gemma-4-12b": {"temperature": 0.6}
     }
 
 Keys are lowercased substrings matched against the model file name

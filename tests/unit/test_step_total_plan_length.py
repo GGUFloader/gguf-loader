@@ -59,7 +59,7 @@ def _status_collector():
 def test_follow_plan_step_status_uses_plan_length_not_max_steps():
     llm = _scripted_llm(json.dumps({"goal": "g", "steps": []}))
     agent = GraphAgent(
-        llm=llm, workspace="/tmp/ws", max_steps=12, plan=False,
+        llm=llm, workspace="/tmp/ws", max_steps=12,
         system_prompt=TEST_SYSTEM_PROMPT,
     )
     plan = [
@@ -90,14 +90,15 @@ def test_follow_plan_step_status_uses_plan_length_not_max_steps():
 # _agent_node reactive fallback: step event has no max_steps denominator
 # ---------------------------------------------------------------------------
 
-def test_reactive_fallback_step_event_has_no_denominator():
-    """No plan → the step event must omit 'max' so no budget total leaks."""
+def test_no_plan_emits_no_step_event():
+    """No plan → the agent node ends the run without any step event (there
+    is no reactive loop anymore), so no budget total can ever leak."""
 
     def llm(prompt, **kwargs):
         return json.dumps({"reasoning": "r", "tool_calls": [], "answer": "ok"})
 
     agent = GraphAgent(
-        llm=llm, workspace="/tmp/ws", max_steps=12, plan=False,
+        llm=llm, workspace="/tmp/ws", max_steps=12,
         system_prompt=TEST_SYSTEM_PROMPT,
     )
     state: GraphState = {
@@ -114,9 +115,9 @@ def test_reactive_fallback_step_event_has_no_denominator():
     agent._agent_node(state, writer=writer_events.append)
 
     step_events = [e for e in writer_events if e.get("event") == "step"]
-    assert step_events, "expected a step event from the reactive loop"
-    for e in step_events:
-        assert "max" not in e, f"max_steps leaked into step event: {e}"
+    assert not step_events, f"no step event expected without a plan: {step_events}"
+    # The run ends deterministically with an answer instead.
+    assert any(e.get("event") == "status" for e in writer_events)
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +127,7 @@ def test_reactive_fallback_step_event_has_no_denominator():
 def test_dispatch_step_without_max_has_no_slash():
     statuses, on_status = _status_collector()
     agent = GraphAgent(
-        llm=lambda prompt, **kw: "{}", workspace="/tmp/ws", plan=False,
+        llm=lambda prompt, **kw: "{}", workspace="/tmp/ws",
         system_prompt=TEST_SYSTEM_PROMPT,
     )
     agent._on_status = on_status
@@ -140,7 +141,7 @@ def test_dispatch_step_without_max_has_no_slash():
 def test_dispatch_step_with_max_uses_provided_total():
     statuses, on_status = _status_collector()
     agent = GraphAgent(
-        llm=lambda prompt, **kw: "{}", workspace="/tmp/ws", plan=False,
+        llm=lambda prompt, **kw: "{}", workspace="/tmp/ws",
         system_prompt=TEST_SYSTEM_PROMPT,
     )
     agent._on_status = on_status
@@ -155,7 +156,7 @@ def test_dispatch_step_ignores_agent_max_steps_when_max_missing():
     statuses, on_status = _status_collector()
     agent = GraphAgent(
         llm=lambda prompt, **kw: "{}", workspace="/tmp/ws", max_steps=12,
-        plan=False, system_prompt=TEST_SYSTEM_PROMPT,
+        system_prompt=TEST_SYSTEM_PROMPT,
     )
     agent._on_status = on_status
 
@@ -231,7 +232,7 @@ def test_end_to_end_status_totals_never_equal_max_steps(tmp_path: Path):
     llm = _scripted_llm(plan_json, finish="Two files found.")
 
     agent = GraphAgent(
-        llm=llm, workspace=tmp_path, max_steps=12, plan=True,
+        llm=llm, workspace=tmp_path, max_steps=12,
         system_prompt=TEST_SYSTEM_PROMPT,
     )
     statuses, on_status = _status_collector()

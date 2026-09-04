@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useModelStore } from '../../stores/modelStore'
+import { useDownloadStore } from '../../stores/downloadStore'
 import { useUIStore } from '../../stores/uiStore'
 import { modelApi, gpuApi } from '../../api/client'
 import { PanelLeftClose, PanelRightClose, Cpu, X, Download } from 'lucide-react'
@@ -8,12 +9,21 @@ import { useUpdateStore } from '../../stores/updateStore'
 
 export function Header() {
   const { info } = useModelStore()
+  const dl = useDownloadStore((s) => s.dl)
   const { toggleLeftPanel, toggleRightPanel } = useUIStore()
   const [gpuOk, setGpuOk] = useState<boolean | null>(null)
 
   useEffect(() => {
     gpuApi.status().then(s => setGpuOk(s.gpu_available)).catch(() => setGpuOk(false))
   }, [])
+
+  // Once the downloaded model is actually loaded, retire the download
+  // indicator so a later unload shows the plain "No model" chip again.
+  useEffect(() => {
+    if (info.loaded && dl?.status === 'done') {
+      useDownloadStore.getState().reset()
+    }
+  }, [info.loaded, dl?.status])
 
   return (
     <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface">
@@ -42,13 +52,41 @@ export function Header() {
         <NotificationBell />
 
         {/* Model chip — compact */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-elevated rounded-full border border-border text-xs">
-          <div className={`w-1.5 h-1.5 rounded-full ${info.loaded ? 'bg-success' : 'bg-text-muted'}`} />
-          <span className="text-text-sec max-w-[150px] truncate">
-            {info.loaded ? info.filename : 'No model'}
-          </span>
-          {info.gpu && <Cpu size={12} className="text-accent" />}
-          {info.loaded && (
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1 bg-elevated rounded-full border border-border text-xs ${dl?.status === 'downloading' ? 'border-accent/40' : ''}`}
+          title={dl?.status === 'downloading'
+            ? `Downloading Gemma 4 12B Q4_K_M — ${Math.round(dl.progress * 100)}%`
+            : (dl?.status === 'error' ? `Download failed: ${dl.message || ''}` : undefined)}
+        >
+          {dl?.status === 'downloading' ? (
+            <>
+              <Download size={11} className="text-accent animate-pulse" />
+              <span className="text-text-sec max-w-[150px] truncate">
+                {Math.round(dl.progress * 100)}%
+              </span>
+            </>
+          ) : dl?.status === 'done' ? (
+            <>
+              <Download size={11} className="text-success" />
+              <span className="text-text-sec max-w-[150px] truncate">
+                {info.loaded ? info.filename : 'Downloaded — loading...'}
+              </span>
+            </>
+          ) : dl?.status === 'error' ? (
+            <>
+              <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              <span className="text-red-400 max-w-[150px] truncate">Download failed</span>
+            </>
+          ) : (
+            <>
+              <div className={`w-1.5 h-1.5 rounded-full ${info.loaded ? 'bg-success' : 'bg-text-muted'}`} />
+              <span className="text-text-sec max-w-[150px] truncate">
+                {info.loaded ? info.filename : 'No model'}
+              </span>
+              {info.gpu && <Cpu size={12} className="text-accent" />}
+            </>
+          )}
+          {info.loaded && dl?.status !== 'downloading' && dl?.status !== 'done' && (
             <button onClick={async () => { await modelApi.unload() }}
               className="p-0.5 text-text-muted hover:text-red-400 transition-colors" title="Unload">
               <X size={10} />

@@ -547,7 +547,7 @@ class AgentEngine:
 
         if tool_name in ("list_directory", "read_file", "search_files"):
             risk = RISK_LOW
-        elif tool_name in ("write_file", "edit_file", "python_interpreter"):
+        elif tool_name in ("write_file", "edit_file"):
             risk = RISK_MEDIUM
         elif tool_name == "run_command":
             cmd = (params.get("command") or "").lower()

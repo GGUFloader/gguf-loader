@@ -41,11 +41,14 @@ def test_gemma_turn_tokens_leave_no_residue():
     assert "user" not in out.replace('"answer"', "")
 
 
-def test_request_action_cleans_before_parse():
-    """The JSON parser must never see raw turn/channel markers."""
+def test_plan_creation_cleans_before_parse():
+    """The planner's JSON parser must never see raw turn/channel markers:
+    the plan is the only gate to tool execution, so it cleans gemma channel
+    tokens before every parse attempt."""
     import inspect
     from ggufloader.core.agent.graph_agent import GraphAgent
-    src = inspect.getsource(GraphAgent._request_action)
-    # Every parse site feeds the CLEANED text: extract_json(self._clean(raw))
-    # (first try + each retry => at least two sites).
-    assert src.count("extract_json(self._clean(raw))") >= 2
+    src = inspect.getsource(GraphAgent._create_plan)
+    # The parse feeds the CLEANED text on every attempt: self._clean(raw)
+    # (first try + each repair retry).
+    assert "self._clean(raw)" in src
+    assert "_json.loads(text)" in src

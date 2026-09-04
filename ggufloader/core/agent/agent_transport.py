@@ -21,6 +21,8 @@ import re
 import time
 from typing import Any, Callable, Dict, Optional, Protocol, runtime_checkable
 
+from .tool_registry import tool_content_for_context
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,12 +73,20 @@ class AgentTransport:
     def make_tool_callback(self) -> Callable[[Dict[str, Any]], None]:
         """Return an on_tool callback suitable for GraphAgent.process()."""
         def on_tool(result: dict) -> None:
+            # Tool payloads live under 'result' (never 'content'); the canonical
+            # formatter renders list/str payloads into model- and UI-visible text.
+            payload = tool_content_for_context(result, max_chars=500)
+            if payload is None:
+                payload = result.get("content", result.get("error", ""))
+            text = str(payload)
             self._send({
                 "type": "tool_result",
                 "message_id": self.message_id,
                 "tool": result.get("tool_name", "unknown"),
                 "success": result.get("status") == "success",
-                "result": result.get("content", result.get("error", ""))[:500],
+                # Bounded for the UI card, but always signal the cut so a
+                # truncated directory listing cannot read as the full list.
+                "result": (text[:497] + "…") if len(text) > 500 else text,
                 "call_id": result.get("call_id", ""),
             })
         return on_tool
@@ -90,6 +100,50 @@ class AgentTransport:
                 "message_id": self.message_id,
             })
         return on_token
+
+    def make_reasoning_callback(self) -> Callable[[str], None]:
+        """Return an on_plan_stream callback: live planner deltas shown as a
+        'thinking' progress step while "Planning..." is on screen.
+
+        The planner's raw output may start with a markdown fence
+        (`````json```) — strip the fence so the card shows the plan itself.
+        """
+        state = {"prefix": True, "buf": ""}
+
+        def on_reasoning(chunk: str) -> None:
+            if not state["prefix"]:
+                self._send({
+                    "type": "reasoning",
+                    "content": chunk,
+                    "message_id": self.message_id,
+                })
+                return
+            # Keep buffering until the JSON plan starts or it's clear the
+            # model is producing prose (no '{' within 64 chars).
+            state["buf"] += chunk
+            idx = state["buf"].find("{")
+            if idx >= 0:
+                state["prefix"] = False
+                rest = state["buf"][idx:]
+                state["buf"] = ""
+                if rest:
+                    self._send({
+                        "type": "reasoning",
+                        "content": rest,
+                        "message_id": self.message_id,
+                    })
+            elif len(state["buf"]) > 64:
+                state["prefix"] = False
+                text = state["buf"]
+                state["buf"] = ""
+                if text:
+                    self._send({
+                        "type": "reasoning",
+                        "content": text,
+                        "message_id": self.message_id,
+                    })
+
+        return on_reasoning
 
     def make_approval_callback(self, workspace: str = ".") -> Callable[[Dict[str, Any]], bool]:
         """Return an on_approval callback that blocks the agent thread."""

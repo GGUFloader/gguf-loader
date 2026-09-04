@@ -248,32 +248,19 @@ def hello(name: str) -> str:
 # Tools in registry
 # ---------------------------------------------------------------------------
 
-def test_generate_agents_md_tool_in_registry(tmp_path):
-    """generate_agents_md tool should be registered."""
-    registry = ToolRegistry(tmp_path)
-    assert "generate_agents_md" in registry.names()
+def test_removed_meta_tools_not_in_registry(tmp_path):
+    """Memory/meta tools are gone from the default registry."""
+    from ggufloader.core.agent.tool_registry import ToolRegistry
+    names = ToolRegistry(tmp_path).names()
+    assert "remember" not in names
+    assert "recall" not in names
+    assert "forget" not in names
+    assert "record_correction" not in names
+    assert "generate_agents_md" not in names
+    assert "export_session" not in names
+    assert "batch_execute" not in names
+    assert "python_interpreter" not in names
 
-
-def test_export_session_tool_in_registry(tmp_path):
-    """export_session tool should be registered."""
-    registry = ToolRegistry(tmp_path)
-    assert "export_session" in registry.names()
-
-
-def test_generate_agents_md_tool_executes(tmp_path):
-    """generate_agents_md tool should work."""
-    from ggufloader.core.agent.tool_registry import GenerateAgentsMdTool
-    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'")
-
-    tool = GenerateAgentsMdTool(tmp_path)
-    result = tool.execute({"force": True})
-    assert result["status"] == "success"
-    assert "AGENTS.md" in result["result"]
-
-
-# ---------------------------------------------------------------------------
-# GraphAgent wiring
-# ---------------------------------------------------------------------------
 
 def test_graph_agent_has_lightweight_core(tmp_path):
     """GraphAgent should have lightweight core attributes."""
@@ -291,7 +278,10 @@ def test_graph_agent_has_lightweight_core(tmp_path):
 def test_graph_agent_process_returns_response(tmp_path):
     """Processing a message should return a response."""
     def fake_llm(prompt, **kwargs):
-        return '{"tool_calls": [], "answer": "Hello!"}'
+        fake_llm.n = getattr(fake_llm, "n", 0) + 1
+        if fake_llm.n == 1:
+            return '{"goal": "g", "steps": [{"step": 1, "description": "Answer", "tool": null, "parameters": {}, "depends_on": []}]}'
+        return "Hello!"
 
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path, max_steps=2, system_prompt='You are a test assistant for unit tests.')
     result = agent.process(user_message="Hi")
@@ -307,16 +297,15 @@ def test_graph_agent_total_tool_count(tmp_path):
     from ggufloader.core.agent.tool_registry import ToolRegistry as TR
     agent = GraphAgent(llm=fake_llm, workspace=tmp_path, tools=TR(tmp_path), system_prompt='You are a test assistant for unit tests.')
     names = agent.tools.names()
-    # Phase 2 tools
+    # Core file/dev tools
     assert "glob" in names
     assert "move_file" in names
-    # Phase 3 tools
-    assert "remember" in names
-    assert "recall" in names
-    assert "forget" in names
-    # Phase 4 tools
-    assert "record_correction" in names
-    # Phase 6 tools
-    assert "generate_agents_md" in names
-    assert "export_session" in names
+    assert "run_python" in names
+    # Memory/meta tools were removed from the single-model catalog
+    assert "remember" not in names
+    assert "recall" not in names
+    assert "forget" not in names
+    assert "record_correction" not in names
+    assert "generate_agents_md" not in names
+    assert "export_session" not in names
     agent.close()

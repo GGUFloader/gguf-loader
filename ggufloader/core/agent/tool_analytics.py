@@ -169,13 +169,6 @@ class ToolAnalytics:
 
         # Check for missing batch opportunities
         writes = self._by_tool.get("write_file", [])
-        edits = self._by_tool.get("edit_file", [])
-        if len(writes) + len(edits) > 3:
-            suggestions.append(
-                f"Made {len(writes)} writes and {len(edits)} edits — "
-                "consider using batch_execute to combine operations"
-            )
-
         return suggestions
 
     def get_tool_rankings(self) -> List[Dict[str, Any]]:

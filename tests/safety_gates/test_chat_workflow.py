@@ -12,10 +12,17 @@ def test_family_has_required_keys():
         assert "archs" in profile
         assert isinstance(profile["archs"], tuple)
 
-def test_mistral_no_system():
+def test_single_pinned_family():
+    # Single-model app: exactly one family profile (gemma4) plus the
+    # generic fallback for non-Gemma files.
+    assert len(FAMILY_PROFILES) == 1
+    assert FAMILY_PROFILES[0]["family"] == "gemma4"
+    assert FAMILY_PROFILES[0]["supports_system_prompt"] is True
+
+def test_no_mistral_family():
+    # Mistral-specific handling was removed with multi-family detection.
     mistral = [p for p in FAMILY_PROFILES if "mistral" in p["family"]]
-    assert len(mistral) > 0
-    assert mistral[0]["supports_system_prompt"] is False
+    assert len(mistral) == 0
 
 def test_prompt_builder_produces_messages():
     builder = PromptBuilder()

@@ -1,21 +1,15 @@
-"""Model-family detection and automatic chat configuration.
+"""Single-model (Gemma 4 12B Q4_K_M) configuration.
 
-Reads a GGUF file's metadata header (pure Python, no model load - the
-header sits before the tensor data) to identify the model family:
+The app is pinned to ONE model: Google Gemma 4 12B Instruct in Q4_K_M.
+Multi-family auto-detection was removed; the only family profile is
+``gemma4`` (see ``ggufloader/config/model_families.json``). GGUF metadata
+is still read (pure Python, header only) for the file's real context
+length, layer count and quant, so context/offload planning stays accurate
+for the pinned target. Files that are not Gemma 4 are detected as
+``generic`` and rejected at the model load gate.
 
-    general.architecture  e.g. "lfm2", "qwen3", "llama", "gemma3"
-    general.name          e.g. "LFM2.5-8B-Instruct"
-    general.basename      e.g. "LFM2.5-8B-Instruct"
-
-and picks a matching profile: sampling parameters plus an optional
-system-prompt suggestion. Filename substrings are the fallback when
-metadata is missing/unreadable. The user's ``model_params.json``
-overrides always win over the automatic profile.
-
-Reference sources for per-family sampling: official model cards /
-Ollama-baked parameters (LiquidAI LFM2.5: 0.2/80/1.05; Qwen3: 0.6/0.95/20;
-Meta Llama-3.x: 0.6/0.9; DeepSeek-R1-Distill: 0.6/0.95;
-Google Gemma-3: 1.0/0.95/64; gpt-oss: 1.0/1.0).
+Sampling follows the official Gemma 4 model card (1.0 / 0.95 / 64); the
+agent role still caps temperature/top_k for reliable structured output.
 """
 
 from __future__ import annotations
@@ -266,57 +260,33 @@ def _load_family_profiles() -> List[Dict[str, Any]]:
         return _FALLBACK_PROFILES
 
 
-# Fallback profiles when JSON is unavailable
+# Fallback profile when the JSON is unavailable: the single pinned
+# Gemma 4 12B Instruct target (mirrors ggufloader/config/model_families.json).
 FALLBACK_PROFILES = [
     {
-        "family": "liquid-lfm",
-        "label": "LiquidAI LFM2",
-        "archs": ("lfm2",),
-        "names": ("lfm2", "lfm 2"),
+        "family": "gemma4",
+        "label": "Google Gemma 4 12B Instruct",
+        "archs": ("gemma4",),
+        "names": ("gemma-4", "gemma4"),
         "version_patterns": (),
         "supports_system_prompt": True,
-        "temperature": 0.2, "top_k": 80, "top_p": 0.9,
-        "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
-    },
-    {
-        "family": "qwen3",
-        "label": "Qwen3",
-        "archs": ("qwen3", "qwen3moe"),
-        "names": ("qwen3",),
-        "version_patterns": (),
-        "supports_system_prompt": True,
-        "temperature": 0.6, "top_k": 20, "top_p": 0.95,
-        "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
-    },
-    {
-        "family": "llama3",
-        "label": "Meta Llama 3.x",
-        "archs": ("llama",),
-        "names": ("llama-3", "llama3", "meta-llama-3"),
-        "version_patterns": ("llama-3", "llama3", "-3-", "llama4"),
-        "supports_system_prompt": True,
-        "temperature": 0.6, "top_k": 40, "top_p": 0.9,
-        "repeat_penalty": 1.1, "min_p": 0.0, "max_tokens": 4096,
-    },
-    {
-        "family": "mistral",
-        "label": "Mistral",
-        "archs": (),
-        "names": ("mistral",),
-        "version_patterns": (),
-        "supports_system_prompt": False,
-        "temperature": 0.7, "top_k": 40, "top_p": 0.9,
-        "repeat_penalty": 1.1, "min_p": 0.0, "max_tokens": 4096,
-    },
-    {
-        "family": "gpt-oss",
-        "label": "OpenAI gpt-oss",
-        "archs": ("gpt_oss",),
-        "names": ("gpt-oss", "gptoss"),
-        "version_patterns": (),
-        "supports_system_prompt": True,
-        "temperature": 1.0, "top_k": 40, "top_p": 1.0,
-        "repeat_penalty": 1.05, "min_p": 0.0, "max_tokens": 4096,
+        "system_prompt": (
+            "You are a helpful file assistant running on Gemma 4 12B. You read "
+            "files, search the workspace, run commands, and help users "
+            "understand and modify their project.\n\n"
+            "Respond with ONLY a JSON object (no markdown):\n"
+            '{"reasoning": "what you plan to do", "estimated_steps": 3, '
+            '"tool_calls": [{"tool": "tool_name", "parameters": {}}], "answer": ""}\n\n'
+            "When answering:\n"
+            '{"reasoning": "summary", "estimated_steps": 0, "tool_calls": [], '
+            '"answer": "your answer"}\n\n'
+            "Rules: tool_calls and answer are mutually exclusive. Think step by "
+            "step, keep reasoning concise, and always finish with either the "
+            "tool call you need or the final answer."
+        ),
+        "temperature": 1.0, "top_k": 64, "top_p": 0.95,
+        "repeat_penalty": 1.0, "min_p": 0.0, "max_tokens": 8192,
+        "context_length": 131072,
     },
 ]
 
@@ -343,12 +313,10 @@ GENERIC_PROFILE = {
 def detect_family(metadata: Dict[str, str], model_path: str | Path) -> Tuple[Dict[str, Any], str]:
     """Return ``(profile, how_detected)`` for the given model.
 
-    Detection order (version-aware, Ollama-style):
-    1. Version patterns against the name+arch (e.g. llama-2 vs llama-3 both
-       share the "llama" GGUF arch - the version in the filename decides)
-    2. GGUF architecture string (e.g. "qwen2", "gemma3"), longest pattern first
-    3. Filename/metadata name substring match
-    4. Fallback to generic profile (never crashes)
+    Single-model app: only the ``gemma4`` family exists. Gemma 4 files
+    (GGUF arch ``gemma4`` or a gemma-4/gemma4 name) resolve to the pinned
+    profile; everything else falls through to the conservative generic
+    profile and is rejected at the model load gate.
     """
     arch = (metadata.get("architecture") or "").lower()
     name = (

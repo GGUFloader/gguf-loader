@@ -60,10 +60,12 @@ actionable errors for the usual setup problems:
 
 ## First Launch
 
-1. **Get a model** — browse GGUF models on
-   [Hugging Face](https://huggingface.co/models?library=gguf) (e.g. Mistral,
-   Llama, DeepSeek, Qwen).
-2. Click **Load Model**, pick your `.gguf` file, wait for it to load.
+1. **Get the model** — download the Gemma 4 12B Instruct Q4_K_M GGUF from
+   [Hugging Face](https://huggingface.co/models?library=gguf&query=gemma+4+12b).
+   This build is pinned to that one model; other `.gguf` files are rejected
+   at load time.
+2. Click **Load Model**, pick your Gemma 4 12B Q4_K_M `.gguf` file, wait for
+   it to load.
 3. Chat in the main panel, or click the **floating chat button** for a
    desktop-level chat window.
 

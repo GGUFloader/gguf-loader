@@ -139,6 +139,8 @@ def test_estimate_memory_no_layers():
 # ---------------------------------------------------------------------------
 
 def test_router_inspect_llama_model(tmp_path):
+    """Non-Gemma files are no longer tuned: they resolve to generic and are
+    rejected at the load gate (single-model app pinned to Gemma 4)."""
     kvs = (
         _kv_str("general.architecture", "llama")
         + _kv_str("general.name", "Llama-3-8B-Instruct")
@@ -152,7 +154,7 @@ def test_router_inspect_llama_model(tmp_path):
     profile = router.inspect(str(p))
 
     assert profile.architecture == "llama"
-    assert profile.family == "llama3"
+    assert profile.family == "generic"
     assert profile.trained_context == 8192
     assert profile.total_layers == 32
     assert profile.is_embedding_model is False
@@ -293,14 +295,6 @@ def test_route_agent_overrides_temperature():
     assert config.repeat_penalty >= 1.1
 
 
-def test_route_code_allows_higher_temperature():
-    router = ModelRouter()
-    profile = ModelProfile(family_params={"temperature": 0.2})
-    config = router.route(profile, ModelRole.CODE)
-
-    assert config.temperature >= 0.4  # code mode raises temp
-
-
 def test_route_reasoning_thinking_budget():
     router = ModelRouter()
     profile = ModelProfile(is_thinking_model=True)
@@ -309,64 +303,12 @@ def test_route_reasoning_thinking_budget():
     assert config.max_tokens >= 16384  # thinking models get bigger budget
 
 
-def test_route_embed_has_zero_temperature():
-    router = ModelRouter()
-    profile = ModelProfile()
-    config = router.route(profile, ModelRole.EMBED)
-
-    assert config.temperature == 0.0
-    assert config.max_tokens == 0
-
-
 def test_route_capped_to_trained_context():
     router = ModelRouter()
     profile = ModelProfile(trained_context=2048)
     config = router.route(profile, ModelRole.CHAT)
 
     assert config.max_tokens <= 2048 - 256
-
-
-# ---------------------------------------------------------------------------
-# Suggest role
-# ---------------------------------------------------------------------------
-
-def test_suggest_role_embedding():
-    router = ModelRouter()
-    profile = ModelProfile(is_embedding_model=True)
-    assert router.suggest_role(profile) == ModelRole.EMBED
-
-
-def test_suggest_role_thinking():
-    router = ModelRouter()
-    profile = ModelProfile(is_thinking_model=True)
-    assert router.suggest_role(profile) == ModelRole.REASONING
-
-
-def test_suggest_role_vision():
-    router = ModelRouter()
-    profile = ModelProfile(supports_vision=True)
-    assert router.suggest_role(profile) == ModelRole.MULTIMODAL
-
-
-def test_suggest_role_default_chat():
-    router = ModelRouter()
-    profile = ModelProfile()
-    assert router.suggest_role(profile) == ModelRole.CHAT
-
-
-# ---------------------------------------------------------------------------
-# Can serve role
-# ---------------------------------------------------------------------------
-
-def test_can_serve_role():
-    router = ModelRouter()
-    embed_profile = ModelProfile(is_embedding_model=True)
-    chat_profile = ModelProfile()
-
-    assert router.can_serve_role(embed_profile, ModelRole.EMBED) is True
-    assert router.can_serve_role(embed_profile, ModelRole.CHAT) is False
-    assert router.can_serve_role(chat_profile, ModelRole.CHAT) is True
-    assert router.can_serve_role(chat_profile, ModelRole.AGENT) is True
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +325,7 @@ def test_quick_profile(tmp_path):
     qp = router.quick_profile(str(p))
 
     assert qp["architecture"] == "llama"
-    assert qp["family"] == "llama3"
+    assert qp["family"] == "generic"  # only gemma4 is a real family now
     assert qp["is_embedding"] is False
     assert "filename" in qp
 
@@ -400,7 +342,7 @@ def test_router_handles_minimal_gguf(tmp_path):
     profile = router.inspect(str(p))
 
     assert profile.architecture == "qwen3"
-    assert profile.family == "qwen3"
+    assert profile.family == "generic"  # only gemma4 is a real family now
     assert profile.total_layers == 0  # not set
     assert profile.trained_context == 0
 
@@ -487,13 +429,19 @@ def test_load_request_nullable_auto_contract():
 
 
 def test_inspect_cache_invalidated_on_mtime_change(tmp_path):
+    import time
     from ggufloader.core.router import ModelRouter
     r = ModelRouter(system=SystemProfile(ram_gb=16.0, vram_gb=0.0,
                                          has_gpu_support=False))
     kvs = _kv_str("general.architecture", "llama") + _kv_u32("llama.block_count", 32)
     p = _create_model_file(tmp_path, "swap.gguf", kvs, kv_count=2)
     prof1 = r.inspect(str(p))
-    # Rewrite the file with different metadata (same path/size-ish).
+    # Rewrite the file with different metadata (same path/size-ish). The
+    # equal-size rewrite is intentional (cache must key on mtime, not size);
+    # on coarse-timestamp filesystems (NTFS ~100 ns ticks) two rapid writes
+    # can share a tick, so settle first to make the mtime deterministically
+    # change.
+    time.sleep(0.05)
     kvs2 = _kv_str("general.architecture", "qwen2") + _kv_u32("qwen2.block_count", 28)
     p.write_bytes(_make_gguf(kvs2, kv_count=2) + b"\x00" * 64)
     prof2 = r.inspect(str(p))

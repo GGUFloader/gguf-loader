@@ -50,14 +50,20 @@ def test_research_blocks_python_aliases() -> None:
     """The read-only research preset blocks every code-execution alias."""
     from ggufloader.core.agent.presets import PRESETS
     blocked = set(PRESETS["research"].blocked_tools)
-    assert {"python_interpreter", "batch_execute", "move_file"} <= blocked
+    assert {"write_file", "edit_file", "run_command", "run_python", "git", "move_file"} <= blocked
+    # The deprecated aliases no longer exist — nothing left to block
+    assert "python_interpreter" not in blocked
+    assert "batch_execute" not in blocked
 
 
 def test_code_review_blocks_python_aliases() -> None:
     """The read-only code_review preset blocks every code-execution alias."""
     from ggufloader.core.agent.presets import PRESETS
     blocked = set(PRESETS["code_review"].blocked_tools)
-    assert {"python_interpreter", "batch_execute", "move_file"} <= blocked
+    assert {"write_file", "edit_file", "run_command", "run_python", "git", "move_file"} <= blocked
+    # The deprecated aliases no longer exist — nothing left to block
+    assert "python_interpreter" not in blocked
+    assert "batch_execute" not in blocked
 
 
 def test_prompt_lists_live_tools() -> None:
@@ -70,22 +76,20 @@ def test_prompt_lists_live_tools() -> None:
         system_prompt_override="You are an assistant.",
     )
     prompt = pb.system_prompt()
-    assert "batch_execute" in prompt or "move_file" in prompt
+    assert "move_file" in prompt
+    assert "batch_execute" not in prompt
+    assert "python_interpreter" not in prompt
+    assert "remember" not in prompt
 
 
-def test_python_interpreter_is_deprecated_alias() -> None:
-    """python_interpreter now aliases run_python (approval-gated, one schema)."""
-    from ggufloader.core.agent.tool_registry import RunPythonTool, PythonInterpreterTool
-    assert issubclass(PythonInterpreterTool, RunPythonTool)
-    assert PythonInterpreterTool.name == "python_interpreter"
-    # Same approval gate as run_python - the sandboxed no-approval
-    # interpreter is gone (it was a fake sandbox with full interpreter
-    # access).
-    import warnings
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        registry = ToolRegistry(tempfile.mkdtemp())
-        result = registry.execute("python_interpreter", {"code": "print(1)"})
-    assert result["status"] == "success"
-    assert any(issubclass(w.category, DeprecationWarning) for w in caught)
-    assert registry.requires_approval("python_interpreter", {"code": "print(1)"}) is True
+def test_no_python_interpreter_alias_remains() -> None:
+    """The deprecated python_interpreter alias is gone from the registry;
+    run_python is the single python path and stays approval-gated."""
+    registry = ToolRegistry(tempfile.mkdtemp())
+    names = registry.names()
+    assert "python_interpreter" not in names
+    assert "batch_execute" not in names
+    assert "run_python" in names
+    result = registry.execute("python_interpreter", {"code": "print(1)"})
+    assert result["status"] == "error"  # unknown tool — fails loudly
+    assert registry.requires_approval("run_python", {"code": "print(1)"}) is True

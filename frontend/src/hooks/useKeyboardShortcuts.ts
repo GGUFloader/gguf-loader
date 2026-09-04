@@ -23,8 +23,7 @@ export function useKeyboardShortcuts() {
       { id: 'toggle-right', label: 'Toggle Right Panel', description: 'Show/hide right panel', category: 'View', keys: ['Cmd', 'Shift', ']'], action: toggleRightPanel },
       { id: 'panel-files', label: 'Open Files', description: 'Switch to file explorer', category: 'Navigation', keys: ['Cmd', '1'], action: () => setRightPanelTab('files') },
       { id: 'panel-dash', label: 'Open Dashboard', description: 'Switch to dashboard', category: 'Navigation', keys: ['Cmd', '2'], action: () => setRightPanelTab('dashboard') },
-      { id: 'panel-models', label: 'Open Models', description: 'Switch to model catalog', category: 'Navigation', keys: ['Cmd', '3'], action: () => setRightPanelTab('catalog') },
-      { id: 'panel-templates', label: 'Open Templates', description: 'Switch to templates', category: 'Navigation', keys: ['Cmd', '4'], action: () => setRightPanelTab('templates') },
+      { id: 'panel-templates', label: 'Open Templates', description: 'Switch to templates', category: 'Navigation', keys: ['Cmd', '3'], action: () => setRightPanelTab('templates') },
     ]
 
     for (const s of defaults) {
