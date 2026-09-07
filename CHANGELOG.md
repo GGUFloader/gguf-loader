@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.3.0] - 2026-09-04
+
+### The single-model agent build
+
+GGUF Loader is now a **single-model app optimized for Google Gemma 4 12B
+Instruct (Q4_K_M)**. All multi-model detection, family profiles, and per-model
+prompts were removed, and the agent flow was rebuilt around a strict
+planner-driven LangGraph graph.
+
+### Added
+- **Auto-load at startup** - the app scans its `models/` folder (plus the
+  last-used model folder) and loads the pinned GGUF in the background; the
+  manual Load Model step is gone.
+- **Model download in the header chip** - when the pinned model is missing the
+  chip offers a download with live progress and auto-loads on completion;
+  first-launch compatibility dialog.
+- **Planner reasoning streams live** ("Planning...") instead of a silent wait.
+- **Inline Codebuff-style process UI** - plan steps, tool calls, and results
+  render in the chat above each answer; the right-hand progress panel was
+  removed.
+- **Launch modes** in `launch.bat` / `launch.sh`: browser (default), Electron
+  desktop, and production (stale `frontend/dist` is rebuilt automatically).
+
+### Changed
+- **Strictly plan-driven agent** - the planner answers directly when no tool
+  is needed and writes a step-by-step plan otherwise; the reactive ReAct
+  fallback was removed. Every turn ends with the plan's answer step.
+- **Tool registry pruned** to the 10 workspace tools the agent uses
+  (memory/meta tools removed); `search_files`/`glob` walks are hardened
+  against huge generated assets.
+- Sampling guardrails tuned for Gemma 4 12B Q4_K_M (`n_ctx=8192` default).
+- Docs overhaul - AGENTS.md and ARCHITECTURE.md rewritten for the current
+  stack; multi-model/Qt-era docs marked historical; dead links fixed.
+
+### Fixed
+- Stray tool-call JSON envelopes are scrubbed from the live stream and the
+  final reply (backend + transport level), with regression tests.
+- "Planning..." wait status no longer persists as a permanent timeline row.
+- WebSocket handlers read live store state, so completed answers always
+  replace the streamed text (no duplication, no stale bubbles).
+
+### Notes
+- `model_families.json` now contains a single family (`gemma4`, Q4_K_M, 12B).
+  A restart is required to apply the new configuration after upgrading.
+
+---
+
 ## [3.0.0] - 2026-08-28
 
 ### Agent Hardware-Aware Tuning

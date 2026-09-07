@@ -1,5 +1,12 @@
 # Agent UI Deep Comparison — Source-Code Verified
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend and
+> FastAPI backend**, running a strictly **plan-driven LangGraph agent** (no
+> reactive loop, no multi-model family tuning). UI and architecture details
+> below may be outdated.
+
 > Based on reading actual source code from: aider/aider/io.py (1191 LOC),
 > aider/commands.py (1712 LOC), sweagent/inspector_cli.py (493 LOC),
 > sweagent/inspector/server.py (354 LOC), openhands/src/components (React),

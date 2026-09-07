@@ -96,7 +96,11 @@ interface ChatState {
   progressSteps: ProgressStep[]
   currentAnnouncement: string
   activeSessionId: string | null
+  /** Bumped every time a message is persisted to the active session, so the
+   *  session list can live-refresh message counts and timestamps. */
+  sessionsRevision: number
   setActiveSessionId: (id: string | null) => void
+  bumpSessionsRevision: () => void
   addMessage: (msg: ChatMessage) => void
   appendToMessage: (id: string, content: string) => void
   setThinking: (id: string, thinking: string) => void
@@ -139,7 +143,9 @@ function persistAssistantReply(content: string, steps?: unknown[]) {
   const st = useChatStore.getState()
   if (st.activeSessionId && content) {
     import('../api/client').then(({ sessionApi }) =>
-      sessionApi.appendMessage(st.activeSessionId!, 'assistant', content, steps).catch(() => {})
+      sessionApi.appendMessage(st.activeSessionId!, 'assistant', content, steps)
+        .then(() => useChatStore.getState().bumpSessionsRevision())
+        .catch(() => {})
     )
   }
 }
@@ -157,8 +163,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   progressSteps: [],
   currentAnnouncement: '',
   activeSessionId: null,
+  sessionsRevision: 0,
 
   setActiveSessionId: (id) => set({ activeSessionId: id }),
+  bumpSessionsRevision: () => set((s) => ({ sessionsRevision: s.sessionsRevision + 1 })),
 
   addMessage: (msg) => {
     set((s) => ({ messages: [...s.messages, msg] }))
@@ -166,7 +174,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const state = get()
     if (state.activeSessionId && (msg.role === 'user' || msg.role === 'assistant') && msg.content) {
       import('../api/client').then(({ sessionApi }) => {
-        sessionApi.appendMessage(state.activeSessionId!, msg.role, msg.content).catch(() => {})
+        sessionApi.appendMessage(state.activeSessionId!, msg.role, msg.content)
+          .then(() => useChatStore.getState().bumpSessionsRevision())
+          .catch(() => {})
       })
     }
   },
@@ -282,6 +292,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const store = get()
     // Clear progress steps from previous turn
     store.clearProgressSteps()
+
+    // Ensure a session exists BEFORE the user message is added, so the
+    // auto-save in addMessage persists it (and it appears in the session
+    // list). Without this, chatting straight from a fresh app state (no
+    // "New task" / session selected) would save nothing.
+    if (!get().activeSessionId) {
+      try {
+        const { sessionApi } = await import('../api/client')
+        const session = await sessionApi.create()
+        useChatStore.setState({ activeSessionId: session.id })
+      } catch {
+        // Offline / API failure - still let the chat run unsaved.
+      }
+    }
+
     store.addMessage({ id: `user_${Date.now()}`, role: 'user', content: text, timestamp: Date.now() })
 
     // Load settings from localStorage

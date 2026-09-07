@@ -1,5 +1,12 @@
 # 🧠 Ollama vs LM Studio vs GGUF Loader: A Comprehensive Comparison
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend and
+> FastAPI backend**, running a strictly **plan-driven LangGraph agent** (no
+> reactive loop, no multi-model family tuning). UI and architecture details
+> below may be outdated.
+
 When it comes to running large language models (LLMs) locally, three prominent tools have emerged: **Ollama**, **LM Studio**, and **GGUF Loader**. Each offers unique features tailored to different user needs. This guide provides an in-depth comparison to help you choose the right tool for your requirements.
 
 ---

@@ -29,6 +29,8 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+_cpu_venv/
+_gpu_venv/
 
 # IDE
 .vscode/

@@ -1,43 +1,49 @@
 # Frequently Asked Questions (FAQ) About GGUF Loader
 
-This FAQ answers common questions to help you troubleshoot and get the best experience with GGUF Loader.
+This FAQ answers common questions about GGUF Loader and how to get the best
+experience with the current build.
 
 ## What is GGUF Loader?
 
-GGUF Loader is an open-source local AI model loader and assistant that supports GGUF-format models, enabling offline AI chats with features like a floating button and extensible addons.
+GGUF Loader is a privacy-first desktop app that runs **one large language
+model fully locally** - Google **Gemma 4 12B Instruct (Q4_K_M)**. It pairs a
+streaming chat with an **agent mode** that plans and executes multi-step file
+tasks (reading, searching, writing, editing, running commands, git) inside a
+workspace folder you choose. Nothing leaves your computer.
 
-## How do I load a model?
+## Which model do I need?
 
-Click the **Load Model** button in GGUF Loader.  
-A window will open allowing you to select the **folder** containing your GGUF model files.  
-Select the folder and click **OK** — the model will then load.
+The app is pinned to the Gemma 4 12B Instruct **Q4_K_M** GGUF
+(`gemma-4-12B-it-Q4_K_M.gguf`, roughly 8 GB). Other GGUF files are rejected at
+load time - this build is deliberately tuned for that one model.
 
-## How does the floating button work?
+## How do I load the model?
 
-The floating button **automatically activates as soon as the model loads**.  
-Whenever you **select any text anywhere on your desktop**, the floating button appears near the selection.  
-Click it to chat instantly with your local AI assistant.
+You usually do not need to do anything. The app **auto-loads** the pinned
+model on startup by scanning its `models/` folder (plus the folder you last
+used). If the file is not on disk, the **model chip in the header** downloads
+it with live progress and loads it when done.
 
-## What if the floating button doesn't appear?
+## Can I chat and ask the agent to do things?
 
-- Confirm that a model is loaded — the floating button only works when a model is active.  
-- Check your operating system permissions for overlay or accessibility features.  
-- Restart GGUF Loader if needed.
+Yes. Plain chat answers questions directly. Switch to **Agent Mode**
+(Ctrl/Cmd + Shift + A) to give the agent a workspace folder - it will plan the
+task, run the steps with sandboxed tools, and show the whole process inline
+before giving you a clean final answer. Commands, code execution, and git
+writes ask for your **Allow/Deny** approval first.
 
-## Can I add my own addons?
+## How much RAM do I need?
 
-Yes! GGUF Loader supports an addon system to extend features.  
-See the [Addon Guide](creating-addons-in-gguf-loader.md) for instructions on creating and installing addons.
+About 8-10 GB of free RAM for the 12B model to run smoothly. GPU acceleration
+(NVIDIA CUDA or Apple Metal) is optional and available under Settings >
+Hardware.
 
-## How do I enable GPU acceleration?
+## Can I extend GGUF Loader with addons?
 
-GPU acceleration requires configuring compatible backends such as CUDA or OpenCL.  
-Refer to the advanced setup wiki page for detailed instructions.
+The right-hand panel is plugin-based. Developers can extend it - see the
+[Addon API](gguf-loader-addon-api.md) and
+[Creating Addons](creating-addons-in-gguf-loader.md) guides.
 
 ## Where can I get help or report issues?
 
-Join the community Discord or open an issue on the GGUF Loader GitHub repository.
-
----
-
-If your question isn't listed here, feel free to add it or contact the maintainers directly.
+Open an issue or discussion on the [GGUF Loader GitHub repository](https://github.com/GGUFloader/gguf-loader), or read the full [FAQ](faq.md) and [User Guide](user-guide.md).

@@ -1,160 +1,202 @@
 # User Guide
 
-Complete guide to using GGUF Loader.
+Complete guide to using **GGUF Loader** - a privacy-first desktop app that runs
+one large language model fully locally: Google **Gemma 4 12B Instruct
+(Q4_K_M)**. The interface is a modern React app on a FastAPI backend, and the
+built-in **agent** can plan and execute multi-step file tasks inside a
+workspace folder you choose.
+
+---
 
 ## Getting Started
 
 ### 1. Launch the Application
 
-Choose your method:
-- **Windows Executable:** Double-click `GGUFLoader.exe`
-- **Installed via pip:** Run `ggufloader` in terminal
-- **From source:** Run `launch.bat` (Windows) or `./launch.sh` (Linux/macOS)
+- **Windows** - double-click `launch.bat`, then pick a mode: **1** Browser
+  (default), **2** Electron desktop window, or **3** Production (built UI).
+- **Linux / macOS** - run `./launch.sh` (same choices).
+- **pip users** - `pip install ggufloader` then run `ggufloader`.
+
+The launcher creates a virtualenv, installs Python and Node dependencies, and
+starts everything for you. See the [Installation Guide](installation.md) for
+details.
 
 ### 2. Load a Model
 
-1. Click the **Load Model** button
-2. Browse to your `.gguf` model file
-3. Wait for the model to load (progress shown in status bar)
-4. Once loaded, you're ready to chat!
+Loading is **automatic** - there is no manual "Load Model" step:
+
+1. On startup the app scans the `models/` folder (plus the folder you last used)
+   for the pinned file **`gemma-4-12B-it-Q4_K_M.gguf`** and loads it in the
+   background.
+2. The **model chip in the top-right header** shows the state:
+   - `No model` - the file was not found. **Click the chip** to download the
+     pinned model (progress shows right in the chip), or use the picker to
+     browse to a folder that contains it.
+   - a percentage while downloading - it auto-loads when finished.
+   - the loaded model name once ready.
+
+This build is pinned to Gemma 4 12B Q4_K_M: other GGUF files are rejected at
+load time with a clear message.
 
 ### 3. Start Chatting
 
-1. Type your message in the input box
-2. Press Enter or click **Send**
-3. The AI will respond based on the loaded model
+Type in the message box at the bottom and press **Enter** to send
+(**Shift+Enter** for a new line). Replies stream in token by token.
 
-## Features
+- Plain **chat mode** answers questions directly.
+- Press **Ctrl/Cmd + Shift + A** (or use the mode toggle) to switch to
+  **Agent Mode** for file tasks.
 
-### System Prompts
+---
 
-Pre-configured prompts for different use cases:
+## Agent Mode
 
-- **Bilingual Assistant** - Responds in your language
-- **Creative Writer** - For creative writing tasks
-- **Code Expert** - Programming assistance
-- **Professional Translator** - Translation between languages
+Agent Mode turns the local model into a working assistant for a **workspace
+folder** you choose - a project, a documentation set, any folder. Every turn
+goes through a **planner**:
 
-Select from the dropdown menu before chatting.
+1. **Plan** - the planner reads your prompt and decides whether tools are
+   needed. For a plain question it answers directly. For a task it writes a
+   step-by-step plan and streams its reasoning live ("Planning...").
+2. **Execute** - the steps run one at a time, in order: list folders, read
+   files, search, create/edit/move files, run commands, use git. Each step's
+   result feeds the next, and the whole process is shown **inline in the chat**
+   above the reply.
+3. **Answer** - the plan's final step synthesizes the results into a normal,
+   clean markdown reply.
 
-### Generation Settings
+You see exactly what the agent is doing - which tool it called, what it found,
+and which step it is on - like watching a human assistant work.
 
-Customize AI behavior:
+### Choosing a Workspace
 
-- **Temperature** (0.1-1.0) - Controls creativity
-  - Lower = More focused and deterministic
-  - Higher = More creative and varied
-- **Max Tokens** - Maximum response length
-- **Top P** - Nucleus sampling parameter
-- **Top K** - Top-k sampling parameter
+When you enable Agent Mode you choose (or confirm) the **workspace folder**.
+Every tool is sandboxed to that root: the agent can read and write files there,
+but cannot touch anything outside it.
 
-### Themes
+### Approvals
 
-Switch between visual themes:
-- Light (default)
-- Dark
-- Persian Classic
+Some tools are sensitive and pause for an **Allow / Deny** card before they
+run:
 
-### Chat Management
+- `run_command` (shell commands)
+- code execution
+- git **write** operations (commits, resets, pushes)
 
-- **Clear Chat** - Remove all messages
-- **Export Chat** - Save conversation to file
-- **Copy Messages** - Copy individual messages
+Read-only git and all file reading/searching run freely. The run waits for your
+choice - approve to continue, deny to skip that call.
 
-## Smart Floating Assistant
+### Sessions
 
-The Smart Floating Assistant works globally across all applications.
+Every conversation is a **session** (left panel: start a new one, switch, or
+resume). Agent runs are checkpointed to SQLite, so a session survives app
+restarts and resumes where it left off.
 
-### How to Use
+---
 
-1. Select any text in any application
-2. A floating ✨ button appears near your cursor
-3. Click the button
-4. Choose an action:
-   - **Summarize** - Get a concise summary
-   - **Comment** - Get AI commentary
-5. View results in the popup window
+## Advanced Search (Find Paragraph)
 
-### Requirements
+The **Advanced Search** panel (right panel, magnifier icon) finds the passage
+that answers a question - in a single file or across a folder - without any
+vector database. The agent plans which files to read (read-only tools only) and
+shows live progress while it scans.
 
-- A model must be loaded in the main application
-- The addon must be enabled (check the **Addons** menu in the main window)
+---
 
-## Addon System
+## Right-hand Panel
 
-### Managing Addons
+The right panel hosts the app's tools. The default tabs include:
 
-1. Open the **Addons** menu in the menu bar to see installed addons
-2. Click an addon name to open its interface
-3. Use **Refresh Addons** to reload them
+| Tab | What it does |
+|---|---|
+| **Files** | Browse the workspace tree, open and view files |
+| **Dashboard** | Workspace overview and recent activity |
+| **Templates** | Project/file templates |
+| **Search** | Advanced Search - question-based passage finding |
+| **Workspaces** | Manage and switch workspace folders |
 
-### Installing Addons
+Open/close the panel with **Ctrl/Cmd + Shift + ]** and jump to Files /
+Dashboard / Templates with **Ctrl/Cmd + 1 / 2 / 3**.
 
-Place addon folders in the `addons/` directory. Each addon should have:
-```
-addons/
-└── your_addon/
-    ├── __init__.py
-    └── main.py
-```
+---
 
-See [Addon Development Guide](addon-development.md) for details.
+## Settings
+
+Open **Settings** (gear icon in the header). Tabs:
+
+- **Model** - model file location and loading options, sampling defaults
+- **Providers** - optional API providers alongside the local model
+- **Agent** - agent preset (Research, Code Review, Refactor, Debug, ...) and
+  workspace/tool permissions
+- **Hardware** - GPU support (install the CUDA or Metal build, see GPU below)
+- **Appearance** - dark/light theme, accent color, font size
+- **Keyboard** - shortcut reference
+- **Plugins** - built-in and third-party panels for the right-hand side
+
+---
+
+## GPU Acceleration
+
+The app runs on CPU out of the box. For an NVIDIA GPU (Windows/Linux) or Apple
+Silicon (macOS), open **Settings > Hardware** and install GPU support - it
+installs the accelerated `llama-cpp-python` build with live status and asks you
+to restart. The scripts `scripts/install_gpu_llama.bat` /
+`install_gpu_llama.sh` do the same from the terminal.
+
+---
 
 ## Keyboard Shortcuts
 
-- **Enter** - Send message
-- **Shift+Enter** - New line in input
-- **Ctrl+L** - Clear chat
-- **Ctrl+K** - Load model
+| Shortcut (Ctrl = Cmd on macOS) | Action |
+|---|---|
+| `Ctrl + K` | Command palette |
+| `Ctrl + Shift + A` | Toggle Agent Mode |
+| `Ctrl + Shift + L` | Clear chat |
+| `Ctrl + Shift + [` | Show/hide left panel |
+| `Ctrl + Shift + ]` | Show/hide right panel |
+| `Ctrl + 1 / 2 / 3` | Right panel: Files / Dashboard / Templates |
+| `Enter` | Send |
+| `Shift + Enter` | New line |
+| `Esc` | Stop the current reply |
+| `Ctrl + /` | Keyboard shortcuts help |
+
+---
 
 ## Tips & Best Practices
 
-### Model Selection
+- **RAM** - Gemma 4 12B Q4_K_M needs roughly 8-10 GB free RAM to run smoothly;
+  close other heavy apps while chatting.
+- **Speed** - enable GPU in Settings > Hardware for the biggest speedup; on CPU
+  keep the context length at the default.
+- **Workspace discipline** - give the agent the smallest folder it needs; a
+  huge workspace makes searches slower.
+- **Privacy** - everything runs locally. Nothing you type or open leaves your
+  machine unless you use a configured API provider.
 
-- **4GB RAM:** Use Q4_0 quantized models (4-5GB)
-- **8GB RAM:** Use Q6_K quantized models (6-7GB)
-- **16GB+ RAM:** Use Q8_0 or larger models
-
-### Performance
-
-- Close other memory-intensive applications
-- Use smaller models for faster responses
-- Adjust max_tokens for shorter responses
-
-### Privacy
-
-- All processing happens locally
-- No data sent to external servers
-- Models and chats stored on your machine
+---
 
 ## Troubleshooting
 
 ### Model Won't Load
 
-- Verify the file is a valid `.gguf` format
-- Check available RAM
-- Try a smaller/quantized model
+- The header chip says "No model": the GGUF is not where the app looks. Click
+  the chip to **download** the pinned model, or point the model picker at the
+  folder containing `gemma-4-12B-it-Q4_K_M.gguf` (the default `models/` folder
+  in the app directory).
+- "Unsupported model": you picked a different GGUF - this build only loads the
+  pinned Gemma 4 12B Q4_K_M file.
 
 ### Slow Responses
 
-- Use a smaller model
-- Reduce max_tokens setting
-- Close other applications
+- Enable GPU in **Settings > Hardware** and restart.
+- Close other RAM-heavy applications.
+- Reduce the context length / generation settings in Settings > Model.
 
-### Application Crashes
+### Application Won't Start
 
-- Check logs in `logs/` directory
-- Ensure sufficient RAM available
-- Try the basic version without addons
-
-### Smart Floater Not Working
-
-- Verify a model is loaded
-- Check addon is enabled
-- Restart the application
-
-## Getting Help
-
-- Check the [FAQ](faq.md)
-- Report issues on [GitHub](https://github.com/GGUFloader/gguf-loader/issues)
-- Email: hossainnazary475@gmail.com
+- Check the launcher's error message (missing Python 3.10+, missing
+  `python3-venv` on Debian/Ubuntu, or failed dependency install).
+- Delete the virtualenv (`.venv` / `frontend/node_modules`) and re-run the
+  launcher - it reinstalls everything.
+- If a previous run crashed mid-write, restart the app; sessions are
+  checkpointed and survive restarts.

@@ -1,9 +1,14 @@
 name: Build & Release Installers
 
-# Builds the Windows and Linux installers with PyInstaller and attaches them
-# to a GitHub Release. Triggers automatically when a version tag (v*) is
-# pushed, and can also be run manually from the Actions tab (builds artifacts
-# only, no release is created).
+# Builds four installables with PyInstaller and attaches them to a GitHub
+# Release:
+#   - Windows CPU-only exe   (GGUFLoader_vX.Y.Z_CPU.exe)
+#   - Windows CUDA/GPU exe   (GGUFLoader_vX.Y.Z_CUDA.exe)   <- needs an NVIDIA GPU + recent drivers, no CUDA Toolkit install
+#   - Linux x86_64 binary    (GGUFLoader_vX.Y.Z_linux_x86_64_CPU)
+#   - Linux CUDA/GPU binary  (GGUFLoader_vX.Y.Z_linux_x86_64_CUDA)  <- needs an NVIDIA GPU + driver >= 550 (CUDA 12.4)
+#
+# Triggers automatically when a version tag (v*) is pushed, and can also be
+# run manually from the Actions tab (builds artifacts only, no release).
 on:
   push:
     tags:
@@ -15,16 +20,35 @@ permissions:
 
 jobs:
   build:
-    name: Build installer (${{ matrix.os }})
+    name: Build installer (${{ matrix.os }}${{ matrix.cuda == '1' && ', CUDA' || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Windows, CPU-only: plain llama-cpp-python wheel from PyPI.
           - os: windows-latest
-            artifact_name: GGUFLoader-win64
+            artifact_name: GGUFLoader-win64-cpu
+            cuda: '0'
+          # Windows, CUDA 12.4 GPU build: installs the prebuilt cu124 wheel
+          # of llama-cpp-python (bundles ggml-cuda + cublas runtimes).
+          - os: windows-latest
+            artifact_name: GGUFLoader-win64-cuda
+            cuda: '1'
+          # Linux, CPU-only.
           - os: ubuntu-latest
-            artifact_name: GGUFLoader-linux-x86_64
+            artifact_name: GGUFLoader-linux-x86_64-cpu
+            cuda: '0'
+          # Linux, CUDA 12.4 GPU build. The cu124 wheel targets
+          # manylinux_2_35_x86_64, which matches ubuntu-latest (glibc 2.35).
+          # Users need an NVIDIA driver >= 550 (CUDA 12.4 compatible); no
+          # CUDA Toolkit install required.
+          - os: ubuntu-latest
+            artifact_name: GGUFLoader-linux-x86_64-cuda
+            cuda: '1'
+    env:
+      GGUFLOADER_CUDA: ${{ matrix.cuda }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,20 +58,115 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Build Electron shell (native window)
+        # The frozen exe opens in an Electron BrowserWindow instead of the
+        # default browser: PyInstaller bundles electron/node_modules/electron/dist
+        # (the runtime) plus the compiled standalone launcher
+        # (electron/dist/standalone.js + the generated standalone package.json).
+        # Windows only - the spec looks for electron.exe; the Linux binary keeps
+        # its browser fallback for now.
+        if: runner.os == 'Windows'
+        run: |
+          cd electron
+          npm ci
+          npm run build:standalone
+
+      - name: Install dependencies (CPU wheel)
+        if: matrix.cuda == '0'
         run: pip install -r requirements.txt pyinstaller
 
+      - name: Install dependencies (CUDA 12.4 wheel)
+        if: matrix.cuda == '1'
+        shell: bash
+        run: |
+          pip install "llama-cpp-python==0.3.34" \
+            --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+          pip install -r requirements.txt pyinstaller
+
+      - name: Smoke-test the frozen exe
+        if: matrix.cuda == '1' || runner.os == 'Windows'
+        shell: bash
+        run: |
+          if [ "$GGUFLOADER_CUDA" = "1" ]; then EXE=dist/GGUFLoader_WithAddons_GPU; else EXE=dist/GGUFLoader_WithAddons; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then EXE="$EXE.exe"; fi
+          chmod +x "$EXE"
+          # --no-browser: the frozen exe would otherwise spawn the bundled
+          # Electron window (no display on the runner) or open the browser.
+          GGUFLOADER_SKIP_AUTOLOAD=1 "$EXE" --no-browser > exe_smoke.log 2>&1 &
+          EXE_PID=$!
+          OK=0
+          for i in $(seq 1 45); do
+            sleep 1
+            if curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/ | grep -q 200; then OK=1; break; fi
+          done
+          kill $EXE_PID 2>/dev/null || true
+          if [ "$OK" != "1" ]; then
+            echo '::error::Frozen exe failed to serve the UI on http://127.0.0.1:8000/'
+            tail -40 exe_smoke.log
+            exit 1
+          fi
+          echo "Smoke test OK: exe served the UI (attempt $i)"
+          tail -5 exe_smoke.log
+
+      - name: Verify llama.cpp build flavor
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import llama_cpp, os, glob
+          lib = os.path.join(os.path.dirname(llama_cpp.__file__), 'lib')
+          files = [os.path.basename(f) for f in glob.glob(os.path.join(lib, '*'))]
+          cuda = [f for f in files if 'cuda' in f.lower() or 'cublas' in f.lower()]
+          print(f"llama_cpp lib files: {len(files)}, CUDA files: {len(cuda)}")
+          want = os.environ.get('GGUFLOADER_CUDA', '0') == '1'
+          if want and not cuda:
+              raise SystemExit("ERROR: expected a CUDA build but found no CUDA runtime files")
+          if not want and cuda:
+              raise SystemExit("ERROR: expected CPU-only build but found CUDA runtime files")
+          print("Build flavor OK")
+          EOF
+
       - name: Build with PyInstaller
-        run: pyinstaller --noconfirm build_exe.spec
+        shell: bash
+        run: |
+          set -o pipefail
+          pyinstaller --noconfirm build_exe.spec 2>&1 | tee pyinstaller.log
+
+      - name: Verify Electron runtime is bundled in the exe
+        # The spec prints this only when it found the Electron runtime on disk;
+        # without it the exe silently falls back to opening the browser.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if ! grep -q "Bundled Electron runtime" pyinstaller.log; then
+            echo '::error::PyInstaller did not bundle the Electron runtime - the exe would fall back to the browser'
+            tail -40 pyinstaller.log
+            exit 1
+          fi
+          echo "Electron runtime bundled OK"
 
       - name: Rename artifact with version
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "$RUNNER_OS" = "Windows" ]; then
-            # CI installs from requirements.txt, which is the plain CPU wheel,
-            # so the Windows artifact is always the CPU-only build.
-            mv dist/GGUFLoader_WithAddons.exe "dist/GGUFLoader_v${VERSION}_CPU.exe"
+            if [ "$GGUFLOADER_CUDA" = "1" ]; then
+              mv dist/GGUFLoader_WithAddons_GPU.exe "dist/GGUFLoader_v${VERSION}_CUDA.exe"
+            else
+              mv dist/GGUFLoader_WithAddons.exe "dist/GGUFLoader_v${VERSION}_CPU.exe"
+            fi
+          elif [ "$GGUFLOADER_CUDA" = "1" ]; then
+            mv dist/GGUFLoader_WithAddons_GPU "dist/GGUFLoader_v${VERSION}_linux_x86_64_CUDA"
           else
             mv dist/GGUFLoader_WithAddons "dist/GGUFLoader_v${VERSION}_linux_x86_64_CPU"
           fi

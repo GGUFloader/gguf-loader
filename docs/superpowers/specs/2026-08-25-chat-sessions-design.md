@@ -1,5 +1,9 @@
 # Chat Sessions Design (ChatGPT-style persistence)
 
+> **📜 Historical design spec** — written before the single-model rebuild and
+> kept for reference. Parts are superseded (e.g. multi-model-per-session
+> tracking); chat sessions now live in the React UI for the one pinned model.
+
 Date: 2026-08-25
 Status: Approved
 

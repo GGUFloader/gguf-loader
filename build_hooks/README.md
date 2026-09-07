@@ -11,12 +11,14 @@ PyInstaller hooks tell the build system how to properly package Python modules a
 ### Module Collection Hooks
 These hooks ensure all necessary files from each package are included:
 
-- **hook-addons.py** - Collects the `addons/` folder and all addon modules
 - **hook-core.py** - Collects the `core/` package (LLM backend + agent engine)
 - **hook-llama_cpp.py** - Collects llama.cpp library and DLL files (critical for AI functionality)
-- **hook-services.py** - Collects the `services/` package (model/chat/agent services)
-- **hook-ui.py** - Collects the `ui/` package
-- **hook-widgets.py** - Collects the `widgets/` package
+
+The legacy PySide6 hooks (hook-PySide6.py, hook-ui.py, hook-widgets.py,
+hook-services.py, hook-addons.py) were removed: the desktop UI is the
+React app running in Electron, so no Qt code ships in the installer.
+`build_exe.spec` excludes PySide6 and the Qt-era `ggufloader` packages
+(ui/widgets/services/addons) outright.
 
 ### Runtime Hook
 - **runtime_hook_llama.py** - Sets up DLL search paths when the executable runs

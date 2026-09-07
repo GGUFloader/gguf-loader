@@ -226,7 +226,7 @@ def _load_family_profiles() -> List[Dict[str, Any]]:
     json_path = _Path(__file__).parent.parent.parent / "config" / "model_families.json"
     if not json_path.exists():
         logger.warning("model_families.json not found at %s", json_path)
-        return _FALLBACK_PROFILES
+        return FALLBACK_PROFILES
     try:
         with open(json_path, encoding="utf-8") as f:
             data = _json.load(f)
@@ -257,7 +257,7 @@ def _load_family_profiles() -> List[Dict[str, Any]]:
         return profiles
     except Exception as e:  # noqa: BLE001
         logger.warning("Failed to load model_families.json: %s", e)
-        return _FALLBACK_PROFILES
+        return FALLBACK_PROFILES
 
 
 # Fallback profile when the JSON is unavailable: the single pinned

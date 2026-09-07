@@ -1,209 +1,207 @@
-# AGENTS.md — Guide for AI Coding Agents
+# AGENTS.md - Guide for AI Coding Agents
 
-This file is a fast onboarding map for anyone (human or AI agent) modifying the
-GGUF Loader codebase. It complements `ARCHITECTURE.md` (deep dive) and
+This file is a fast onboarding map for anyone (human or AI agent) modifying
+the GGUF Loader codebase. It complements `ARCHITECTURE.md` (deep dive) and
 `QUICK_REFERENCE.md` (user-facing quick start).
 
 ## What this project is
 
-A **PySide6 (Qt) desktop app** that runs **GGUF LLMs locally** via
-`llama-cpp-python` (llama.cpp). Features: chat panel, always-on-top Floating
-Chat addon, agentic mode (LangGraph agent with approval-gated tools), and
-"Find Paragraph" folder search. Ships as a pip package (`ggufloader`), a
-PyInstaller one-file exe (Windows/Linux), and a wheel/sdist.
+A **local-first desktop agent app, optimized for exactly one model: Google
+Gemma 4 12B Instruct (Q4_K_M)**. It is a FastAPI + React application:
+
+- **Backend**: Python/FastAPI (`ggufloader/api/`) - serves the REST API
+  (`/api/*`), the WebSocket (`/ws`), and the built React UI. llama.cpp runs
+  in-process via `llama-cpp-python`.
+- **Frontend**: React + TypeScript + Tailwind (`frontend/`), streamed over a
+  WebSocket. Optionally wrapped in Electron (`electron/`).
+- **Agent**: a strictly **plan-driven LangGraph agent** - the planner node
+  writes a step plan, then the agent node executes it step by step. There is
+  **no reactive ReAct loop** and no multi-model family tuning.
+- The pinned GGUF is **auto-detected and loaded at startup** from the models
+  folder (or downloaded from the header chip when missing). No manual
+  "Load Model" step.
+
+Ships as a pip package (`ggufloader`), a PyInstaller one-file exe
+(Windows/Linux), and from source via `launch.bat` / `launch.sh`.
 
 ## Commands
 
 ```bash
-# Install (Windows dev)
-python -m venv .venv && .venv\Scripts\activate
-pip install -r requirements.txt
+# Install (Windows dev) - venv lives in .venv
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
+.venv/bin/python -m pip install -r requirements.txt           # Linux/macOS
 
-# Run
-python main.py            # or launch.bat / launch.sh (auto-setup)
+# Backend (FastAPI) - port 8000
+python -m uvicorn ggufloader.api.app:create_app --factory --port 8000 --reload
 
-# Test (unit tests, no model/GPU needed)
-python -m pytest tests/unit
+# Frontend (Vite dev server) - port 5173, proxies /api and /ws to :8000
+cd frontend && npm install && npm run dev
 
-# Build executables
-scripts/build_exe.bat     # Windows → dist/GGUFLoader_v<ver>_<GPU|CPU>.exe
-scripts/build_linux.sh    # Linux/WSL → dist/GGUFLoader_v<ver>_linux_x86_64_CPU
-python -m PyInstaller build_exe.spec
+# Or launch everything via the launcher (mode 1 = dev/browser, 2 = Electron,
+# 3 = production with a rebuilt frontend):
+launch.bat                      # Windows (launch.sh on Linux/macOS)
+
+# Backend unit tests (headless, no model/GPU needed)
+.venv/Scripts/python.exe -m pytest tests/unit                 # Windows
+python -m pytest tests/unit                                   # any active venv
+
+# Frontend checks
+cd frontend && npx tsc --noEmit && npm run build
 ```
+
+Useful switches: `GGUF_GRAPH_TRACE=0` disables per-node graph tracing;
+`GGUFLOADER_SKIP_AUTOLOAD=1` skips the startup model scan (the auto-loader
+is already a no-op under pytest).
+
 
 ## Layout
 
 ```
-main.py                    # repo-root entry (thin bootstrap; app logic in ggufloader/)
-ggufloader/                # THE app package — everything lives here
-  _version.py              # single source of truth for the version (mirrored in pyproject.toml)
-  main.py                  # QApplication bootstrap + DLL path setup
-  resource_manager.py      # resolves per-deployment paths (repo / pip / frozen exe)
-  addon_manager.py         # loads addons (see ggufloader/addons/README.md)
-  config.py  utils.py
-  ui/                      # main_window, sidebar, chat_panel, agent_panel, find_dialog, theme
-  widgets/                 # chat_bubble, feedback_dialog
+launch.bat / launch.sh          launcher: venv setup + 3 launch modes
+main.py                         thin bootstrap (uvicorn factory import)
+ggufloader/                     THE backend package - all Python lives here
+  _version.py                   single source of truth for the version
+  config.py                     constants: pinned-model identity, chat sampling, paths
+  config/model_families.json    ONE family: gemma4 (params + system prompt)
+  api/
+    app.py                      FastAPI factory: CORS, route mounting, /ws,
+                                static dist serving, lifespan (auto-load)
+    auto_load.py                startup scan/load of the pinned GGUF + download helper
+    deps.py                     dependency access (model backend etc.)
+    routes/                     REST routers: model, chat, agent, files, gpu, ...
+    websocket/handler.py        /ws endpoint: ConnectionManager + agent orchestration
   core/
-    llm/model_backend.py   # the ONLY module that instantiates llama_cpp.Llama
-    engine/                # ModelEngine protocol, LlamaCppEngine, LangChain adapter
-    agent/                 # LangGraph agent loop, tool registry, text extraction
-    search/                # Find Paragraph: paragraph_search, planner
-  services/                # Qt worker-thread services (model, chat, agent, search, gpu install, launcher)
-  addons/                  # bundled addons (floating_chat) + addon dev guide
-scripts/                   # build/install helpers (bat + sh)
-build_hooks/               # PyInstaller hooks incl. llama_cpp DLL collection
-tests/unit/                # pytest suite (headless)
+    llm/model_backend.py        the ONLY module that instantiates llama_cpp.Llama
+    llm/prompt_builder.py       conversation + final-response prompt formatting
+    router.py                   inspect GGUF -> LoadStrategy (n_ctx, gpu layers, batch)
+    system_probe.py             RAM/VRAM probing, GPU offload support
+    agent/
+      graph_agent.py            LangGraph agent: planner/agent/tools nodes (THE agent)
+      tool_registry.py          Tool base + sandboxed tools (read/write/search/glob/shell/git)
+      tool_orchestrator.py      executes tool batches: dedupe, retry, approval, stuck detection
+      agent_transport.py        status strings -> typed WS progress events
+      presets.py                agent presets (research/code_review/refactor/debug/...)
+      token_cleaner.py          Gemma channel-token cleaning
+      context_budget.py         context budgeting + compaction
+  services/ ui/ widgets/        legacy Qt-era code still present, NOT the UI path
+frontend/                       React + TypeScript + Tailwind app
+  src/App.tsx                   <AppLayout/> root
+  src/components/               layout, chat, agent, model, settings, workbench, ui
+  src/stores/                   zustand stores (chatStore = WS reducer, modelStore, ...)
+  src/api/                      typed REST + WS client
+  dist/                         production build served by FastAPI
+electron/                       optional Electron shell (spawns backend + loads UI)
+tests/unit/                     pytest suite (headless)
 ```
+
+The legacy PySide6 UI (`python main.py --qt`) is deprecated and no longer
+ships in the installer or dependencies - the React app running in Electron
+is the only UI, and the backend boots without PySide6. Build features in
+frontend/ and ggufloader/api.
 
 ## Non-negotiable conventions
 
-1. **llama.cpp is touched in exactly one place.** Only
-   `ggufloader/core/llm/model_backend.py` may import/instantiate `llama_cpp`
-   (and `core/engine/llama_cpp_engine.py` wraps it). Everything else — UI,
-   agents, services, addons — must go through the engine/backend. The runtime
-   is **one model at a time, serialized**; never create a second `Llama`.
-2. **Qt lives on the main thread.** Background work (model calls, file I/O,
-   installs) runs in `QThread` workers under `ggufloader/services/` with
-   signals for progress/completion. Don't block the UI thread.
-3. **Lazy imports for testability.** Modules that `import llama_cpp` or
-   PySide6 do so inside functions, so unit tests (headless, no model) can
-   import the logic without pulling in the runtime.
-4. **Everything lives under `ggufloader`.** No new top-level modules in
-   site-packages — the wheel must only claim the `ggufloader` name.
-5. **Version**: update `ggufloader/_version.py` (and `pyproject.toml`) when
-   releasing; tag `v<version>` to trigger the release workflow.
-6. **Addons**: see `ggufloader/addons/README.md` — contract is a package with
-   `register(parent=None) -> QWidget`.
-7. **Executable naming**: builds are versioned + variant-labeled
-   (`GGUFLoader_v<ver>_GPU.exe` / `_CPU.exe` / `_linux_x86_64_CPU`). The
-   Windows build script auto-detects GPU vs CPU from the installed wheel.
-8. **Linux llama-cpp-python**: no PyPI wheel exists for Linux — `pip install`
-   compiles from source (needs gcc/cmake), unless installed from abetlen's
-   prebuilt index (`--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`).
-   `launch.sh` uses that index automatically when build tools are missing.
-
-## Agent & GPU support (v2.2.0)
-
-**Agent Mode is a LangGraph StateGraph** — `ggufloader/core/agent/graph_agent.py`:
-
-- Graph: `START → planner → agent → (continue: tools → agent | end: END)`.
-  The `planner` node is the first node of the graph: it asks the LLM whether
-  tools are needed and writes the step plan (or decides the question needs
-  no tools), storing it in graph state — the whole turn is one graph run.
-  The `agent` node then follows that plan **step by step**; there is **no
-  reactive ReAct loop** — the plan is the only driver. Malformed plan JSON
-  is retried with a repair hint (the planner is the only gate to tool
-  execution); if the planner still produces nothing, the run ends with a
-  deterministic wrap-up instead of switching to another agent. Every plan
-  is normalized to end with an answer step, so the final answer always
-  comes from the plan's answer step. The `tools` node executes calls (one
-  corrective retry per failure), and `_router` continues while work remains.
-  The final answer streams tokens.
-- **Checkpointing**: `langgraph.checkpoint.sqlite.SqliteSaver` — one SQLite
-  DB per thread. The thread id is derived from the workspace path
-  (`agent-<sha>`), so the same folder resumes the same conversation across
-  app restarts.
-- **Approval**: sensitive tools (shell, git) suspend the graph via LangGraph
-  `interrupt()`; the UI shows Allow/Deny and resumes with
-  `Command(resume=...)`.
-- **Cancellation is cooperative** — `cancel()` sets an event the nodes check
-  between LLM and tool calls.
-- `process()` keeps the old `AgentEngine` call signature, so the service/UI
-  layer can swap engines without changes.
-
-**One-click GPU install** — `ggufloader/services/gpu_install_service.py`:
-
-- `GpuInstallService` (QThread worker) runs the platform installer via
-  `launcher_service` (`install_gpu_llama.bat` / `.sh`) and emits
-  `done(success, message)`.
-- The sidebar button (`ui/sidebar_panel.py`, "⬇ Install GPU Support") calls
-  `main_window._install_gpu_support()`; state comes from
-  `is_gpu_support_installed()` and the button flips to "✅ GPU Support
-  Installed" (green tick) when the CUDA build is present.
-- Installing GPU support swaps the llama-cpp-python wheel for the CUDA build
-  (abetlen cu124 index). Rebuild the exe with `scripts/install_gpu_llama.bat`
-  followed by `build_exe.bat` to produce the `_GPU.exe` variant.
-
-## Release flow
-
-1. Bump `_version.py` + `pyproject.toml`; move CHANGELOG `[Unreleased]` →
-   `[<version>]`.
-2. Commit, push `main`, tag `v<version>`, push the tag.
-3. `.github/workflows/build-release.yml` builds Windows (CPU) + Linux artifacts
-   and publishes a GitHub Release. The GPU exe is built locally only (CI is
-   CPU-only) — attach `dist/GGUFLoader_v<ver>_GPU.exe` manually.
+1. **One model, one runtime.** This build loads exactly Gemma 4 12B Q4_K_M;
+   `api/routes/model.py` rejects other GGUFs. Only
+   `ggufloader/core/llm/model_backend.py` may instantiate `llama_cpp`.
+   One model at a time, serialized - never create a second `Llama`.
+2. **The agent is strictly plan-driven.**
+   `START -> planner -> (agent <-> tools) -> END`. The planner decides
+   whether tools are needed and writes the plan; the agent node never
+   invents its own action loop. The final answer always comes from the
+   plan's answer step. Do not reintroduce a reactive ReAct fallback -
+   tests enforce plan mode.
+3. **WebSocket events are the UI contract.** The typed event vocabulary
+   (`token`, `reasoning`, `progress_*`, `tool_*`, `message_complete`, ...)
+   is consumed by `frontend/src/stores/chatStore.ts`. Add fields; never
+   silently rename or remove types without updating the reducer.
+4. **Everything lives under `ggufloader/`.** No new top-level modules -
+   the wheel claims only the `ggufloader` name.
+5. **Version**: bump `ggufloader/_version.py` and `pyproject.toml` together;
+   update `CHANGELOG.md`; tag `v<version>` to trigger the release workflow
+   (`.github/workflows/build-release.yml`).
+6. **Tests are headless.** Never require a loaded model/GPU in unit tests.
+   New graph/tool/transport behavior needs a regression test in `tests/unit`.
+7. **Line endings**: on Windows the repo normalizes to CRLF on checkout
+   (git autocrlf). `git diff` warnings about LF -> CRLF on edited files are
+   normal - don't fight them, and don't convert whole files' endings.
+8. **Tools stay sandboxed.** Every tool resolves paths against the workspace
+   root and rejects escapes. `run_command`, `run_python`, mutating `git`
+   calls, and `move_file` always require human approval; reads never do.
 
 
+## The agent (deep dive)
 
-## Agent Harness (for coding agents)
+`ggufloader/core/agent/graph_agent.py` builds a small LangGraph `StateGraph`
+with three traced nodes:
 
-### Startup workflow
-
-Every new session, before editing any code:
-
-1. Read `feature_list.json` to see what features exist and their status.
-2. Read `progress.md` to see what was last worked on and what's next.
-3. Read `session-handoff.md` if it exists (previous session's state).
-4. Run `./init.sh` or `python -m pytest tests/unit -x -q` to verify the project builds.
-5. Pick ONE unfinished feature from `feature_list.json` (status: "not-started" or "in-progress").
-
-### One-feature-at-a-time rule
-
-Work on exactly ONE feature per session. Do not start a second feature until the
-current one is done and verified. This prevents half-finished work and scope drift.
-
-### Definition of done
-
-A feature is DONE only when ALL of these are true:
-
-1. **Code works**: The feature functions as described in `feature_list.json`.
-2. **Tests pass**: `python -m pytest tests/unit -x -q` exits 0.
-3. **No regressions**: Existing tests still pass (run the full suite).
-4. **Evidence recorded**: Update `feature_list.json` status to "done" and add evidence.
-5. **Progress updated**: Update `progress.md` with what was done, what's next, and any decisions.
-
-### Completion gate
-
-Before claiming "done" or ending a session:
-
-1. Run `python -m pytest tests/unit -x -q` — must pass.
-2. Update `feature_list.json` — set your feature's status and evidence.
-3. Update `progress.md` — mark completed items, note next steps.
-4. Write `session-handoff.md` — capture context for the next session.
-
-### State artifacts
-
-| File | Purpose | When to update |
-|------|---------|---------------|
-| `feature_list.json` | Tracks all features, dependencies, status, evidence | When starting or completing a feature |
-| `progress.md` | Session-by-session progress log | Every session, before ending |
-| `session-handoff.md` | Handoff context for next session | End of every session |
-| `AGENTS.md` | This file — startup rules and conventions | Rarely (project-level changes only) |
-
-### Scope boundaries
-
-- Do not modify `llama-cpp-python` or `PySide6` internals.
-- Do not add new top-level packages outside `ggufloader/`.
-- Do not change the public API surface without updating docs.
-- Do not skip tests to save time — the harness exists because agents are unreliable.
-
-### Verification commands
-
-```bash
-# Quick verification (run before every commit)
-python -m pytest tests/unit -x -q
-
-# Full verification (run at end of session)
-python -m pytest tests/ -x -q
-python -m compileall -q -x '(^|/)(\.?venv|env|node_modules|build|dist|__pycache__)(/|$)' ggufloader/
-
-# Harness validation
-node "C:/Users/MY-PC/.agents/skills/harness-creator/scripts/validate-harness.mjs" --target .
 ```
+START -> planner -> agent -> (continue: tools -> agent | end: END)
+                       ^------------------------------+
+```
+
+- **planner node** (`_planner_node`) - the FIRST node of every run. It calls
+  the LLM for a JSON plan ({"goal", "steps": [...]}), retrying malformed
+  JSON with a repair hint (the planner is the only gate to tool execution).
+  Plans are normalized: capped at 6 steps and guaranteed to end with an
+  answer step (tool: null) when the model produced only tool steps.
+  Planner deltas stream to the UI as `reasoning` events.
+- **agent node** (`_agent_node`) - strictly follows the plan one step at a
+  time (`_follow_plan_step`):
+  - Tool steps produce `pending_calls`, which the tools node executes.
+    STEP_N.result references in parameters resolve from earlier steps.
+  - Answer steps collect evidence from ALL completed plan steps (bounded,
+    ~6000 chars) and ask the LLM to synthesize plain prose. Answers are
+    scrubbed (`strip_tool_envelope`) and never ship an access-refusal when
+    tool evidence exists - the evidence is rendered deterministically.
+  - When the planner produced nothing, the run ends with an honest wrap-up.
+    There is no reactive fallback.
+- **tools node** (`_tools_node`) - executes the pending batch through
+  `ToolOrchestrator.execute_batch`: dedupes already-executed call
+  signatures, retries failed calls once with a repair hint, honors approval
+  (graph interrupt() -> Allow/Deny -> Command(resume=...)), and reports
+  results back into the plan step.
+- **router** - `continue` while calls remain and the step budget allows,
+  `end` once a final answer exists.
+
+State is checkpointed to SQLite (SqliteSaver, one file per workspace
+thread) so conversations resume across restarts. Cancellation is
+cooperative (`cancel()` sets an event the nodes check). Graph tracing logs
+`[graph] <node> enter/exit | <ms> | <summary>` per node plus a `turn done`
+rollup - the fastest way to see architecture issues (disable with
+`GGUF_GRAPH_TRACE=0`).
+
+Sampling: chat defaults live in `config.py` (CHAT_TEMPERATURE=0.2,
+CHAT_TOP_K=80, CHAT_REPEAT_PENALTY=1.05) and the family params follow
+official Gemma 4 guidance; the agent path caps temperature/top_k for
+reliable structured output.
+
+## Frontend wiring (short version)
+
+`frontend/src/stores/chatStore.ts` owns the WebSocket connection
+(`connectWebSocket()`), a zustand reducer over the WS events, and the
+message list. Agent runs render **inline in the chat column** (Codebuff
+style): progress steps are folded into the finished assistant message on
+`message_complete`. Key stores: `modelStore` (load/unload/status),
+`downloadStore` (pinned-model download with header-chip progress),
+`uiStore`, `themeStore`, `workspaceStore`. The header shows the loaded
+model chip plus the version banner; a first-launch compatibility dialog
+confirms the pinned model is present.
+
+## Session workflow for coding agents
+
+The repo keeps light session artifacts (`feature_list.json`, `progress.md`,
+`session-handoff.md`, `init.sh`) used by the agent harness workflow: start
+by reading `feature_list.json` and `progress.md`; work on one feature;
+verify with `python -m pytest tests/unit -x -q`; update the artifacts at
+the end of the session. Follow the conventions above even when the harness
+is inactive - they encode hard-won constraints (single model, plan-driven
+agent, event contract, headless tests).
 
 ## Docs index
 
-- `README.md` — user install guide · `QUICK_REFERENCE.md` — user quick start
-- `ARCHITECTURE.md` / `ARCHITECTURE_V2.md` — deep architecture
-- `ggufloader/addons/README.md` — addon development
-- `CHANGELOG.md` — history · `CONTRIBUTING.md` — contribution guide
+- `README.md` - user install guide | `QUICK_REFERENCE.md` - user quick start
+- `ARCHITECTURE.md` - this codebase's architecture (current) |
+  `ARCHITECTURE_V2.md` - 12-month target architecture
+- `CHANGELOG.md` - history | `CONTRIBUTING.md` - contribution guide

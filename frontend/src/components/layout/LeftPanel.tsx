@@ -38,7 +38,7 @@ export function LeftPanel() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
-  const { clearMessages, setActiveSessionId } = useChatStore()
+  const { clearMessages, setActiveSessionId, sessionsRevision } = useChatStore()
   const [showLoadDialog, setShowLoadDialog] = useState(false)
   const workspace = useWorkspaceStore((s) => s.workspace)
   const [modelFolder, setModelFolder] = useState('')
@@ -74,6 +74,14 @@ export function LeftPanel() {
     loadModelInfo()
     loadAppInfo()
   }, [loadSessions, loadModelInfo, loadAppInfo])
+
+  // Live-refresh the session list whenever a message is persisted to the
+  // active session (user prompt or finished assistant reply) so message
+  // counts and last-updated times stay current without a page reload.
+  // Also covers the initial mount load.
+  useEffect(() => {
+    loadSessions()
+  }, [sessionsRevision, loadSessions])
 
   async function handleNewChat() {
     try {
@@ -422,9 +430,11 @@ export function LeftPanel() {
                     </span>
                     <span
                       className="text-[10px] text-text-muted"
-                      title={session.created || session.updated}
+                      title={session.created
+                        ? `Started ${formatDate(session.created)} · Last activity ${formatDate(session.updated)}`
+                        : undefined}
                     >
-                      {formatDate(session.created || session.updated)}
+                      {formatDate(session.updated || session.created)}
                     </span>
                   </div>
                 </button>
@@ -522,8 +532,8 @@ export function LeftPanel() {
                   <div className="text-xs text-text-sec truncate">{s.title || 'Untitled'}</div>
                   <div className="flex items-center gap-2 text-[10px] text-text-muted">
                     <span>{s.message_count || 0} msgs</span>
-                    <span title={s.created || s.updated}>
-                      {formatDate(s.created || s.updated)}
+                    <span className="text-[10px] text-text-muted" title={s.created ? `Started ${formatDate(s.created)} · Last activity ${formatDate(s.updated)}` : undefined}>
+                      {formatDate(s.updated || s.created)}
                     </span>
                   </div>
                 </div>

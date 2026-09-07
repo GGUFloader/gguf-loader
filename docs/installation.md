@@ -1,76 +1,139 @@
 # Installation Guide
 
-This guide covers all installation methods for GGUF Loader.
+How to install and launch **GGUF Loader** - the single-model (Gemma 4 12B
+Q4_K_M) local AI agent app. Pick whichever method fits you.
 
-## Method 1: Windows Executable (Easiest)
+---
 
-1. Download the latest release: [GGUFLoader.2.0.1.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.0.1/GGUFLoader.2.0.1.exe)
-2. Run the executable
-3. No Python installation required!
+## Method 1: Prebuilt executable (easiest, end users)
 
-## Method 2: Install via pip
+1. Open the [GitHub Releases page](https://github.com/GGUFloader/gguf-loader/releases).
+2. Download the artifact for your platform:
+   - `GGUFLoader_v<version>_GPU.exe` - Windows with an NVIDIA GPU (CUDA)
+   - `GGUFLoader_v<version>_CPU.exe` - Windows, any machine
+   - `GGUFLoader_v<version>_linux_x86_64_CPU` - Linux
+3. Run it. No Python, Node, or other runtime is needed.
+
+On first start the app looks for the pinned model and offers to download it
+from the header chip if it is missing (see First Launch below).
+
+---
+
+## Method 2: pip install
 
 ```bash
 pip install ggufloader
 ggufloader
 ```
 
-## Method 3: Run from Source
+- Requires **Python 3.10-3.13**.
+- The wheel installs only the `ggufloader` name, so it is safe alongside other
+  packages in a shared/global environment.
+- Update any time with `pip install --upgrade ggufloader`.
+
+---
+
+## Method 3: Run from source
 
 ### Prerequisites
-- Python 3.7 or higher
-- Git (optional)
+
+- **Python 3.10+** (the launchers and pip both require it)
+- **Node.js 18+** (for the frontend - the launcher installs it via `npm`)
+- Git (optional, to clone)
 
 ### Windows
 
-1. Clone or download the repository
-2. Double-click `launch.bat`
-3. The script will automatically:
-   - Create a virtual environment
-   - Install dependencies
-   - Launch the application
+1. Clone or download the repository.
+2. Double-click **`launch.bat`**.
+3. It creates a virtualenv, installs Python dependencies, installs frontend
+   dependencies, then asks which mode to run:
 
-### Linux/macOS
+   | Choice | Mode | Notes |
+   |---|---|---|
+   | **1** | Browser (default) | Backend + Vite dev server, opens in your browser |
+   | **2** | Desktop | Electron native window (Electron starts its own backend on :8000) |
+   | **3** | Production | Rebuilds the built UI if stale and serves it from one server |
 
-1. Clone or download the repository
-2. Make the script executable:
-   ```bash
-   chmod +x launch.sh
-   ```
-3. Run the script:
-   ```bash
-   ./launch.sh
-   ```
+### Linux / macOS
 
-## Launching the Application
+1. Clone or download the repository.
+2. `chmod +x launch.sh`
+3. Run **`./launch.sh`** - same setup and mode choices. On Debian/Ubuntu you
+   may need `python3-venv` (the script tells you the exact command). The CPU
+   `llama-cpp-python` wheel is installed prebuilt, so no C compiler is needed.
 
-- Includes addon system
-- Smart Floating Assistant
-- All features enabled
+### Manual start (after dependencies are installed)
 
-**Launch:**
-- Windows: `launch.bat`
-- Linux/macOS: `./launch.sh`
+```bash
+# backend only (development):
+python -m uvicorn ggufloader.api.app:create_app --factory --port 8000
+
+# frontend dev server (separate terminal):
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+---
+
+## First Launch
+
+1. Start the app. On startup it **auto-scans for the pinned model** - the file
+   `gemma-4-12B-it-Q4_K_M.gguf` in the app's `models/` folder (plus the
+   last-used model folder) - and loads it in the background.
+2. If the model is not on disk, the **model chip in the header** shows a
+   Download action with live progress and auto-loads the file when done.
+3. Start chatting. Press **Ctrl/Cmd + Shift + A** for Agent Mode (choose a
+   workspace folder to let the agent work in).
+
+This build runs exactly one model - Gemma 4 12B Instruct Q4_K_M. Other GGUF
+files are rejected with a clear message.
+
+---
+
+## GPU Acceleration (optional)
+
+The default install runs on CPU. To use an NVIDIA GPU (Windows/Linux) or Apple
+Silicon (macOS):
+
+- **In the app:** open **Settings > Hardware** and follow the install flow; it
+  swaps in the accelerated `llama-cpp-python` build and asks you to restart.
+- **Scripts:** `scripts/install_gpu_llama.bat` (Windows) or
+  `scripts/install_gpu_llama.sh` (Linux/macOS).
+
+---
 
 ## Troubleshooting
 
 ### Python Not Found
-Ensure Python 3.7+ is installed and added to your PATH.
+
+`launch.bat` needs **Python 3.10+** on PATH - install it from python.org and
+re-run. (Linux: you may also need `python3-venv` / `virtualenv`.)
 
 ### Permission Denied (Linux/macOS)
+
 ```bash
 chmod +x launch.sh
 ```
 
-### Antivirus Blocking
-Some antivirus software may flag the executable. Add an exception if needed.
+### Frontend fails to install or build
 
-### Dependencies Fail to Install
-Try manually installing:
+The launcher needs **Node.js 18+** and an internet connection on first run. If
+`npm install` fails, delete `frontend/node_modules` and re-run the launcher.
+
+### Antivirus / SmartScreen warnings (Windows)
+
+Executables built with PyInstaller are sometimes flagged. Choose "More info >
+Run anyway" for the official release file, or build from source.
+
+### Dependencies fail to install
+
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt   # Python deps
+cd frontend && npm install                  # frontend deps
 ```
+
+---
 
 ## Next Steps
 
-After installation, see the [User Guide](user-guide.md) to get started.
+See the [User Guide](user-guide.md) for the full walkthrough, or the
+[FAQ](faq.md) for common questions.

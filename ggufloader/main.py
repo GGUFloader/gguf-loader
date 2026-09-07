@@ -13,9 +13,37 @@ import logging
 import os
 import platform
 import sys
+import traceback
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _show_error_dialog(message: str) -> None:
+    """Surface a fatal startup error to the user.
+
+    When the app is frozen as a windowed (console-less) exe and the user
+    double-clicks it, a crash would otherwise exit silently - "nothing
+    happens". The launcher shim routes stdout/stderr to devnull (uvicorn
+    needs real streams), so ``sys.stderr is None`` can no longer gate the
+    dialog: show the native message box for EVERY frozen Windows failure.
+    Print too, so terminal launches and redirected logs still get the
+    traceback.
+    """
+    try:
+        print(message, file=sys.stderr if sys.stderr is not None else sys.__stderr__)
+    except Exception:  # noqa: BLE001 - printing must never be the crash
+        pass
+    try:
+        if os.name == "nt" and getattr(sys, "frozen", False):
+            import ctypes
+
+            # MB_ICONERROR = 0x10; always-on-top so it is not missed.
+            ctypes.windll.user32.MessageBoxW(
+                None, message, "GGUF Loader - Error", 0x10 | 0x40000
+            )
+    except Exception:  # noqa: BLE001 - the dialog must never be the crash
+        pass
 
 
 def setup_library_path() -> None:
@@ -41,7 +69,7 @@ def setup_library_path() -> None:
             components = os.environ.get(env_var, "").split(os.pathsep)
             if dll_path not in components:
                 os.environ[env_var] = os.pathsep.join([dll_path, *components])
-                logger.info("Added to %s: %s", env_var, dll_path)
+                logger.info("Added to %s: %s", env_var, components)
     except Exception as e:  # noqa: BLE001 - never block startup on this
         logger.warning("Could not set up library path: %s", e)
 
@@ -83,16 +111,25 @@ def _launch_react(port: int = 8000, open_browser: bool = True) -> int:
 
     logger.info("Starting GGUF Loader in React mode on port %d", port)
 
+    # Capture crashes from the server thread so a windowed exe can show
+    # them instead of dying silently (uvicorn swallows the traceback into
+    # logging, and with no console there is nothing to log to).
+    server_error: list[BaseException] = []
+
     # Start FastAPI in background thread
     def run_server():
-        import uvicorn
-        uvicorn.run(
-            "ggufloader.api.app:create_app",
-            factory=True,
-            host="127.0.0.1",
-            port=port,
-            log_level="info",
-        )
+        try:
+            import uvicorn
+            uvicorn.run(
+                "ggufloader.api.app:create_app",
+                factory=True,
+                host="127.0.0.1",
+                port=port,
+                log_level="info",
+            )
+        except BaseException as exc:  # noqa: BLE001 - reported below
+            server_error.append(exc)
+            logger.exception("Backend server crashed")
 
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
@@ -107,23 +144,63 @@ def _launch_react(port: int = 8000, open_browser: bool = True) -> int:
             time.sleep(0.5)
     else:
         logger.error("Backend server failed to start")
+        if server_error:
+            tb = "".join(
+                traceback.format_exception(
+                    type(server_error[0]), server_error[0], server_error[0].__traceback__
+                )
+            )
+            _show_error_dialog(
+                f"GGUF Loader failed to start (backend on port {port}):\n\n{tb}"
+            )
+        else:
+            _show_error_dialog(
+                f"GGUF Loader failed to start: the backend on port {port} did not "
+                "become ready. Another application may be using that port - "
+                "close it or start GGUF Loader with:  --port 8010"
+            )
         return 1
 
     url = f"http://localhost:{port}"
     logger.info("Backend ready at %s", url)
 
     if open_browser:
-        import webbrowser
-        webbrowser.open(url)
-        logger.info("Opened browser at %s", url)
+        _open_ui(url)
 
-    # Keep running
+    # Keep running (the server is in a daemon thread; main must stay alive)
+    import time
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         return 0
+
+
+def _open_ui(url: str) -> None:
+    """Open the UI in Electron (frozen) or a browser (dev)."""
+    if getattr(sys, "frozen", False):
+        # Frozen exe: launch the bundled Electron standalone launcher
+        import subprocess
+        electron_dir = os.path.join(sys._MEIPASS, "electron")
+        electron_exe = os.path.join(electron_dir, "electron.exe")
+        if os.path.isfile(electron_exe):
+            logger.info("Launching Electron: %s", electron_exe)
+            subprocess.Popen(
+                [electron_exe, electron_dir, f"--url={url}"],
+                cwd=electron_dir,
+                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+            )
+        else:
+            # Electron not bundled (e.g. CI build without Electron) - fall back
+            logger.warning("Electron not found at %s, opening in browser", electron_exe)
+            import webbrowser
+            webbrowser.open(url)
+    else:
+        import webbrowser
+        webbrowser.open(url)
+        logger.info("Opened browser at %s", url)
 
 
 def _launch_qt() -> int:
@@ -207,5 +284,18 @@ def main() -> int:
         return _launch_qt()
 
 
+def run() -> int:
+    """Entry wrapper: turn any fatal startup error into a visible dialog."""
+    try:
+        return main()
+    except SystemExit:
+        raise
+    except BaseException:
+        _show_error_dialog(
+            "GGUF Loader failed to start:\n\n" + traceback.format_exc()
+        )
+        return 1
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

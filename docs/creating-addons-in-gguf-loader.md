@@ -555,13 +555,13 @@ __version__ = "1.0.0"  # Major.Minor.Patch
 
 ## 🤝 Contributing to Core
 
-Want to contribute to GGUF Loader itself? Check out our [Contributing Guide](contributing.md).
+Want to contribute to GGUF Loader itself? Check out our [Contributing Guide](../CONTRIBUTING.md).
 
 ## 📚 Additional Resources
 
-- [Addon API Reference](addon-api.md) - Complete API documentation
-- [Smart Floater Example](smart-floater-example.md) - Learn from the built-in addon
-- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+- [Addon API Reference](gguf-loader-addon-api.md) - Complete API documentation
+- [Smart Floater Example](using-floating-button-gguf-loader.md) - Learn from the built-in addon
+- [Troubleshooting](faq.md#troubleshooting) - Common issues and solutions
 
 ---
 

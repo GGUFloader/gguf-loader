@@ -1,5 +1,12 @@
 # Why Choose GGUF Loader? Understanding Local AI Tools and Their Strengths
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend and
+> FastAPI backend**, running a strictly **plan-driven LangGraph agent** (no
+> reactive loop, no multi-model family tuning). UI and architecture details
+> below may be outdated.
+
 The local AI and Large Language Model (LLM) ecosystem is growing fast, with several tools designed to help you run AI models on your own hardware — no cloud needed. This guide explains some popular tools and why GGUF Loader is the ideal choice for your local AI needs.
 
 ## Popular Local AI Tools and What They Do

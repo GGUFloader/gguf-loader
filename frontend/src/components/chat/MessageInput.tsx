@@ -41,6 +41,8 @@ export function MessageInput() {
   // render progress even while this picker is closed.
   const dl = useDownloadStore((s) => s.dl)
   const startDownload = useDownloadStore((s) => s.startDownload)
+  // Whether the pinned model is already detected + loaded by the backend.
+  const modelInfo = useModelStore((s) => s.info)
 
   // Workspace state (shared with LeftPanel)
   const workspace = useWorkspaceStore((s) => s.workspace)
@@ -379,8 +381,24 @@ export function MessageInput() {
                   </button>
                 ))}
 
-                {/* No model present → offer the pinned download */}
+                {/* No model present → offer the pinned download (unless the
+                    pinned model is already detected + loaded - then no
+                    download is needed) */}
                 {!folderLoading && folderModels.length === 0 && (
+                  modelInfo.loaded ? (
+                    <div className="border-t border-border px-3 py-3">
+                      <div className="flex items-center gap-1.5 text-[11px] text-green-400">
+                        <CheckCircle2 size={11} className="flex-shrink-0" />
+                        <span className="truncate">
+                          Model ready: {modelInfo.filename || 'Gemma 4 12B Q4_K_M'}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] text-text-muted leading-snug">
+                        This folder is empty, but the pinned Gemma 4 12B Q4_K_M is
+                        already loaded — no download needed.
+                      </p>
+                    </div>
+                  ) : (
                   <div className="border-t border-border px-3 py-3 space-y-2">
                     <p className="text-[11px] text-text-muted leading-snug">
                       {modelFolder
@@ -422,6 +440,7 @@ export function MessageInput() {
                       </div>
                     )}
                   </div>
+                  )
                 )}
               </div>
             </>

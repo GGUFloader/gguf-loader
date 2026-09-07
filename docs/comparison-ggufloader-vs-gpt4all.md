@@ -1,5 +1,12 @@
 # Deep Comparison: GGUF Loader vs GPT4All
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend and
+> FastAPI backend**, running a strictly **plan-driven LangGraph agent** (no
+> reactive loop, no multi-model family tuning). UI and architecture details
+> below may be outdated.
+
 **Scope:** line-level functional comparison of every subsystem — generation,
 prompting, templates, sampling, EOS handling, reasoning display, context
 management, persistence, agents/tools, RAG, server, downloads, settings, UI

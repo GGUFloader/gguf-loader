@@ -71,10 +71,10 @@ Want to install? → docs/installation.md
 
 ```
 Want to use features? → docs/user-guide.md
-    ├─ Load models → Section: "Load a Model"
-    ├─ Chat with AI → Section: "Start Chatting"
-    ├─ Smart Floater → Section: "Smart Floating Assistant"
-    └─ Manage addons → Section: "Addon System"
+    ├─ Auto-load / model states → Section: "Load a Model"
+    ├─ Chat vs Agent Mode → Section: "Agent Mode"
+    ├─ Advanced Search → Section: "Advanced Search (Find Paragraph)"
+    └─ Panel tools & settings → Section: "Right-hand Panel"
 ```
 
 ### Development Tasks
@@ -103,8 +103,8 @@ Have a problem? → docs/faq.md
 | Question | Answer |
 |----------|--------|
 | Install GGUF Loader? | [Installation Guide](installation.md) |
-| Load a model? | [User Guide - Load Model](user-guide.md#loading-models) |
-| Use Smart Floater? | [User Guide - Smart Floater](user-guide.md#smart-floating-assistant) |
+| Load a model? | [User Guide - Load Model](user-guide.md#2-load-a-model) |
+| Give the agent a folder to work on? | [User Guide - Agent Mode](user-guide.md#agent-mode) |
 | Create an addon? | [Addon Development](addon-development.md) |
 | Set up feedback? | [Feedback System](feedback-system.md) |
 | Contribute code? | [Contributing](../CONTRIBUTING.md) |
@@ -120,7 +120,7 @@ Have a problem? → docs/faq.md
 | FAQ | [docs/faq.md](faq.md) |
 | Addon guide | [docs/addon-development.md](addon-development.md) |
 | Feedback setup | [docs/feedback-system.md](feedback-system.md) |
-| All docs index | [DOCUMENTATION.md](../DOCUMENTATION.md) |
+| All docs index | [DOCUMENTATION.md](DOCUMENTATION.md) |
 | Quick reference | [QUICK_REFERENCE.md](../QUICK_REFERENCE.md) |
 
 ## 📊 Documentation Hierarchy
@@ -228,7 +228,7 @@ All documentation is mobile-friendly and can be read on:
 
 ## 💡 Tips
 
-- **Bookmark** [DOCUMENTATION.md](../DOCUMENTATION.md) for quick access
+- **Bookmark** [DOCUMENTATION.md](DOCUMENTATION.md) for quick access
 - **Use Ctrl+F** to search within documents
 - **Check FAQ first** before asking questions
 - **Read user guide** for comprehensive information
@@ -238,7 +238,7 @@ All documentation is mobile-friendly and can be read on:
 
 Can't find what you need?
 
-1. Check [DOCUMENTATION.md](../DOCUMENTATION.md) - Complete index
+1. Check [DOCUMENTATION.md](DOCUMENTATION.md) - Complete index
 2. Search [FAQ](faq.md) - Common questions
 3. Ask in [Discussions](https://github.com/GGUFloader/gguf-loader/discussions)
 4. Email: hossainnazary475@gmail.com

@@ -1,5 +1,12 @@
 # GGUFLoader Agent vs Modern AI Harnesses — Full Deep Comparison
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend and
+> FastAPI backend**, running a strictly **plan-driven LangGraph agent** (no
+> reactive loop, no multi-model family tuning). UI and architecture details
+> below may be outdated.
+
 > Code-level comparison of 5 harnesses studied from source: Mini-Coding-Agent (1019 LOC), SWE-agent (3890+ LOC), Aider (2485+ LOC), Codex CLI (170K+ LOC Rust), GGUFLoader (~2600 LOC).
 
 ---

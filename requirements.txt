@@ -1,8 +1,8 @@
 # GGUF Loader Requirements
 # Core dependencies for the GGUF Loader application
 
-# GUI Framework
-PySide6>=6.8,<6.12
+# NOTE: no PySide6 - the desktop UI is the React app running in Electron,
+# so the Python side is backend-only (FastAPI + llama.cpp + LangGraph).
 
 # API Server
 fastapi>=0.115,<1

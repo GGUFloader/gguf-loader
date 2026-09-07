@@ -21,22 +21,19 @@ computer.
 
 ---
 
-## 🆕 What's New in 3.0.0 — React Frontend
+## What's New in 2.3.0 - the single-model agent build
 
-- **React UI** — complete rewrite from PySide6 to React + TypeScript + Tailwind
-  CSS, matching the UI patterns of DeepSeek Harness, OpenHands, and Claude Code
-- **3-panel layout** — Sessions (left), Chat (center), Workbench (right)
-- **Streaming** — token-by-token delivery via WebSocket
-- **Agent UI** — tool cards, approval dialogs, mode selector, context lens
-- **Workbench** — file explorer, terminal, git panel in right sidebar
-- **Electron packaging** — standalone desktop app (no browser needed)
-- **240 tests** — 222 original + 18 new API integration tests
-- **Dual-mode** — `python main.py --react` (default) or `--qt` (legacy)
+- **One model, zero config** - the app is optimized for **Gemma 4 12B Instruct Q4_K_M** only; all multi-model detection, family profiles, and per-model prompts were removed so that one model just works.
+- **Auto-load at startup** - the app scans its `models/` folder (plus the last-used model folder) and loads the pinned GGUF automatically; if it is missing, the header model chip downloads it with live progress. The manual Load Model step is gone.
+- **Strictly plan-driven agent** - every agent turn goes through a planner node: no tools needed, the model answers directly; tools needed, a plan is written and executed step by step. The reactive ReAct fallback was removed.
+- **Codebuff-style process UI** - plan steps, tool calls, and results render inline in the chat above each answer; the old right-hand progress panel is gone.
+- **Reliable final answers** - stray tool-call JSON envelopes are scrubbed from the live stream and the final reply, and wait-status text such as "Planning..." never sticks in the timeline.
+- **Pruned tools** - the default registry is the 10 workspace tools the agent actually uses (memory/meta tools removed), and searches are hardened against huge generated folders.
+- **Self-setup launchers** - `launch.bat` / `launch.sh` offer browser, Electron, and production modes and install Python + Node dependencies.
 
-See [REACT_MIGRATION_GUIDE.md](docs/REACT_MIGRATION_GUIDE.md) for details.
+Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in docs marked as historical.
 
 ---
-
 ## 🆕 What's New in 2.2.0
 
 - **Collision-proof pip package** — the entire app now ships inside a single
@@ -62,45 +59,27 @@ See [REACT_MIGRATION_GUIDE.md](docs/REACT_MIGRATION_GUIDE.md) for details.
 
 ## ✨ Features
 
-### React UI (v3.0)
+### Interface
 
-- 🖥️ **3-panel layout** — Sessions (left), Chat (center), Workbench (right)
-- 💬 **Streaming chat** — token-by-token delivery via WebSocket
-- 🤖 **Agent mode** — tool cards, approval dialogs, mode selector
-- 📁 **File explorer** — tree view with 30+ file type icons, search
-- 💻 **Integrated terminal** — command history, Ctrl+L clear
-- 🔀 **Git panel** — status, changed files, inline diff, commit
-- ⚙️ **Settings dialog** — Model, Agent, Appearance, Keyboard tabs
-- 🔍 **Context lens** — live token breakdown bar
-- 📊 **Metrics bar** — duration, tokens, tool calls, cost estimate
-- 🎨 **Theme** — dark/light mode, 8 accent colors, font size slider
-- ⌨️ **Keyboard shortcuts** — Ctrl+M, Ctrl+N, Ctrl+B, Ctrl+\, Esc
-- 📱 **Electron** — standalone desktop app (no browser needed)
+- 🗂️ **Sessions left, chat center, tools right** - sessions (left), the chat with the inline agent process (center), and tool panels - Files, Dashboard, Templates, Search, Workspaces - (right)
+- 💬 **Streaming chat** - token-by-token delivery via WebSocket
+- 🤖 **Agent mode** - planner-driven runs with Allow/Deny approvals, streamed inline in the chat
+- 📥 **Model chip in the header** - shows load state; downloads the pinned Gemma 4 12B Q4_K_M GGUF with live progress when it is missing
+- ⚙️ **Settings dialog** - Model, Providers, Agent, Hardware, Appearance, Keyboard, Plugins tabs
+- 🎨 **Theme** - dark/light mode, accent colors, font size
+- ⌨️ **Command palette & shortcuts** - Ctrl/Cmd+K, Ctrl/Cmd+Shift+A (agent mode), Ctrl/Cmd+Shift+[ / ] (panels), Ctrl/Cmd+1/2/3
+- 📱 **Electron** - standalone desktop app (no browser needed)
 
 ### Core Features
 
-- 🤖 **Agentic Mode (LangGraph)** — an autonomous LangGraph-driven assistant
-  that reads, writes, edits, searches, runs commands, and uses git inside a
-  workspace folder you grant it access to — with human approval for anything
-  sensitive, and SQLite checkpointing so conversations resume after restarts.
-- 🔎 **Find Paragraph** — locate a passage in a document or folder with the
-  model itself, no RAG or vector database required.
-- 🧾 **Real file reading** — extracts text from `.md`, `.pdf`, `.docx`, `.txt`
-  and source files, so the agent can summarize and answer from real content.
-- 🔄 **Universal model support** — load ANY GGUF model from anywhere; no
-  conversion or configuration.
-- ⚡ **GPU acceleration** — an **Install GPU Support** button in the sidebar
-  installs the CUDA build with live status (green tick when ready); the app
-  detects it and uses the GPU cleanly for fast inference.
-- 🌐 **Floating chat** — an always-on-top chat button that follows you across
-  apps, with proper word wrapping and right-to-left support.
-- 🔒 **Privacy first** — 100% local inference. Your prompts and files never
-  leave your machine.
-- 🎨 **Modern UI** — React (default) or PySide6 (legacy) with dark/light themes.
-- 💻 **Cross-platform** — Windows 10/11, Linux, and macOS (including Apple
-  Silicon).
-
----
+- 🤖 **Plan-driven agent (LangGraph)** - a planner node decides each turn: tool-free questions are answered directly; tasks get a step-by-step plan that runs with sandboxed tools (list/read/write/edit/move/search files, shell commands, code, git) inside the workspace you grant - with Allow/Deny approval for commands, code, and git writes, and SQLite checkpointing so conversations resume after restarts.
+- 🔎 **Advanced Search (Find Paragraph)** - locate a passage in a document or folder with the model itself, no RAG or vector database required.
+- 🧾 **Real file reading** - extracts text from `.md`, `.pdf`, `.docx`, `.txt` and source files, so the agent can summarize and answer from real content.
+- 🎯 **Single-model focus** - the build loads exactly Gemma 4 12B Q4_K_M (the only file it is tuned for); other GGUFs are rejected with a clear message.
+- ⚡ **GPU acceleration** - enable it under **Settings -> Hardware** (it installs the CUDA/Metal build with live status); the app then uses the GPU for inference.
+- 📋 **Process you can follow** - agent runs stream their plan, tool calls, and results inline in the chat, Codebuff-style.
+- 🔒 **Privacy first** - 100% local inference. Your prompts and files never leave your machine.
+- 💻 **Cross-platform** - Windows 10/11, Linux, and macOS (including Apple Silicon), via React + Electron or in the browser.
 
 ## 🎬 Screenshot
 
@@ -163,12 +142,9 @@ the CPU build otherwise.
 
 ### First launch
 
-1. **Download a model** — browse [Hugging Face GGUF models](https://huggingface.co/models?library=gguf).
-2. Click **Load Model**, pick your `.gguf` file, wait for it to load.
-3. Click the **floating chat button** and start chatting — or open the chat
-   panel in the main window.
-
----
+1. Start the app - it **auto-loads** the pinned Gemma 4 12B Q4_K_M GGUF from the `models/` folder (or the last-used model folder) in the background.
+2. No model on disk? The **model chip in the header** downloads it with live progress and loads it when finished.
+3. Chat in the main window, or press **Ctrl/Cmd + Shift + A** for Agent Mode and choose a workspace folder.
 
 ## 🤖 Agentic Mode
 
@@ -180,29 +156,21 @@ tasks, calls tools, and streams every step live.
 
 | Tool | What it does |
 |---|---|
-| `list_directory` | Explore folders in the workspace |
-| `read_file` | Read any file (MD/PDF/DOCX/TXT/code — text extracted automatically) |
-| `write_file` | Create new files |
-| `edit_file` | Make targeted edits to existing files |
+| `list_directory` / `glob` | Explore folders and match file paths in the workspace |
+| `read_file` | Read any file (MD/PDF/DOCX/TXT/code - text extracted automatically) |
 | `search_files` | Find files and grep for content |
-| `run_command` | Run a shell command inside the workspace (sandboxed) |
-| `git` | Git operations (status, diff, add, commit) |
-
-Every tool is **sandboxed to the workspace root** — the agent cannot touch
-anything outside the folder you granted.
+| `write_file` / `edit_file` / `move_file` | Create, edit, and move files |
+| `run_command` | Run a shell command inside the workspace (approval-gated) |
+| `run_python` | Execute Python source inside the workspace (approval-gated) |
+| `git` | Git operations - read-only runs freely, writes require approval |
 
 ### Human approval
 
-Shell commands and git writes are sensitive, so they pause for your approval:
-an **Allow / Deny** card appears in the agent panel and the run waits for your
-choice. Everything else (reading, searching, writing files) runs automatically.
+Shell commands, code execution, and git writes are sensitive, so they pause for an **Allow / Deny** card and the run waits for your choice. Everything else (reading, searching, file edits) runs automatically.
 
-### Live transcript
+### Inline process
 
-The agent panel shows the run as it happens — step chips, each tool call with
-its result, status lines like "📖 Reading remaining files…", and approval
-cards. Runs are checkpointed (SQLite), so state survives restarts, and a step
-budget keeps runaway loops in check.
+Each agent turn renders inline in the chat: the plan's steps, every tool call with its result, and status lines appear above the answer as the run happens, Codebuff-style. Runs are checkpointed (SQLite), so state survives restarts, and a step budget keeps runaway loops in check.
 
 ### Example tasks
 
@@ -213,12 +181,11 @@ budget keeps runaway loops in check.
 
 ---
 
-## 🔎 Find Paragraph (search without RAG)
+## 🔎 Advanced Search (Find Paragraph, no RAG)
 
-From **Tools → Find Paragraph…** you can locate a specific passage in a
-document or across a folder:
+Open the **Advanced Search** panel (magnifier icon in the right-hand panel) to locate a specific passage in a document or across a folder:
 
-- **Single file** — type a question ("what does it say about control flow?")
+**Single file** — type a question ("what does it say about control flow?")
   and the model finds and ranks the matching paragraphs.
 - **Folder search** — a planner decides which files to look at and in what
   order (using only read-only tools), with a live per-file scan counter.
@@ -235,15 +202,9 @@ finding the answer.
 The pip-installed app runs on CPU by default. To speed up inference with an
 NVIDIA GPU:
 
-1. Click **⬇ Install GPU Support** in the sidebar.
-2. The app installs the CUDA-enabled `llama-cpp-python` build into your current
-   Python environment (you'll see progress, then "✅ GPU support installed —
-   restart to apply").
-3. Restart the app. The button now shows a **green tick** ("GPU support is
-   installed") and inference uses the GPU — no CPU+GPU mixing, just the GPU.
-
-On macOS, GPU (Metal) support is enabled by building `llama-cpp-python` with
-Metal, e.g. `CMAKE_ARGS="-DGGML_METAL=on" pip install --force-reinstall llama-cpp-python`.
+1. Open **Settings -> Hardware** and click the GPU install option.
+2. The app installs the CUDA-enabled `llama-cpp-python` build into your current Python environment (you'll see progress, then a green check when it is done).
+3. Restart the app. Settings then shows a **green tick** ("GPU support is installed") and inference uses the GPU - no CPU+GPU mixing, just the GPU.
 
 For manual control you can also run the bundled scripts:
 `scripts/install_gpu_llama.bat` (Windows) / `scripts/install_gpu_llama.sh`
@@ -267,8 +228,8 @@ Gemma 4 12B Instruct Q4_K_M GGUF from
 
 - **Python:** 3.10–3.13 (pip install)
 - **OS:** Windows 10/11, Linux, macOS (Intel & Apple Silicon)
-- **RAM:** 4 GB minimum (8 GB recommended)
-- **Storage:** 2 GB free
+- **RAM:** 8 GB minimum for the 12B model (16 GB recommended)
+- **Storage:** ~8 GB free for the model file
 - **GPU:** Optional — NVIDIA CUDA on Windows/Linux, Metal on macOS
 
 ## 📦 Dependencies
@@ -278,8 +239,11 @@ together, so `pip install ggufloader` resolves the same tested combination
 every time — no dependency mismatch, and every package has prebuilt wheels for
 all three platforms:
 
-`PySide6` · `llama-cpp-python` (CPU by default) · `langgraph` ·
-`langgraph-checkpoint-sqlite` · `langchain-core` · `pydantic`
+`llama-cpp-python` (CPU by default) · `langgraph` ·
+`langgraph-checkpoint-sqlite` · `langchain-core` · `fastapi` · `uvicorn` ·
+`pydantic`
+
+(The legacy PySide6 desktop UI is no longer shipped or installed - the React app running in Electron is the only UI, so the installer contains just the Python backend plus the Electron/React frontend.)
 
 ---
 

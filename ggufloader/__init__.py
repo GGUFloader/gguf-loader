@@ -19,7 +19,6 @@ __url__ = "https://github.com/GGUFloader/gguf-loader"
 # Public API re-exports for code written against the older nested layout.
 # Kept at the bottom so `__version__` is set before any heavy module loads.
 from .main import main  # noqa: E402,F401
-from .addon_manager import AddonManager  # noqa: E402,F401
 from .config import ensure_directories  # noqa: E402,F401
 
 __all__ = [
@@ -30,3 +29,18 @@ __all__ = [
     "AddonManager",
     "ensure_directories",
 ]
+
+
+def __getattr__(name: str):
+    """Lazily resolve legacy re-exports.
+
+    ``AddonManager`` belongs to the legacy PySide6 UI layer. It is resolved
+    on demand (PEP 562) so importing the ``ggufloader`` package - and with
+    it the FastAPI backend, the PyInstaller bundle, and the pip wheel -
+    never requires PySide6 to be installed. Only code that actually touches
+    the Qt UI imports it.
+    """
+    if name == "AddonManager":
+        from .addon_manager import AddonManager
+        return AddonManager
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

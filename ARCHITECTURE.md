@@ -1,499 +1,217 @@
-# GGUF Loader — Architecture
+# GGUF Loader - Architecture (current)
 
-This document describes how GGUF Loader is structured, how it threads, and how
-to extend it. It is aimed at developers who want to contribute features, add
-services or tools, or build addons.
+This document describes how GGUF Loader is structured today: a FastAPI +
+React application built around **one pinned local model** (Gemma 4 12B
+Instruct Q4_K_M) and a **strictly plan-driven LangGraph agent**. It is aimed
+at developers who want to contribute features, add tools or presets, change
+prompts/sampling, or touch the frontend.
 
-**Design goals**
+`ARCHITECTURE_V2.md` is the separate 12-month *target* architecture; this
+document describes the current build.
 
-1. **A pure, testable core.** All domain logic (model wrappers, prompt
-   formatting, agent loop, tools) lives in `core/` and never imports Qt.
-2. **A thin Qt bridge.** `services/` adapts the pure core to Qt's threading and
-   signal model. Every background pipeline (model load, chat, agent) runs
-   through a service.
-3. **Dumb views.** UI panels render state and emit signals; they never call
-   into llama.cpp or manage model state directly. `MainWindow` is the only
-   object that wires things together (the composition root).
-4. **Backward-compatible addons.** The main window exposes the same surface the
-   old monolithic window exposed, so existing addons keep working.
+## Design principles
 
----
+1. **A pure, testable core.** Domain logic (prompt building, plan
+   execution, tools, context budgeting) lives in `ggufloader/core/` and
+   imports neither FastAPI nor the UI.
+2. **One model, forever.** This build is pinned to Gemma 4 12B Q4_K_M.
+   Model detection, family tuning, and role matrices were removed; the load
+   gate in `api/routes/model.py` rejects any other GGUF. llama.cpp is
+   touched in exactly one place: `core/llm/model_backend.py`.
+3. **The agent is a LangGraph graph, and it is strictly plan-driven.**
+   START -> planner -> (agent <-> tools) -> END. The planner decides
+   whether tools are needed and writes the step plan; the final answer
+   always comes from the plan's answer step. No reactive ReAct loop.
+4. **Stream everything, cancel everything.** No blocking LLM call leaves the
+   user staring at a frozen UI: tokens, reasoning, plan, and tool progress
+   stream over the WebSocket, and cancellation is cooperative.
+5. **Safety by default.** Every tool is jailed to the workspace root;
+   shell/python/git-write/move calls pause for human approval.
+6. **Graceful degradation, never silent failure.** Malformed plan JSON is
+   repaired and retried; an empty plan ends with an honest wrap-up; a
+   refusal is never shipped when tool evidence exists - the evidence is
+   rendered deterministically instead.
+7. **The pinned 12B is the real user.** Prompts, schemas, retries, and
+   sampling are tuned for a small quantized model that occasionally leaks
+   JSON envelopes and channel markers - the pipeline cleans and repairs for
+   it, and every fix is regression-tested.
 
-## 1. Layered overview
+## Process model
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  UI layer (ui/, widgets/)             QWidgets, Qt signals  │
-│  ChatPanel · SettingsSidebar · MainWindow · ThemeMixin      │
-│  widgets: ChatBubble · FeedbackDialog                       │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ Qt signals (queued, cross-thread)
-┌───────────────────────────▼─────────────────────────────────┐
-│  Services layer (services/)    QObject + QThread workers    │
-│  ModelService · ChatService · AgentService · Environment    │
-│  - the only layer that creates threads                      │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ plain Python calls
-┌───────────────────────────▼─────────────────────────────────┐
-│  Core layer (core/)              pure Python, no Qt         │
-│  llm/     ModelBackend · PromptBuilder                      │
-│  agent/   AgentEngine · ToolRegistry (sandboxed tools)      │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ the *only* direct contact
-┌───────────────────────────▼─────────────────────────────────┐
-│  llama-cpp-python runtime (llama_cpp.Llama)                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Support modules (not part of the layers but shared by all of them):
-
-- `main.py` — entry point: logging, llama DLL path setup, `QApplication`, opens `MainWindow`.
-- `config.py` — constants + `get_paths()`/`ensure_directories()` (creates `models/`, `chats/`, `exports/`, `logs/`, `config/`, `cache/`).
-- `resource_manager.py` — resolves paths for the four deployment modes (development, installed package, PyInstaller, frozen exe).
-- `addon_manager.py` — discovers and loads addons from `addons/`.
-- `utils.py` — small text helpers (e.g. `detect_persian_text`).
-
-### Directory layout
+One Python process runs FastAPI. The llama.cpp runtime lives in-process
+(one Llama, serialized by a lock). The React UI connects over HTTP
+(/api/*) and one WebSocket (/ws) - directly to FastAPI in browser and
+production mode, or via Vite's dev proxy in development. Electron
+(electron/main.ts) is an optional shell: it spawns the backend itself
+(port 8000) and loads the UI, cleaning both up on quit.
 
 ```
-main.py                    # Entry point (bootstrap only)
-__init__.py                # Package metadata + public API re-exports
-config.py                  # Constants + path/directory bootstrap
-resource_manager.py        # Deployment-aware path resolution
-addon_manager.py           # Addon discovery/loading + sidebar
-utils.py                   # Misc helpers
-
-core/                      # PURE domain layer (no Qt)
-├── llm/
-│   ├── model_backend.py   #   ModelBackend: callable llama wrapper + lock
-│   └── prompt_builder.py  #   PromptBuilder: system prompt + history
-└── agent/
-    ├── tool_registry.py   #   Sandboxed filesystem tools
-    └── agent_engine.py    #   Pure agent loop (tools + final answer)
-
-services/                  # Qt bridge layer (QObject + QThread workers)
-├── model_service.py       #   Background model load/unload
-├── chat_service.py        #   Streaming generation with cooperative stop
-└── agent_service.py       #   Background agent turns
-
-ui/                        # Presentation layer
-├── main_window.py         #   Composition root + addon-facing API
-├── chat_panel.py          #   Message list, input, agent controls
-├── sidebar_panel.py       #   Model/GPU/context/appearance settings
-└── theme.py               #   Dark/light stylesheets
-
-widgets/                   # Reusable widgets
-├── chat_bubble.py         #   Chat message bubble
-└── feedback_dialog.py     #   Feedback form (background email send)
-
-addons/                    # Addon packages (see §5)
-└── floating_chat/         #   Smart Floating Assistant addon
-
-scripts/                   # Developer/ops scripts (not imported by the app)
-build_exe.spec, build_hooks/   # PyInstaller packaging
+Browser / Electron shell
+   |  HTTP /api/*  +  WS /ws (typed events, heartbeat)
+   v
+FastAPI process (uvicorn, ggufloader.api.app:create_app)
+   |-- REST routers   /api/model /api/chat /api/agent /api/files /api/gpu ...
+   |-- WebSocket      /ws -> ConnectionManager -> agent run orchestration
+   |-- lifespan       startup: start_auto_load() scans the models folder,
+   |                  background-loads the pinned GGUF
+   |-- static         serves frontend/dist (production) with SPA fallback
+   v
+llama.cpp (core/llm/model_backend.py, the ONLY Llama) - serialized by lock
 ```
 
----
 
-## 2. Core layer (`core/`)
+## Startup and model lifecycle
 
-**Invariant: nothing in `core/` imports PySide6.** It can be unit-tested
-without a display and reused from any thread.
+`api/app.py`'s lifespan calls `start_auto_load()` (api/auto_load.py), which
+spawns a daemon thread that scans the default models/ folder plus the
+last-used model folder for a GGUF matching the pinned Gemma 4 12B Q4_K_M
+(PINNED_ARCH/PINNED_QUANT/PINNED_SIZE in config.py), loads it in the
+background, and reports state through /api/model/*. When the model is
+missing, the UI's model picker offers a one-click download
+(PINNED_MODEL_URL) streamed by `downloadStore` with progress in the header
+chip. The load path:
 
-### 2.1 `core/llm/model_backend.py` — `ModelBackend`
+1. /api/model/load (or auto-load) validates the file against the pinned
+   identity - other GGUFs are rejected with a clear message.
+2. `core/router.py` inspects the GGUF and produces a LoadStrategy
+   (n_ctx, n_gpu_layers, batch) that fits system RAM/VRAM
+   (system_probe.py).
+3. `core/llm/model_backend.py` instantiates the single llama_cpp.Llama.
 
-The **only module in the application that calls into the `llama_cpp`
-runtime**. Everything else — UI, services, addons — goes through
-`ModelBackend`. (`resource_manager.get_dll_path()` imports `llama_cpp` too,
-but only to locate its DLL directory, never to run inference.)
+## Agent turn flow (the heart)
 
-- `load()` creates the `llama_cpp.Llama` runtime (`n_ctx`, `n_gpu_layers`);
-  `unload()` releases it; `is_loaded` reports state.
-- **Callable interface:** `backend(prompt, stream=True, ...)` returns a token
-  generator; `stream=False` returns a full response dict — the same shape as a
-  raw `Llama` object, so legacy callers (including addons) keep working.
-- `generate_stream(prompt, **kwargs)` yields plain text tokens; `generate()`
-  returns a complete string.
-- **Thread safety:** a single `threading.Lock` serializes every call to the
-  runtime. The lock is held for the *lifetime of a stream* so two threads can
-  never interleave calls into llama.cpp (which crashes). This is why only one
-  generation can run at a time app-wide.
+An agent message arrives as {"type": "agent_start"} on /ws.
+`api/websocket/handler.py` builds the callbacks, then runs
+`GraphAgent.process(...)` in a thread executor. The whole turn is **one
+LangGraph run**:
 
-### 2.2 `core/llm/prompt_builder.py` — `PromptBuilder`
-
-Pure string formatting. Builds a `User:/Assistant:`-style conversation prompt
-from a `system_prompt`, the last 6 history messages, and the new user message.
-`stop_tokens()` returns the token-level stop sequences (`</s>`, `user:`,
-`assistant:`, …) passed to generation.
-
-### 2.3 `core/agent/tool_registry.py` — `ToolRegistry`
-
-Sandboxed filesystem tools for the agent.
-
-- A `Tool` subclass has a `name`, a `description`, and an
-  `execute(params) -> dict` returning `{"status": "success", "result": ...}` or
-  `{"status": "error", "error": ...}` (always with `"tool_name"`).
-- **Sandbox:** every path is resolved with `Tool.resolve()` relative to one
-  workspace root and rejected if it escapes it (path-traversal protection).
-- Built-in tools: `list_directory`, `read_file` (BOM/encoding aware, size
-  limit), `write_file`, `edit_file` (replace / insert_line / delete_line),
-  `search_files`.
-- `ToolRegistry.describe()` renders the tool list into the agent system prompt,
-  so new tools are advertised automatically.
-- `create_default_registry(workspace)` is the convenience factory.
-
-### 2.4 `core/agent/agent_engine.py` — `AgentEngine`
-
-A pure agent loop. It knows nothing about Qt or llama.cpp — it receives a
-plain callable `llm(prompt, max_tokens, temperature) -> str`.
-
-Flow per user message (`process(user_message, on_status, on_tool)`):
-
-1. Optional quick analysis for complex requests (status updates via callback).
-2. Ask the model for a JSON tool-call plan; parse with `extract_json()`
-   (handles ```json fences and bare balanced-brace objects).
-3. Execute each tool, streaming status and tool results via callbacks.
-4. Ask the model for a natural-language final response (with a deterministic
-   fallback if the model returns nothing useful).
-
-The engine keeps its own `conversation_history`; callbacks (`on_status`,
-`on_tool`) are how the UI learns about progress. The result dict is
-`{"response": str, "tool_results": [...]}`.
-
----
-
-## 3. Services layer (`services/`)
-
-Services are `QObject`s that expose a signal surface to the UI and run work on
-background threads. **All app background pipelines run through this layer.**
-(Two legacy `QThread` subclasses — `EmailSenderThread` and `StreamingThread` —
-were migrated onto this pattern; no `QThread` subclasses remain in the
-codebase.)
-
-### 3.1 The worker pattern (used by the services)
-
-`EnvironmentService` runs the app's own dependency launcher: a fast
-synchronous `check()` (interpreter + `requirements.txt` status) plus a
-background `run_task("install")` / `run_task("bootstrap")` that streams
-`pip` output via the `output` signal and finishes with
-`finished(bool, str)` — the same QThread + worker shape as below.
-
-`LauncherService` (plain functions, no Qt) re-exposes the shell utilities
-in `scripts/` (GPU install/monitor/verify, EXE build) as one-click
-console-window launchers from the sidebar.
-
-(Worker pattern used by all services)
-
-```python
-worker = ChatWorker()          # QObject, created in the MAIN thread
-worker.prompt = prompt         # arguments = plain attributes
-worker.backend = backend
-worker.params = params
-
-thread = QThread(self)         # parented to the service (main thread)
-worker.moveToThread(thread)
-
-thread.started.connect(worker.process)          # zero-arg @Slot()
-worker.token_received.connect(self.token_received.emit)
-worker.finished.connect(thread.quit)
-thread.finished.connect(worker.deleteLater)
-thread.finished.connect(thread.deleteLater)
-thread.finished.connect(lambda: self._clear_refs(thread, worker))
-thread.start()
+```
+WS handler -- agent_start --> GraphAgent.process (thread)
+   on_status / on_token / on_tool / on_plan / on_plan_stream / on_approval
+                              |-- AgentTransport --> typed WS events
+START --> planner node            (LLM: JSON plan; deltas stream as 'reasoning')
+       --> agent node             (follow plan step by step)
+             tool step --> tools node --> ToolOrchestrator.execute_batch
+                                       (dedupe, retry, approval interrupt,
+                                        stuck detection) --> back to agent
+             answer step --> evidence synthesis LLM call (plain prose)
+       --> END (final_answer) --> message_complete + agent_complete
 ```
 
-Rules that make this reliable:
+- **Plan structure**: {goal, steps: [{step, description, tool, parameters,
+  depends_on}]}. Normalized: max 6 steps, trailing answer step guaranteed.
+  STEP_N.result parameter references resolve from completed steps.
+- **Approval**: sensitive tools raise a LangGraph interrupt(); the UI shows
+  Allow/Deny (tool_approval); the run resumes with Command(resume=...).
+- **Evidence**: the answer step synthesizes from ALL completed tool steps
+  (not just declared dependencies), bounded to ~6000 chars; anti-refusal
+  and envelope-scrub logic guarantee clean prose.
+- **Checkpointing**: SqliteSaver per workspace thread id - runs survive
+  restarts and are resumable.
+- **Tracing**: every node visit logs [graph] <node> enter/exit | <ms> | ...
+  plus a per-turn rollup (GGUF_GRAPH_TRACE=0 to silence).
 
-- **Arguments are assigned as attributes before `thread.start()`**, then the
-  worker's `process()` is a **zero-arg `@Slot()`**.
-  > **Why?** Connecting `thread.started` to a Python lambda silently breaks
-  > cross-thread signal delivery in PySide6 — the worker code runs, but
-  > nothing it emits ever arrives on the main thread. This was a real bug
-  > found during the refactor; attributes + bound slots are the fix.
-- **Results flow back exclusively through signals.** Worker signals are
-  forwarded to the service's own signals; the UI connects to the service, never
-  to the worker.
-- **Threads are short-lived:** one `QThread` per request (per model load, per
-  generation, per agent turn), quit after the work, deleted with
-  `deleteLater`.
-- **No stale handles:** `_clear_refs()` drops the service's references when
-  the thread finishes, and every `stop()`/shutdown path nulls them — otherwise
-  you get `shiboken: QThread already deleted` at exit.
+## WebSocket event vocabulary
 
-### 3.2 `ModelService`
+/ws events (see api/websocket/handler.py + agent_transport.py):
 
-| Signal | Payload | Meaning |
+| Event | Payload | Meaning |
 |---|---|---|
-| `loading` | `str` | status text while a load is in progress |
-| `loaded` | `ModelBackend` | the ready backend (main thread) |
-| `error` | `str` | load failure |
-| `unloaded` | — | model released |
+| token | token | streamed answer text |
+| reasoning | content | live planner/thinking deltas |
+| agent_phase | status, phase, plan_step | coarse phase transitions |
+| progress_announce | content | transient/live announcement |
+| progress_step_complete | content | a plan/step line finished |
+| tool_call / tool_result | call + result | tool execution feed |
+| tool_approval | id, tool, args | approval request (blocks the run) |
+| agent_plan_update | plan | plan object, ready |
+| message_complete | content, plan, phase_log, preset, duration_ms | final message |
+| agent_complete | plan, phase_log, tool_results | run finished |
+| heartbeat | ts | keepalive (30 s) |
+| error | message | failure |
 
-- `load(path, use_gpu, n_ctx)` unloads any current model, spawns a
-  `ModelLoadWorker`, and returns the built `ModelBackend` via `loaded`.
-- The service **owns** the backend (`backend` / `model` properties, `is_loaded`).
-- `unload()` stops a pending load and releases the model.
+Status strings from the agent ("Planning...", "Plan (N steps):",
+"> Step N/M: ...", "[plan] -> tool(...)", "[OK] ...", ...) are mapped to
+these progress events by `AgentTransport._handle_status`. That mapping is
+the presentation contract - e.g. transient wait-statuses such as
+"Planning..." must never become permanent timeline rows.
 
-### 3.3 `ChatService`
 
-| Signal | Payload | Meaning |
+## Tools and safety
+
+`core/agent/tool_registry.py` defines sandboxed tools: a Tool subclass with
+name, description, JSON schema, execute(params), and an optional
+requires_approval hook.
+
+| Tool | Approval | Notes |
 |---|---|---|
-| `started` | — | a generation began |
-| `token_received` | `str` | one text token |
-| `finished` | — | generation completed |
-| `error` | `str` | generation failed |
+| list_directory, read_file, search_files, glob | never | read-only; pruned walks + caps (search/glob skip vendor dirs, read heads only) |
+| write_file, edit_file, move_file | move only | mutate inside the workspace |
+| run_command, run_python, git | always | shell/interpreter/git; non-mutating git reads may auto-run |
 
-- `generate(backend, prompt, stop_tokens, **params)` streams tokens.
-- **Cooperative stop:** `ChatWorker` checks a `threading.Event` between tokens;
-  `service.stop()` sets it, quits, and waits (≤ 2 s).
+All paths resolve against the workspace root and reject escapes. Presets
+(core/agent/presets.py: research, code_review, refactor, debug, full_stack,
+quick_fix) whitelist/blacklist tools and set step budgets, so e.g. research
+can never plan writes.
 
-### 3.4 `AgentService`
+## Frontend
 
-Mirrors the engine's callbacks as signals:
+`frontend/src/App.tsx` renders AppLayout (Header + optional Left/Right
+panels + ChatPanel + MobileNav + dialogs/banners). The WebSocket lives in
+`stores/chatStore.ts`, which reduces the typed events into zustand state.
+Agent runs display **inline in the chat column** (Codebuff style):
+progressSteps stream while a run is live and are folded into the finished
+assistant message (msg.steps) on message_complete. StreamingText renders
+live tokens; a token-level filter in `agent_transport.make_token_callback`
+keeps tool-call JSON envelopes out of the bubble. Right-panel agent and
+workbench panels (Artifacts, Context, benchmark, plugins, ...) plug in
+around the chat column. Model state (load/unload/status, download progress)
+lives in modelStore + downloadStore and drives the header chip.
 
-| Signal | Payload |
-|---|---|
-| `response_generated` | `str` — final answer |
-| `tool_executed` | `dict` — tool result |
-| `status_update` | `str` — progress line |
-| `processing_started` / `processing_finished` | — |
-| `error_occurred` | `str` |
+## Configuration
 
-- `create_engine(backend, workspace)` builds the engine: it wraps
-  `backend.generate(...)` in the `llm` callable (with generation params +
-  `PromptBuilder.stop_tokens()`), creates a sandboxed `ToolRegistry` for the
-  workspace, and returns an `AgentEngine`. The service caches it as `engine`.
-- `process_message(engine, message)` runs a turn on a worker thread.
+- ggufloader/config/model_families.json - the single gemma4 family:
+  sampling params (official Gemma 4 guidance), the shared stable system
+  prompt, context length. Read at startup by the router.
+- ggufloader/config.py - pinned-model identity (PINNED_*), chat sampling
+  defaults, chat max tokens, path helpers (get_paths()), per-deployment
+  data directories.
+- User settings are persisted by the frontend (localStorage) and sent with
+  each request; sampling caps on the agent path keep structured output
+  reliable on the quantized model.
 
----
+## How to extend
 
-## 4. UI layer (`ui/`)
+- **Add a tool**: subclass Tool in tool_registry.py, register it in the
+  default registry, give it a JSON schema (advertised automatically), set
+  requires_approval if it executes anything, and add a regression test.
+- **Add a preset**: add an AgentPreset entry in core/agent/presets.py
+  (allowed/blocked tools, max_steps, mode text).
+- **Change prompts or sampling**: family params and the system prompt live
+  in model_families.json; chat defaults in config.py. The plan/answer
+  prompt templates live in graph_agent.py and prompt_builder.py - keep the
+  "no JSON in answers" and anti-refusal rules intact.
+- **Add a REST route**: create api/routes/<name>.py and include the router
+  in api/app.py under /api/<name>.
+- **Add a WS event**: emit it from agent_transport.py or the handler, add a
+  reducer case in chatStore.ts, and render it in the UI.
+- **Frontend feature**: components in frontend/src/components/, state in a
+  zustand store, typed client calls in frontend/src/api/.
 
-### 4.1 Composition root — `MainWindow`
+## Testing and validation
 
-`MainWindow(QMainWindow, ThemeMixin)` owns everything:
+- Backend: python -m pytest tests/unit - headless, no model/GPU needed.
+- Frontend: cd frontend && npx tsc --noEmit and npm run build.
+- Graph tracing: run with default tracing and read the [graph] lines in the
+  server log to see node order and timing.
+- The auto-loader is skipped under pytest (GGUFLOADER_SKIP_AUTOLOAD); for
+  manual backend runs, keep the model in the models/ folder (or the
+  remembered folder) and it loads itself at startup.
 
-- three services (`_model_service`, `_chat_service`, `_agent_service`),
-- a `PromptBuilder` and the `conversation_history` list,
-- the panels: `SettingsSidebar` and `ChatPanel`, arranged in a `QSplitter`
-  (no addon column — addons are launched from the **Addons menu**),
-- a menu bar (File / View / Addons / Help) built by `_build_menu_bar`.
+## Invariants
 
-Its own logic is limited to **wiring** (`_wire_services`, `_wire_ui_signals`)
-and **state transitions** (model loaded, generation finished, agent init,
-theme toggled via `theme_changed`).
-`closeEvent` stops the floating-chat addon, then stops chat/agent services and
-unloads the model.
-
-### 4.2 Dumb panels
-
-- **`SettingsSidebar`** — emits `load_model_requested`, `dark_mode_toggled`,
-  `text_size_changed`, `clear_chat_requested`, `feedback_requested`, … and
-  exposes state getters (`get_processing_mode()`, `get_context_size()`) and
-  setters (`set_status`, `set_model_info`, `set_loading`). It never touches
-  services directly.
-- **`ChatPanel`** — renders bubbles (`ChatBubble`), streams tokens
-  (`begin_streaming` / `stream_token` / `finish_streaming`), hosts the input
-  (`MessageInput`: Enter sends, Shift+Enter is a newline), and the agent-mode
-  controls (toggle, workspace combo/browse, status label). Emits
-  `message_submitted`, `agent_mode_toggled`, `workspace_selected`.
-- **`ThemeMixin`** — `apply_styles()` switches `DARK_STYLESHEET` /
-  `LIGHT_STYLESHEET`.
-
-**Convention:** panels never import `services/` or `core/`; they communicate
-only through signals and setter methods. This keeps them reusable and makes the
-data flow visible in one place (`MainWindow`).
-
----
-
-## 5. Threading model
-
-```
-Thread                            Owns                                   Runs
-───────────────────────────────────────────────────────────────────────────────────
-Main thread        QApplication, all QWidgets, services,      UI updates, signal
-                   ModelBackend handle (owner)                wiring, addons
-Worker (load)      ModelLoadWorker (per load)                 ModelBackend(...).load()
-Worker (chat)      ChatWorker (per generation)                generate_stream() loop
-Worker (agent)     AgentWorker (per turn)                     AgentEngine.process()
-```
-
-Key properties:
-
-1. **UI runs only on the main thread.** Qt widgets are never touched from a
-   worker.
-2. **The model backend is owned by the main thread** (via `ModelService`) but
-   *called from* worker threads; `ModelBackend`'s internal lock makes that safe.
-3. **All worker→UI communication is via queued signals.** A signal emitted on
-   a worker thread with a receiver on the main thread is delivered by the
-   event loop, so UI code can safely touch widgets in the connected slot.
-4. **One generation at a time.** The lock in `ModelBackend` serializes model
-   calls; `ChatService.generate()` and `AgentService.process_message()` also
-   stop any in-flight request before starting a new one.
-5. **Stop is cooperative.** A `threading.Event` checked between tokens, plus a
-   bounded `thread.wait(2000)`.
-6. **Clean shutdown.** On `closeEvent`: addon `stop()` → chat/agent
-   `stop()` → `ModelService.unload()`; finished threads `deleteLater`
-   themselves and the services clear their references.
-
-### Example: a chat message
-
-```
-User types in ChatPanel ── message_submitted(text) ──► MainWindow._send_message
-                                                          │ model loaded? no → warn
-                                                          │ history += user msg
-                                                          │ prompt = PromptBuilder.build(...)
-                                                          │ ChatPanel.begin_streaming()
-                                                          ▼
-                                                      ChatService.generate(...)
-                                                          │ create ChatWorker (attrs),
-                                                          │ moveToThread, thread.start()
-                                                          ▼
-Worker thread: for token in backend.generate_stream(prompt): emit token_received(token)
-                                                          │  (queued to main thread)
-                                                          ▼
-MainWindow ── token_received ──► ChatPanel.stream_token  (bubble grows, autoscroll)
-                                                          │
-Worker: emit finished ──► thread.quit ──► _clear_refs      │
-                                                          ▼
-MainWindow._on_generation_finished ──► finish_streaming() → history += response
-                                        generation_finished.emit()  (→ addons)
-```
-
-### Example: an agent turn
-
-```
-Agent mode on ──► MainWindow._init_agent ──► AgentService.create_engine(backend, workspace)
-Message ──► _send_to_agent ──► AgentService.process_message(engine, text)
-Worker thread: engine.process(text, on_status=emit status_update, on_tool=emit tool_executed)
-  status_update  ──► ChatPanel.add_system_message      (progress lines)
-  tool_executed  ──► MainWindow._on_agent_tool_executed (✓/✗ system messages)
-  response_generated ──► ChatPanel.add_ai_message
-```
-
----
-
-## 6. Addon system
-
-Addons live in `addons/<name>/` and must expose a `register(parent=None)`
-function in their `__init__.py`. `AddonManager` scans the directory, imports
-each package, and calls `register(main_window)`; the return value (if any) is
-embedded in the main window. Addons are launched from the **Addons menu**
-(`AddonManager.open_addon_dialog`), which calls `register(parent)` again.
-
-The `floating_chat` addon shows the **main-window contract** addons rely on:
-
-| Member | Type | Purpose |
-|---|---|---|
-| `model` | property → `ModelBackend` or `None` | callable, llama-compatible (`model(prompt, stream=True)`); `None` when unloaded |
-| `model_loaded` | `Signal(object)` | emitted when a model finishes loading |
-| `model_unloaded` | `Signal()` | emitted when the model is released |
-| `generation_finished` | `Signal()` | emitted when the main chat completes |
-| `generation_error` | `Signal(str)` | emitted when generation fails |
-| `theme_changed` | `Signal(bool)` | emitted when dark/light mode is toggled (`True` = dark); addons can connect to restyle themselves |
-| `chat_generator` | always `None` | legacy hook; `None` keeps addons on the `model` path |
-| `_floating_chat_addon` | attribute | the addon stores its own instance here for lifecycle management |
-
-How the addon finds the window: `register(parent)` checks whether `parent`
-(and then its parents, then `QApplication.topLevelWidgets()`) has both
-`model` and `model_loaded` attributes. If you build an addon, do the same —
-**do not** import `MainWindow` directly, or your addon breaks when the app is
-packaged.
-
----
-
-## 7. How to extend
-
-### 7.1 Add an agent tool
-
-1. Subclass `Tool` in `core/agent/tool_registry.py`:
-
-   ```python
-   class CurrentTimeTool(Tool):
-       name = "current_time"
-       description = "Return the current date and time"
-
-       def execute(self, params):
-           import datetime
-           return {"status": "success", "result": str(datetime.datetime.now()),
-                   "tool_name": self.name}
-   ```
-
-2. Register it in `ToolRegistry.__init__` (`self.register(CurrentTimeTool)`).
-   It appears in the agent's system prompt automatically via `describe()`.
-3. Optional polish: extend `AgentEngine._describe()` and
-   `_summarize_result()` (status-line wording) and `MainWindow._on_agent_tool_executed`
-   (system-message wording) for the new tool.
-
-### 7.2 Add a service (the pattern)
-
-Follow `ChatService` exactly:
-
-1. **Worker** `QObject` with arg *attributes*, a zero-arg `@Slot() process()`,
-   and result signals.
-2. **Service** `QObject` with the public signal surface; a
-   `start_work(...)` method that stops the previous run, builds the worker,
-   `moveToThread`s it, wires `thread.started.connect(worker.process)`,
-   forwards worker signals to service signals, quits the thread on completion,
-   `deleteLater`s both, and calls `_clear_refs`.
-3. Add the stop/cleanup calls to `MainWindow.closeEvent` and wire the new
-   signals in `_wire_services`.
-
-### 7.3 Add a UI panel
-
-- Emit signals from the panel; expose setter methods for state; never import
-  `services/` or `core/`.
-- Add the panel to the splitter in `MainWindow._build_ui()` and connect it in
-  `_wire_ui_signals()`.
-
-### 7.4 Write an addon
-
-```
-addons/my_addon/
-├── __init__.py     # from .main import register
-└── main.py         # register(parent=None) -> QWidget | None
-```
-
-- Locate the window via `hasattr(parent, "model")`/`model_loaded` (walk
-  parents, then `QApplication.topLevelWidgets()`).
-- Connect to `model_loaded`, `generation_finished`, `generation_error`, `theme_changed`; call
-  `gguf_app.model(prompt, stream=True)` for inference.
-- Store your instance on the window (e.g. `gguf_app._my_addon`) and stop it in
-  `closeEvent` if needed. See the [Addon Development Guide](https://ggufloader.github.io/docs/addon-development/) for the full guide.
-
-### 7.5 Add configuration
-
-Add constants to `config.py` (they're all documented in the [Configuration Guide](https://ggufloader.github.io/docs/configuration/)).
-Runtime-created directories are declared in `get_paths()` /
-`ensure_directories()`; `resource_manager.py` decides where they actually live
-per deployment mode (dev = project root, exe = `%LOCALAPPDATA%`/`~`).
-
-### 7.6 Packaging
-
-- `scripts/build_exe.bat` → `pyinstaller build_exe.spec`.
-- Each package gets a PyInstaller hook in `build_hooks/`
-  (`hook-core.py`, `hook-services.py`, `hook-ui.py`, `hook-widgets.py`,
-  `hook-addons.py`, `hook-llama_cpp.py`). If you add a top-level package, add
-  a hook and a `hiddenimports` entry in `build_exe.spec`.
-
----
-
-## 8. Testing & validation
-
-- **Core is unit-testable without Qt.** `PromptBuilder`, `ToolRegistry`
-  (including sandbox-escape rejection) and `AgentEngine.extract_json`/loop are
-  plain Python.
-- **Syntax check:** `python -m compileall -q .`
-- **Headless GUI smoke test** (no display needed):
-  `QT_QPA_PLATFORM=offscreen python -c "from ui.main_window import MainWindow; ..."`.
-  Verify: window constructs, addons register, chat pipeline streams tokens and
-  finishes, agent pipeline responds, shutdown releases all thread references.
-- **Dependencies:** install into `.venv` (`python -m venv .venv`, then
-  `pip install -r requirements.txt`); always use `.venv`'s interpreter.
-
----
-
-**Keep the invariants:** no Qt in `core/` · only `ModelBackend` calls into
-llama.cpp · background pipelines run through `services/` (don't add new
-`QThread` subclasses) · panels only talk in signals · addons find the window
-via duck typing, never by import.
+No UI/frontend code creates a second Llama | only model_backend.py touches
+llama.cpp | the planner is the only gate to tool execution | the final
+answer always comes from the plan's answer step | no reactive ReAct loop |
+every WS event type has a matching store reducer | tools stay inside the
+workspace and sensitive ones always ask first | unit tests stay headless.

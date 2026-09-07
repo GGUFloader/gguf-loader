@@ -2,6 +2,8 @@
 
 import struct
 
+import pytest
+
 from ggufloader.core.llm.model_backend import holdback_stream
 from ggufloader.core.llm.model_profiles import (
     read_gguf_general_metadata,
@@ -63,6 +65,9 @@ class FakeBackend:
 
 
 def _fit(messages, params, backend=None):
+    # MainWindow is part of the legacy PySide6 UI layer; skip these tests
+    # in backend-only environments where PySide6 is not installed.
+    pytest.importorskip("PySide6")
     from types import SimpleNamespace
     from ggufloader.ui.main_window import MainWindow
     backend = backend or FakeBackend()
@@ -74,6 +79,7 @@ def _fit(messages, params, backend=None):
 
 
 def _make_window():
+    pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
     import os

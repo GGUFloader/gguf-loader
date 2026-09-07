@@ -1,9 +1,10 @@
-# GGUF Loader — Quick Reference
+# GGUF Loader - Quick Reference
 
-A privacy-first desktop app that runs **GGUF large language models locally** on
-Windows, Linux, and macOS (PySide6 + llama.cpp via `llama-cpp-python`). Load a
-`.gguf` model, chat with it, and use the floating chat and agentic modes —
-everything runs on your machine, no cloud.
+A privacy-first desktop app that runs one large language model - Google
+**Gemma 4 12B Instruct (Q4_K_M)** - fully locally. The frontend is React +
+TypeScript on a FastAPI backend, with a built-in **plan-driven agent**
+(LangGraph) that can read, write, search, and run commands inside a workspace
+folder you choose. No cloud, no telemetry.
 
 ---
 
@@ -19,7 +20,7 @@ Grab the right file from [GitHub Releases](https://github.com/GGUFloader/gguf-lo
 | `GGUFLoader_v<version>_CPU.exe` | ~70 MB | Windows, any machine |
 | `GGUFLoader_v<version>_linux_x86_64_CPU` | ~105 MB | Linux (chmod +x, run directly) |
 
-No Python or other runtime is needed — the exe is self-contained.
+No Python or other runtime is needed - the exe is self-contained.
 
 ### Option 2: pip install
 
@@ -28,7 +29,7 @@ pip install ggufloader
 ggufloader          # launch the app
 ```
 
-Requires Python 3.10–3.13. The wheel only installs the `ggufloader` name, so it
+Requires Python 3.10-3.13. The wheel only installs the `ggufloader` name, so it
 is safe alongside other packages.
 
 ### Option 3: Run from source
@@ -37,100 +38,100 @@ is safe alongside other packages.
 git clone https://github.com/GGUFloader/gguf-loader.git
 cd gguf-loader
 python -m venv .venv
-.venv\Scripts\activate        # Windows — or: source .venv/bin/activate
+.venv\Scripts\activate        # Windows - or: source .venv/bin/activate
 pip install -r requirements.txt
-python main.py
+python -m ggufloader.main       # or: python main.py
 ```
 
 ### Option 4: Launcher scripts (auto-setup)
 
 `launch.bat` (Windows) and `launch.sh` (Linux/macOS) create a virtualenv if
-needed, check/install dependencies, and start the app. They report clear,
-actionable errors for the usual setup problems:
+needed, check/install Python and Node dependencies, then ask which mode to run:
 
-- **Linux without a C compiler** — no problem: `llama-cpp-python` is installed
-  from abetlen's **prebuilt CPU wheel index** instead of being compiled, so
-  `gcc`/`cmake` are optional.
-- Missing `python3-venv` (Debian/Ubuntu) — falls back to `virtualenv`, or tells
-  you the exact `apt` command.
-- Python < 3.10, no network to PyPI, or a broken venv — each gets a specific
-  message with the fix.
+| Choice | Mode | What it does |
+|---|---|---|
+| **1** | Browser (default) | Starts the FastAPI backend + Vite dev server and opens the app in your browser |
+| **2** | Desktop | Compiles and launches the Electron window (Electron owns the backend on :8000) |
+| **3** | Production | Rebuilds `frontend/dist` if stale, then serves the built UI from one server |
+
+The scripts report clear, actionable errors for the usual setup problems
+(missing Python 3.10+, no `python3-venv`, Linux without a C compiler - the CPU
+`llama-cpp-python` wheel is pulled prebuilt, so `gcc`/`cmake` are optional).
 
 ---
 
 ## First Launch
 
-1. **Get the model** — download the Gemma 4 12B Instruct Q4_K_M GGUF from
-   [Hugging Face](https://huggingface.co/models?library=gguf&query=gemma+4+12b).
-   This build is pinned to that one model; other `.gguf` files are rejected
-   at load time.
-2. Click **Load Model**, pick your Gemma 4 12B Q4_K_M `.gguf` file, wait for
-   it to load.
-3. Chat in the main panel, or click the **floating chat button** for a
-   desktop-level chat window.
+1. Start the app (any method above). On startup it **auto-detects the pinned
+   Gemma 4 12B Q4_K_M GGUF** in the `models/` folder (plus the last-used model
+   folder) and loads it in the background - there is no manual load step.
+2. If the model file is **not on disk**, the model chip in the top-right of the
+   header offers a **Download** action with live progress; once finished it
+   loads automatically.
+3. The header chip shows the state at a glance: `No model` / downloading with a
+   percentage / the loaded filename.
+4. Start chatting in the center panel. Press `Ctrl/Cmd + Shift + A` to switch
+   to **Agent Mode** and pick a workspace folder.
+
+Only the pinned model loads: any other `.gguf` file is rejected at load time
+with a clear message (this build is single-model by design).
 
 ---
 
-## Features
+## Interface
 
-- **Chat panel** — streamed responses from the loaded local model.
-- **Floating Chat addon** — always-on-top messenger-style button; drag it
-  anywhere, position is remembered. (On Linux Wayland it stays inside the app
-  window — use X11 / `QT_QPA_PLATFORM=xcb` for full floating behavior.)
-- **Agentic Mode** — LangGraph-driven working assistant for a folder you
-  choose: it plans multi-step tasks, reads/creates/edits files via tools, and
-  streams every step. Approval-gated tools keep it safe, and each workspace's
-  conversation is checkpointed to SQLite — it survives app restarts and
-  resumes where you left off.
-- **Find Paragraph** — locate the passage that answers a question inside a
-  document or a whole folder (light mode pre-filters by keyword; "exhaustive"
-  scans everything). No embeddings or vector store needed.
+- **Left panel** - chat sessions (new, switch, resume; stored in SQLite).
+- **Center** - the chat. Agent turns render their **process inline**, Codebuff
+  style: the plan's steps, each tool call with its result, and status lines
+  appear above the final answer, which is clean markdown.
+- **Right panel** - tool panels: Files, Dashboard, Templates, Advanced Search,
+  Workspaces, and more (switch with the icons or `Ctrl/Cmd + 1/2/3`).
+- **Header** - model chip (download/load state) and panel toggles.
+- **Settings** (gear icon) - tabs: Model, Providers, Agent, Hardware,
+  Appearance, Keyboard, Plugins.
+
+### Keyboard shortcuts
+
+| Shortcut (Ctrl = Cmd on macOS) | Action |
+|---|---|
+| `Ctrl + K` | Command palette |
+| `Ctrl + Shift + A` | Toggle Agent Mode |
+| `Ctrl + Shift + L` | Clear chat |
+| `Ctrl + Shift + [` / `Ctrl + Shift + ]` | Show/hide left / right panel |
+| `Ctrl + 1` / `2` / `3` | Right panel: Files / Dashboard / Templates |
+| `Enter` | Send message |
+| `Shift + Enter` | New line in the input |
+| `Esc` | Stop the running reply |
+| `Ctrl + /` | Keyboard shortcuts help |
+
+---
+
+## Agent Mode
+
+Agent Mode turns the local model into a working assistant for a **workspace
+folder** you choose (your project, a doc set, anything):
+
+1. **Plan** - the planner node decides whether the request needs tools. If not,
+   the model answers directly. If yes, it writes a step-by-step plan.
+2. **Execute** - each step runs in order (list/read/write/edit/search files,
+   run commands, git) using tools sandboxed to the workspace root.
+3. **Answer** - the plan's final step synthesizes the result into a normal
+   reply, shown in the chat.
+
+Approvals: `run_command`, code execution, and git **write** operations pause for
+an **Allow / Deny** card; reading/searching runs freely. Every run is
+checkpointed to SQLite, so work survives restarts.
+
+---
 
 ## GPU vs CPU
 
 - The **GPU exe** bundles the CUDA runtime; the **CPU exe** is ~10x smaller and
   runs anywhere. CPU-only builds still work on NVIDIA machines, just slower.
-- From source/pip, the default install is **CPU**. To enable GPU on Windows:
-  click **⬇ Install GPU Support** in the app's sidebar — it installs the CUDA
-  build with a live status and flips to a green ✅ when done (then restart).
-  Equivalent manual path: `scripts/install_gpu_llama.bat`. macOS uses Metal
-  (built via `CMAKE_ARGS="-DGGML_METAL=on"`). CUDA wheels come from
-  `https://abetlen.github.io/llama-cpp-python/whl/cu124`.
-
----
-
-## Addons
-
-Addons are small packages that plug into the app UI. The **Floating Chat**
-addon ships bundled. Each addon is a directory with an `__init__.py` exposing a
-`register(parent=None) -> QWidget` function; the returned widget is hosted in
-the sidebar and in an "Addon:" dialog.
-
-- Where addons live: bundled ones in `ggufloader/addons/`; user addons in the
-  per-user data directory resolved by `find_addons_dir()`.
-- Write your own: see **[Developing Addons](ggufloader/addons/README.md)**.
-
----
-
-## Development
-
-```bash
-# Tests (no GPU/model needed)
-python -m pytest tests/unit
-
-# Windows executable — detects GPU vs CPU and names the artifact
-scripts/build_exe.bat                 # → dist/GGUFLoader_v<ver>_GPU.exe | _CPU.exe
-
-# Linux executable (run on Linux or WSL)
-scripts/build_linux.sh                # → dist/GGUFLoader_v<ver>_linux_x86_64_CPU
-
-# Wheel / sdist
-pip install build && python -m build  # → dist/
-```
-
-- Version lives in `ggufloader/_version.py` (mirrored in `pyproject.toml`).
-- One-file binaries are **not** cross-platform — build each on its own OS.
-- New bundled addons must be added to `build_exe.spec` (datas + hiddenimports).
+- From source/pip, the default install is **CPU**. To enable GPU: open
+  **Settings > Hardware** and click the GPU install option (installs the CUDA
+  build with live status, then restart). macOS uses Metal.
+- Manual equivalent: `scripts/install_gpu_llama.bat` / `install_gpu_llama.sh`.
 
 ---
 
@@ -138,19 +139,21 @@ pip install build && python -m build  # → dist/
 
 | Symptom | Fix |
 |---|---|
-| Chat says "Model: Not loaded" | Load a model in the main window first |
+| Header chip says "No model" | The pinned GGUF is not in the `models/` folder - click the chip to download it, or point the model picker at a folder containing `gemma-4-12B-it-Q4_K_M.gguf` |
+| "Unsupported model" error | Other GGUF files are rejected by design - this build is pinned to Gemma 4 12B Q4_K_M |
 | `Failed to build llama-cpp-python` on Linux | Use `launch.sh` (prebuilt CPU wheels) or install `build-essential cmake` |
-| Floating button stuck / off-screen | Delete the `FloatingChat` settings (registry / `~/.config/GGUFLoader/…` / macOS plist) and restart |
-| Button doesn't float above apps on Linux | That's Wayland — run under X11 or `QT_QPA_PLATFORM=xcb` |
-| CUDA out of memory | Use a smaller model, fewer context layers (`n_gpu_layers`), or the CPU build |
-| Slow folder search | Use light mode (default) — it only reads keyword-matching chunks |
+| Slow responses | Close other RAM-heavy apps, or enable GPU in Settings > Hardware |
+| CUDA out of memory | Lower `n_gpu_layers` / context in Settings > Model, or use the CPU build |
+| Agent never reaches an answer | Check the inline timeline - if a tool call is waiting, approve or deny the card; Esc stops the run |
 
 ---
 
 ## More Docs
 
-- [README](README.md) — full overview and install guide
-- [Developing Addons](ggufloader/addons/README.md) — addon API and examples
-- [AGENTS.md](AGENTS.md) — codebase guide for AI coding agents
-- [Architecture](ARCHITECTURE.md) / [ARCHITECTURE_V2.md](ARCHITECTURE_V2.md)
+- [README](README.md) - full overview
+- [User Guide](docs/user-guide.md) - deeper walkthrough of the UI
+- [Installation](docs/installation.md) · [FAQ](docs/faq.md)
+- [Documentation index](docs/DOCUMENTATION.md) · [Navigation guide](docs/NAVIGATION_GUIDE.md)
+- [AGENTS.md](AGENTS.md) - codebase guide for AI coding agents
+- [Architecture](ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

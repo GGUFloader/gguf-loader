@@ -1,5 +1,12 @@
 # DeepSeek Harness vs GGUFLoader -- Deep UI Comparison
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend and
+> FastAPI backend**, running a strictly **plan-driven LangGraph agent** (no
+> reactive loop, no multi-model family tuning). UI and architecture details
+> below may be outdated.
+
 ## 1. What DSH Streams vs GGUFLoader Streams
 
 ### DSH Streams:

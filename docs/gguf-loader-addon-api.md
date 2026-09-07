@@ -616,9 +616,9 @@ class SafeExecution:
 
 ## 📚 Additional Resources
 
-- [Smart Floater Example](smart-floater-example.md) - Complete addon example
+- [Smart Floater Example](using-floating-button-gguf-loader.md) - Complete addon example
 - [Addon Development Guide](addon-development.md) - Step-by-step development guide
-- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+- [Troubleshooting](faq.md#troubleshooting) - Common issues and solutions
 
 ---
 

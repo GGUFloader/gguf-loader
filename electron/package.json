@@ -5,6 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
+    "build:standalone": "tsc && node scripts/write-standalone-package.cjs",
     "dev": "concurrently \"npm run build:watch\" \"wait-on dist/main.js && electron .\"",
     "build:watch": "tsc --watch",
     "pack": "npm run build && electron-builder --dir",

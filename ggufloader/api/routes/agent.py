@@ -349,14 +349,24 @@ async def agent_model_switch(req: HotSwapRequest) -> dict:
     from ggufloader.core.agent.model_hotswap import ModelHotSwap
 
     def load_model(path, n_ctx=4096, n_gpu_layers=-1):
-        from ggufloader.services.model_service import ModelService
-        svc = ModelService()
-        return svc.load(path, use_gpu=n_gpu_layers != 0, n_ctx=n_ctx)
+        # Load through the canonical router path (inspect -> plan -> fallback
+        # ladder) instead of the legacy Qt ModelService - the backend runs
+        # without PySide6 in the Electron-only builds.
+        from ggufloader.api.deps import get_router
+        from ggufloader.core.router import ModelRole
+        router = get_router()
+        backend, _profile, _strategy, _config = router.load(
+            path,
+            ModelRole.CHAT,
+            n_ctx=n_ctx,
+            use_gpu=n_gpu_layers != 0,
+            n_gpu_layers=n_gpu_layers,
+        )
+        return backend
 
     def unload_model():
-        from ggufloader.services.model_service import ModelService
-        svc = ModelService()
-        svc.unload()
+        from ggufloader.api.deps import set_model_backend
+        set_model_backend(None)
 
     swap = ModelHotSwap(load_fn=load_model, unload_fn=unload_model)
     if req.fallback_chain:
@@ -367,9 +377,8 @@ async def agent_model_switch(req: HotSwapRequest) -> dict:
 @router.post("/model/unload")
 async def agent_model_unload() -> dict:
     """Unload the current model."""
-    from ggufloader.services.model_service import ModelService
-    svc = ModelService()
-    svc.unload()
+    from ggufloader.api.deps import set_model_backend
+    set_model_backend(None)
     return {"status": "unloaded"}
 
 

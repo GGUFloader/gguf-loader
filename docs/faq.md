@@ -1,243 +1,160 @@
 # Frequently Asked Questions
 
+Common questions about GGUF Loader, answered for the current build (a
+single-model, plan-driven agent app with a React frontend on a FastAPI
+backend).
+
+---
+
 ## General
 
 ### What is GGUF Loader?
 
-GGUF Loader is a desktop application that lets you run large language models (LLMs) locally on your computer. It supports GGUF format models and provides a user-friendly interface for chatting with AI.
+A privacy-first desktop application that runs one large language model -
+Google **Gemma 4 12B Instruct (Q4_K_M)** - fully locally. It combines a
+streaming chat with an **agent mode** that plans and executes multi-step file
+tasks (read, search, write, edit, run commands, git) inside a workspace folder
+you choose. Everything runs on your machine.
 
-### Is it free?
+### Does GGUF Loader need the internet?
 
-Yes, GGUF Loader is completely free and open source under the MIT License.
+No. Inference is 100% local. The only online step is the one-time **download of
+the model file** (the app can do it for you). Optional API providers, GPU
+packages, and update checks use the network only if you enable them.
 
-### Does it work offline?
+### Which model does this build run?
 
-Yes! Once you've downloaded a model, everything runs locally on your machine with no internet connection required.
+Exactly one: **Gemma 4 12B Instruct, Q4_K_M** (`gemma-4-12B-it-Q4_K_M.gguf`).
+The app is deliberately optimized for that model - prompts, sampling, and
+context settings are tuned for it. Other GGUF files are rejected at load time
+with a clear message.
 
-### What platforms are supported?
+### What happened to the old multi-model version?
 
-- Windows 10/11
-- Linux (most distributions)
-- macOS
+Earlier versions loaded any GGUF. This build intentionally dropped that in
+favor of a single, well-tuned model so everything "just works" - no model
+family detection, no per-model prompt headaches. Older multi-model docs are
+kept for reference and marked as historical.
 
-## Installation
+---
 
-### Do I need Python installed?
+## The Model
 
-- **Windows Executable:** No, Python is bundled
-- **pip install:** Yes, Python 3.7+ required
-- **From source:** Yes, Python 3.7+ required
+### How do I get the model loaded?
 
-### How much disk space do I need?
+You usually do not have to do anything:
 
-- Application: ~500MB
-- Models: 4-20GB each (depending on model size)
-- Recommended: 10GB+ free space
+1. Drop the file `gemma-4-12B-it-Q4_K_M.gguf` into the app's `models/` folder
+   (or any folder you point the picker at), then start the app - it
+   **auto-loads the model in the background**.
+2. If the file is missing, the **model chip in the header** offers a
+   **Download** action with live progress, and loads the model automatically
+   once the download finishes.
 
-### Can I install it on a USB drive?
+There is no manual "Load Model" step anymore.
 
-Yes, the portable executable can run from a USB drive. Just copy the entire folder.
+### Where can I download the model manually?
 
-## Models
+Search Hugging Face for Gemma 4 12B Instruct GGUF (Q4_K_M) - the app's pinned
+file is `gemma-4-12B-it-Q4_K_M.gguf`. Place it in the `models/` folder (or a
+folder you choose via the model picker) and restart, or just use the in-app
+Download button.
 
-### Where do I get models?
+### How much RAM / disk do I need?
 
-Download GGUF models from:
-- [Hugging Face](https://huggingface.co/models?library=gguf)
-- [TheBloke's Collection](https://local-ai-zone.github.io)
-- Model links in our [README](../README.md)
+- The model file is about **8 GB** on disk.
+- Plan for **8-10 GB of free RAM** while running; close other heavy apps if it
+  is sluggish. GPU offloading lowers CPU/RAM pressure.
 
-### What model size should I use?
+### Can I use a different or larger model?
 
-Based on your RAM:
-- **4GB RAM:** Q4_0 models (4-5GB)
-- **8GB RAM:** Q6_K models (6-7GB)
-- **16GB+ RAM:** Q8_0 or larger models
-
-### What does Q4_0, Q6_K mean?
-
-These are quantization levels:
-- **Q4_0:** 4-bit quantization (smaller, faster, less accurate)
-- **Q6_K:** 6-bit quantization (balanced)
-- **Q8_0:** 8-bit quantization (larger, slower, more accurate)
-
-### Can I use multiple models?
-
-Yes, but only one model can be loaded at a time. You can switch models by loading a different file.
+No - not in this build. It is pinned to Gemma 4 12B Q4_K_M by design. If you
+need another model, use the multi-model (Qt-era) releases or fork the code;
+the current codebase intentionally hard-codes one model.
 
 ### Do I need a GPU?
 
-No, GGUF Loader works on CPU. GPU acceleration is optional and can improve performance.
+No, it runs on CPU. An NVIDIA GPU (CUDA) or Apple Silicon (Metal) speeds things
+up considerably: open **Settings > Hardware** and install GPU support, then
+restart.
 
-## Usage
+---
 
-### How do I load a model?
+## Using the App
 
-1. Click the "Load Model" button
-2. Browse to your `.gguf` file
-3. Wait for it to load
-4. Start chatting!
+### What is the difference between Chat and Agent Mode?
 
-### Why are responses slow?
+- **Chat mode** - the model answers your questions directly.
+- **Agent Mode** (toggle with **Ctrl/Cmd + Shift + A**) - a planner analyzes
+  your prompt. For tool-free questions it answers directly too; for tasks it
+  writes a step-by-step plan, executes the steps with sandboxed tools, and
+  produces a final answer. You watch the whole process inline.
 
-- **Large model:** Try a smaller/quantized model
-- **Low RAM:** Close other applications
-- **CPU-bound:** Consider GPU acceleration
-- **High max_tokens:** Reduce in settings
+### Which tools does the agent have?
 
-### Can I save my chats?
+Listing/reading files, writing, editing, moving, searching file content, running
+shell commands, executing code, and git. Commands, code execution, and git
+**writes** pause for an **Allow / Deny** approval card; everything is sandboxed
+to the workspace folder you grant.
 
-Yes, use the "Export Chat" feature to save conversations to a file.
+### Can I save and resume chats?
 
-### How do I change the AI's personality?
+Yes. Every conversation is a session (left panel) and agent runs are
+checkpointed to SQLite, so they survive restarts. The right-hand panel also has
+export/import tools for sessions.
 
-Use the System Prompts dropdown to select different personalities (Creative Writer, Code Expert, etc.) or create custom prompts.
+### How do I steer the assistant's behavior?
 
-## Smart Floating Assistant
+In **Settings > Agent** pick a preset (Research, Code Review, Refactor, Debug,
+Full Stack, Quick Fix, ...), which sets the system prompt and sampling profile.
 
-### What is the Smart Floating Assistant?
+### Answers occasionally show raw tool output or JSON - is that normal?
 
-An addon that lets you select text anywhere on your system and process it with AI (summarize, comment, etc.).
+It should not happen. A run's final answer is meant to be clean markdown; if a
+reply ever arrives as raw JSON or repeated fragments, press **Esc**, ask again,
+or restart the app. If it keeps happening, report it with the server log - it
+is treated as a bug.
 
-### How do I enable it?
+### Where is the old Smart Floating Assistant / floating chat?
 
-It's enabled by default. Open the **Addons** menu to verify it's listed.
+It belonged to the previous PySide6-era build. The current React app does not
+include a global floating chat; agent runs instead show their process **inline
+in the chat column**. Docs that describe the floating assistant are marked as
+historical.
 
-### Why isn't the floating button appearing?
+### Can I extend the UI with panels?
 
-- Ensure a model is loaded
-- Check the addon is enabled
-- Try restarting the application
-- Verify clipboard permissions
+The right-hand panel is plugin-based (built-in and third-party panels are
+listed in Settings > Plugins). Developers: see the
+[Addon API](gguf-loader-addon-api.md) and
+[Creating Addons](creating-addons-in-gguf-loader.md) guides.
 
-### Does it work in all applications?
-
-Yes, it works globally across all applications on your system.
-
-## Addons
-
-### What are addons?
-
-Addons are extensions that add new features to GGUF Loader. They can add UI components, process text in custom ways, or integrate with external services.
-
-### How do I install an addon?
-
-1. Download the addon folder
-2. Place it in the `addons/` directory
-3. Restart GGUF Loader
-4. The addon will appear in the **Addons** menu
-
-### Can I create my own addon?
-
-Yes! See the [Addon Development Guide](addon-development.md) for instructions.
-
-### Where can I find more addons?
-
-Check:
-- GitHub discussions
-- Community forums
-- Addon marketplace (coming soon)
+---
 
 ## Troubleshooting
 
-### Application won't start
+### The model never loads - the header chip says "No model"
 
-- Verify Python 3.7+ is installed (if running from source)
-- Try deleting the `venv` folder and re-running launch script
-- Check antivirus isn't blocking the application
-- Look for error messages in `logs/` directory
+The pinned GGUF is not in a folder the app scans. Click the chip to download
+it, or place `gemma-4-12B-it-Q4_K_M.gguf` into the `models/` folder and
+restart. Verify the filename matches exactly (the app only loads that file).
 
-### Model won't load
+### Responses are slow
 
-- Verify the file is a valid `.gguf` format
-- Check you have enough RAM available
-- Try a smaller model
-- Ensure the file isn't corrupted (re-download if needed)
+Enable GPU in **Settings > Hardware** and restart; close other RAM-heavy
+applications; keep the context/generation settings at their defaults.
 
-### "Out of memory" error
+### The app won't start (from source)
 
-- Close other applications
-- Use a smaller/more quantized model
-- Reduce max_tokens setting
-- Restart your computer to free up RAM
+Check the launcher's error: you need **Python 3.10+**, `python3-venv` on
+Debian/Ubuntu, and a working network for first-time dependency installs. Delete
+the `.venv` / `frontend/node_modules` folders and re-run the launcher to start
+clean.
 
-### Application crashes
+### Where can I get help?
 
-- Check logs in `logs/` directory
-- Try the basic version without addons
-- Verify your system meets minimum requirements
-- Report the issue on GitHub with log files
-
-### Responses are gibberish
-
-- Model may be corrupted (re-download)
-- Try adjusting temperature setting
-- Use a different model
-- Check system prompt is appropriate
-
-## Privacy & Security
-
-### Is my data sent anywhere?
-
-No, all processing happens locally on your machine. No data is sent to external servers.
-
-### Where are my chats stored?
-
-Chats are stored locally in the `chats/` directory on your computer.
-
-### Can others see my conversations?
-
-No, unless they have physical access to your computer and the `chats/` directory.
-
-### Is it safe to use?
-
-Yes, GGUF Loader is open source and you can review the code. All processing is local and private.
-
-## Performance
-
-### How can I make it faster?
-
-- Use smaller/quantized models (Q4_0)
-- Reduce max_tokens setting
-- Close other applications
-- Enable GPU acceleration (if available)
-- Upgrade RAM
-
-### Does it support GPU acceleration?
-
-Yes, if you have a compatible GPU and the necessary drivers installed. GPU support depends on the llama-cpp-python library.
-
-### How much RAM do I need?
-
-- **Minimum:** 4GB (for small models)
-- **Recommended:** 8GB
-- **Optimal:** 16GB+
-
-## Contributing
-
-### How can I contribute?
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on:
-- Reporting bugs
-- Suggesting features
-- Submitting code
-- Improving documentation
-
-### I found a bug, what should I do?
-
-1. Check if it's already reported on [GitHub Issues](https://github.com/GGUFloader/gguf-loader/issues)
-2. If not, create a new issue with:
-   - Description of the bug
-   - Steps to reproduce
-   - Your system info
-   - Log files (if applicable)
-
-### Can I request features?
-
-Yes! Open a feature request on [GitHub Issues](https://github.com/GGUFloader/gguf-loader/issues) or discuss in [GitHub Discussions](https://github.com/GGUFloader/gguf-loader/discussions).
-
-## Still Have Questions?
-
-- 📧 Email: hossainnazary475@gmail.com
-- 💬 [GitHub Discussions](https://github.com/GGUFloader/gguf-loader/discussions)
-- 🐛 [Report Issues](https://github.com/GGUFloader/gguf-loader/issues)
+- [GitHub Issues](https://github.com/GGUFloader/gguf-loader/issues) - bug
+  reports
+- [GitHub Discussions](https://github.com/GGUFloader/gguf-loader/discussions) -
+  questions and ideas
+- The [User Guide](user-guide.md) and [Quick Reference](../QUICK_REFERENCE.md)

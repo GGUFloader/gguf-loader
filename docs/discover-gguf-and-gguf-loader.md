@@ -51,8 +51,8 @@ GGUF Loader is an open-source, easy-to-use app that lets you:
 ## Getting Started
 
 1. Download GGUF Loader from [GitHub](https://github.com/GGUFloader/gguf-loader)  
-2. Find and download GGUF-format models (many free and open source)  
-3. Open GGUF Loader, click **Load Model**, select your model folder, and start chatting!
+2. Install and start the app - on first launch it **auto-loads** its pinned model, Google Gemma 4 12B Instruct (Q4_K_M), scanning the `models/` folder at startup  
+3. If the model file is missing, the **header chip** downloads it for you with live progress - no manual loading needed. Then just start chatting!
 
 ## Related Search Terms
 
@@ -70,5 +70,5 @@ GGUF Loader is an open-source, easy-to-use app that lets you:
 Explore the future of AI assistants — right on your desktop with GGUF Loader.
 
 [Visit GGUF Loader on GitHub](https://github.com/GGUFloader/gguf-loader)  
-[How to Use GGUF Loader](how-to-use-gguf-loader.md)  
+[How to Use GGUF Loader](user-guide.md)  
 [FAQ](frequently-asked-questions-gguf.md)

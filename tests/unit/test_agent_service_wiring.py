@@ -1,3 +1,10 @@
+import pytest
+
+# AgentService is part of the legacy PySide6 UI layer (Qt signals/threads).
+# It is not shipped with the backend-only installs, so skip this test when
+# PySide6 is not available.
+pytest.importorskip("PySide6")
+
 from ggufloader.core.agent.model_profiles import get_profile
 from ggufloader.services.agent_service import AgentService
 
