@@ -18,7 +18,7 @@ function createWindow() {
     minHeight: 600,
     title: 'GGUF Loader',
     icon: iconPath,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#f8f9fa', // light theme default
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

@@ -158,8 +158,8 @@ function getBrightness(hex: string): number {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  preset: 'dark',
-  colors: { ...PRESETS.dark },
+  preset: 'light',
+  colors: { ...PRESETS.light },
   reducedMotion: false,
 
   setPreset: (preset) => {
@@ -184,13 +184,12 @@ export const useThemeStore = create<ThemeState>((set) => ({
   },
 }))
 
-// Initialize from localStorage
+// Initialize from localStorage; light is the default for first-time users.
 export function initTheme() {
   try {
     const saved = localStorage.getItem('ggufloader_theme') as ThemePreset
-    if (saved && PRESETS[saved]) {
-      useThemeStore.getState().setPreset(saved)
-    }
+    const preset = saved && PRESETS[saved] ? saved : 'light'
+    useThemeStore.getState().setPreset(preset)
     const rm = localStorage.getItem('ggufloader_reduced_motion')
     if (rm === 'true') {
       useThemeStore.getState().setReducedMotion(true)

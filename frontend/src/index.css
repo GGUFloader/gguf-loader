@@ -1,23 +1,25 @@
 @import "tailwindcss";
-@import "highlight.js/styles/github-dark-dimmed.css";
+@import "highlight.js/styles/github.css";
 
+/* Default (fallback) palette is the light theme; the theme store
+   overrides these at runtime via CSS variables. */
 @theme {
-  --color-bg: #0b0e14;
-  --color-surface: #12161f;
-  --color-elevated: #1a202c;
-  --color-border: #242c3a;
-  --color-text: #e7ebf2;
-  --color-text-sec: #a3adbf;
-  --color-text-muted: #677184;
-  --color-accent: #e8a33d;
-  --color-accent-hover: #f0b458;
-  --color-success: #3fbf8a;
-  --color-danger: #e5544b;
-  --color-warning: #e8a33d;
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-elevated: #f1f3f5;
+  --color-border: #dee2e6;
+  --color-text: #212529;
+  --color-text-sec: #495057;
+  --color-text-muted: #868e96;
+  --color-accent: #d9480f;
+  --color-accent-hover: #e8590c;
+  --color-success: #2f9e44;
+  --color-danger: #e03131;
+  --color-warning: #f08c00;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {

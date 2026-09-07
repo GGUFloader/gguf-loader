@@ -206,7 +206,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#f8f9fa', // light theme default
     show: false, // Show after ready
   })
 

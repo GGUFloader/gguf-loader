@@ -14,7 +14,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  theme: 'dark',
+  theme: 'light',
   leftPanelOpen: true,
   rightPanelOpen: true,
   rightPanelTab: 'files',
