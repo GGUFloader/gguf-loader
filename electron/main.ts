@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import * as path from 'path'
 import { spawn, execSync, ChildProcess } from 'child_process'
 import * as net from 'net'
+import * as http from 'http'
 
 let mainWindow: BrowserWindow | null = null
 let backendProcess: ChildProcess | null = null
@@ -179,9 +180,23 @@ function stopVite() {
   }
 }
 
+function requestBackendShutdown() {
+  // Best-effort: lets the backend unload the model before it is killed.
+  try {
+    const req = http.request(
+      { hostname: 'localhost', port: BACKEND_PORT, path: '/api/shutdown', method: 'POST', timeout: 1500 },
+      (res) => { res.resume() }
+    )
+    req.on('timeout', () => req.destroy())
+    req.on('error', () => {})
+    req.end()
+  } catch {}
+}
+
 function stopBackend() {
   if (backendProcess) {
     console.log('Stopping backend...')
+    requestBackendShutdown()
     try { backendProcess.kill() } catch {}
     killByPort(BACKEND_PORT)
     backendProcess = null

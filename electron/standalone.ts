@@ -1,10 +1,40 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import * as http from 'http'
 import * as path from 'path'
 
 const BACKEND_URL = process.argv.find(a => a.startsWith('--url='))?.split('=')[1]
   || 'http://localhost:8000'
 
 let mainWindow: BrowserWindow | null = null
+let shuttingDown = false
+
+// Ask the Python backend to unload the model and exit. Best-effort: the
+// backend force-exits itself shortly after, so we never block quitting on
+// this (bounded to 2s even if the request hangs).
+function requestBackendShutdown(): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const req = http.request(
+        BACKEND_URL.replace(/\/$/, '') + '/api/shutdown',
+        { method: 'POST', timeout: 2000 },
+        (res) => { res.resume(); resolve() }
+      )
+      req.on('timeout', () => req.destroy())
+      req.on('error', () => resolve())
+      req.end()
+    } catch {
+      resolve()
+    }
+  })
+}
+
+async function quitApp() {
+  if (shuttingDown) return
+  shuttingDown = true
+  // Unload the model / stop the backend before this process exits.
+  await requestBackendShutdown()
+  app.quit()
+}
 
 function createWindow() {
   const iconPath = app.isPackaged
@@ -40,7 +70,7 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null
-    app.quit()
+    void quitApp()
   })
 }
 
@@ -67,7 +97,7 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('window-all-closed', () => app.quit())
+app.on('window-all-closed', () => { void quitApp() })
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })

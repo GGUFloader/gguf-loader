@@ -116,17 +116,24 @@ def _launch_react(port: int = 8000, open_browser: bool = True) -> int:
     # logging, and with no console there is nothing to log to).
     server_error: list[BaseException] = []
 
-    # Start FastAPI in background thread
+    # Start FastAPI in background thread. An explicit uvicorn.Server (rather
+    # than uvicorn.run) is registered on the API module so the /api/shutdown
+    # endpoint can request a graceful stop when the Electron window closes -
+    # without it, the frozen exe would keep running (model in RAM) forever.
     def run_server():
         try:
             import uvicorn
-            uvicorn.run(
+            config = uvicorn.Config(
                 "ggufloader.api.app:create_app",
                 factory=True,
                 host="127.0.0.1",
                 port=port,
                 log_level="info",
             )
+            server = uvicorn.Server(config)
+            from ggufloader.api import app as api_app
+            api_app._active_server = server
+            server.run()
         except BaseException as exc:  # noqa: BLE001 - reported below
             server_error.append(exc)
             logger.exception("Backend server crashed")
@@ -167,14 +174,15 @@ def _launch_react(port: int = 8000, open_browser: bool = True) -> int:
     if open_browser:
         _open_ui(url)
 
-    # Keep running (the server is in a daemon thread; main must stay alive)
-    import time
+    # Keep running until the server thread stops: /api/shutdown (called by
+    # the Electron shell on close) sets should_exit, server.run() returns,
+    # and the process exits cleanly after unloading the model. Ctrl+C in a
+    # terminal still interrupts the join.
     try:
-        while True:
-            time.sleep(1)
+        server_thread.join()
     except KeyboardInterrupt:
         logger.info("Shutting down...")
-        return 0
+    return 0
 
 
 def _open_ui(url: str) -> None:

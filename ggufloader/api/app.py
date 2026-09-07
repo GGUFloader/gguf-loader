@@ -7,6 +7,8 @@ with a REST/WebSocket API for the React frontend.
 from __future__ import annotations
 
 import logging
+import os
+import threading
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -29,6 +31,11 @@ from ggufloader.config import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The uvicorn.Server the launcher (ggufloader.main) is running. Registered
+# there so /api/shutdown can ask it to stop when the Electron window closes;
+# None when the app is run directly (uvicorn CLI, TestClient, dev).
+_active_server = None
 
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -100,6 +107,33 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "version": __version__}
+
+    # Graceful close: the Electron shell calls this when the user closes
+    # the window. Unload the model first (frees the multi-GB context), then
+    # stop the server so the packaged launcher process can exit.
+    @app.post("/api/shutdown")
+    async def shutdown() -> dict:
+        """Unload the model and stop the backend process."""
+        from ggufloader.api.deps import get_model_backend, set_model_backend
+
+        backend = get_model_backend()
+        if backend is not None:
+            try:
+                unload = getattr(backend, "unload", None)
+                if callable(unload):
+                    unload()
+            except Exception as e:  # noqa: BLE001 - shutdown must still proceed
+                logger.warning("Error unloading model at shutdown: %s", e)
+        set_model_backend(None)
+
+        server = _active_server
+        if server is not None:
+            server.should_exit = True
+            # Failsafe: if the process is somehow still alive shortly after
+            # the graceful stop (lingering thread), force-exit so the app
+            # never stays resident with the model in memory.
+            threading.Timer(3.0, os._exit, args=(0,)).start()
+        return {"status": "shutting_down"}
 
     # App-level identity: drives the version banner and the
     # first-launch model-compatibility dialog in the React UI.
