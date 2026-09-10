@@ -1,17 +1,23 @@
-# Package Structure
+# Package Structure (Historical)
 
-This document explains the structure of the GGUF Loader 2.0.0 PyPI package and how the Smart Floating Assistant addon is included.
+> **📜 Historical document** — describes the package structure at version 2.0.0.
+> The current build (v2.3.0) is a **single-model (Gemma 4 12B Q4_K_M)** agent
+> app with a **React/TypeScript frontend** on a **FastAPI backend**. The
+> structure below is outdated. For the current structure see
+> [AGENTS.md](../AGENTS.md) and [docs/PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md).
+
+This document explains the structure of the GGUF Loader 2.0.0 PyPI package and how the Smart Floating Assistant addon was included.
 
 ## 📦 Package Overview
 
 **Package Name**: `ggufloader`  
-**Version**: `2.0.0`  
+**Version**: `2.3.0`  
 **Command**: `ggufloader`  
 
 When users install with `pip install ggufloader`, they get:
 - Complete GGUF Loader application
-- Smart Floating Assistant addon (pre-installed)
-- Comprehensive documentation
+- Plan-driven LangGraph agent
+- React frontend (served via FastAPI)
 - All necessary dependencies
 
 ## 🏗️ Directory Structure
@@ -262,4 +268,4 @@ The package structure is designed to provide:
 
 ---
 
-**This package structure ensures that GGUF Loader 2.0.0 provides a complete, professional AI text processing solution with the Smart Floating Assistant included by default! 🚀**
+**This document is historical. See [AGENTS.md](../AGENTS.md) for the current project layout.**

@@ -1,5 +1,9 @@
 # Developing GGUF Loader Addons
 
+> **Note:** Addons currently use PySide6 (Qt) widgets. The main app UI is
+> React, but the addon system still runs in the Qt layer. This is a known
+> gap — a future version may migrate addons to React.
+
 Addons are small Python packages that plug into the GGUF Loader UI. The
 **Floating Chat** addon (`ggufloader/addons/floating_chat/`) is the reference
 implementation — read it alongside this guide.

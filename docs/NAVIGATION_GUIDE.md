@@ -46,14 +46,14 @@ Start Here
 1. README.md
    ↓ (Project overview)
    
-2. CONTRIBUTING.md
-   ↓ (How to contribute?)
+2. AGENTS.md
+   ↓ (Codebase map for agents + humans)
    
-3. docs/addon-development.md
-   ↓ (Create addons)
+3. ARCHITECTURE.md
+   ↓ (Deep architecture dive)
    
-4. docs/feedback-system.md
-   (Set up feedback)
+4. CONTRIBUTING.md
+   (How to contribute?)
 ```
 
 ## 📋 By Task
@@ -80,10 +80,11 @@ Want to use features? → docs/user-guide.md
 ### Development Tasks
 
 ```
-Want to develop? → docs/addon-development.md
-    ├─ Create addon → Section: "Addon Structure"
-    ├─ Use API → Section: "Addon API"
-    └─ Publish → Section: "Publishing Your Addon"
+Want to develop? → CONTRIBUTING.md
+    ├─ Project structure → Section: "Project Structure"
+    ├─ Add a tool → ARCHITECTURE.md → "How to extend"
+    ├─ Add a REST route → Section: "Adding a New API Endpoint"
+    └─ Add a React component → Section: "Adding a New React Component"
 ```
 
 ### Problem Solving
@@ -105,8 +106,8 @@ Have a problem? → docs/faq.md
 | Install GGUF Loader? | [Installation Guide](installation.md) |
 | Load a model? | [User Guide - Load Model](user-guide.md#2-load-a-model) |
 | Give the agent a folder to work on? | [User Guide - Agent Mode](user-guide.md#agent-mode) |
-| Create an addon? | [Addon Development](addon-development.md) |
-| Set up feedback? | [Feedback System](feedback-system.md) |
+| Understand the codebase? | [AGENTS.md](../AGENTS.md) |
+| Understand the architecture? | [ARCHITECTURE.md](../ARCHITECTURE.md) |
 | Contribute code? | [Contributing](../CONTRIBUTING.md) |
 | Report a bug? | [GitHub Issues](https://github.com/GGUFloader/gguf-loader/issues) |
 
@@ -118,8 +119,8 @@ Have a problem? → docs/faq.md
 | Installation steps | [docs/installation.md](installation.md) |
 | User manual | [docs/user-guide.md](user-guide.md) |
 | FAQ | [docs/faq.md](faq.md) |
-| Addon guide | [docs/addon-development.md](addon-development.md) |
-| Feedback setup | [docs/feedback-system.md](feedback-system.md) |
+| Codebase guide | [AGENTS.md](../AGENTS.md) |
+| Architecture | [ARCHITECTURE.md](../ARCHITECTURE.md) |
 | All docs index | [DOCUMENTATION.md](DOCUMENTATION.md) |
 | Quick reference | [QUICK_REFERENCE.md](../QUICK_REFERENCE.md) |
 
@@ -137,8 +138,8 @@ Level 2: Main Guides
 └── docs/faq.md (Questions)
 
 Level 3: Advanced Topics
-├── docs/addon-development.md (Develop)
-├── docs/feedback-system.md (Configure)
+├── AGENTS.md (Codebase guide)
+├── ARCHITECTURE.md (Architecture deep dive)
 └── CONTRIBUTING.md (Contribute)
 
 Level 4: Project Info
@@ -171,14 +172,14 @@ Level 4: Project Info
 1. Read README.md
    "What does this do?"
    
-2. Read CONTRIBUTING.md
-   "How can I help?"
+2. Read AGENTS.md
+   "How is the code organized?"
    
-3. Study docs/addon-development.md
-   "How do I create addons?"
+3. Read ARCHITECTURE.md
+   "How does the agent/backend/frontend work?"
    
-4. Check existing addons
-   "See examples"
+4. Read CONTRIBUTING.md
+   "How can I contribute?"
 ```
 
 ### Scenario 3: Troubleshooting
@@ -209,7 +210,7 @@ Level 4: Project Info
 → [User Guide](user-guide.md)
 
 ### 2 Hours
-→ [Addon Development](addon-development.md)
+→ [AGENTS.md](../AGENTS.md) + [ARCHITECTURE.md](../ARCHITECTURE.md)
 
 ## 📱 Mobile-Friendly Links
 

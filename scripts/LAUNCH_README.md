@@ -4,37 +4,41 @@ This document covers the launch scripts for Windows, macOS, and Linux that live 
 
 ## Files
 
-- `launch.bat` (project root) - Launches the full GGUF Loader application with addon support (Windows)
-- `launch.sh` (project root) - Launches the full GGUF Loader application with addon support (macOS and Linux)
+- `launch.bat` (project root) - Windows launcher
+- `launch.sh` (project root) - Linux/macOS launcher
 
 ## Usage
 
 ### Windows
-Simply double-click on `launch.bat` to run the application:
+Double-click `launch.bat`. It creates a virtualenv if needed, installs
+Python and Node dependencies, then asks which mode to run:
 
-1. If a Python virtual environment doesn't exist, it will be created automatically
-2. Required dependencies will be installed
-3. The application will start
+| Choice | Mode | What it does |
+|--------|------|-------------|
+| **1** | Browser (default) | Starts FastAPI backend + Vite dev server, opens in browser |
+| **2** | Desktop | Compiles and launches Electron window |
+| **3** | Production | Rebuilds `frontend/dist` if stale, serves built UI |
 
 ### macOS and Linux
 Run the launch script from the terminal:
 
 ```bash
+chmod +x launch.sh
 ./launch.sh
 ```
 
-1. If a Python virtual environment doesn't exist, it will be created automatically
-2. Required dependencies will be installed
-3. The application will start
+Same mode choices as Windows.
 
 ## Requirements
 
-- Python 3.7 or higher must be installed and accessible from the command line
+- **Python 3.10+** (the scripts check for this)
+- **Node.js 18+** (installed automatically on first run via npm)
+- On Debian/Ubuntu: `python3-venv` or `virtualenv` may be needed
 
 ## Troubleshooting
 
 If you encounter issues:
 
-1. Ensure Python is installed and added to your PATH
-2. Try deleting the `.venv` folder and running the script again
-3. Check that your antivirus isn't blocking the virtual environment creation
+1. Ensure Python 3.10+ is installed and on your PATH
+2. Delete the `.venv` folder and `frontend/node_modules`, then re-run the launcher
+3. On Linux, `llama-cpp-python` is pulled as a prebuilt CPU wheel — no C compiler needed

@@ -1,10 +1,14 @@
-# Building GGUF Loader Executable
+# Building GGUF Loader Executable (Historical)
+
+> **📜 Historical document** — describes the build process from an earlier version.
+> The current build (v2.3.0) uses `scripts/build_exe.bat` and
+> `build_exe.spec`. See [AGENTS.md](../AGENTS.md) for current build commands.
 
 This guide explains how to create a standalone Windows executable (.exe) for the GGUF Loader application.
 
 ## Prerequisites
 
-1. **Python 3.8+** installed on your system
+1. **Python 3.10+** installed on your system
 2. **Virtual environment** with all dependencies installed
 3. **PyInstaller** (will be installed automatically by the build script)
 
@@ -213,7 +217,7 @@ Before distribution:
 
 ## File Size Optimization
 
-Typical executable size: 100-300 MB (includes PySide6 and llama-cpp-python)
+Typical executable size: 70-850 MB (CPU build ~70 MB, GPU build ~850 MB with CUDA runtime)
 
 To reduce size:
 - Remove unused Qt modules

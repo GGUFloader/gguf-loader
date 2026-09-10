@@ -1,4 +1,7 @@
-# Quick Start Guide - Floating Chat Addon
+# Quick Start Guide - Floating Chat Addon (Historical)
+
+> **📜 Historical document** — the Floating Chat addon belongs to the PySide6-era build.
+> The current React app does not include a global floating chat.
 
 Get started with the Facebook Messenger-style floating chat button in under 2 minutes!
 

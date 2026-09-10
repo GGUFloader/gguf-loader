@@ -8,6 +8,7 @@ import { StepProgressPanel } from './StepProgressPanel'
 import { ToolCallCard } from '../agent/ToolCallCard'
 import { ToolApprovalDialog } from '../agent/ToolApprovalDialog'
 import { MessageInput } from './MessageInput'
+import { Cpu } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import type { ToolApprovalRequest } from '../../stores/chatStore'
 
@@ -89,7 +90,7 @@ export function ChatPanel() {
         <div className="max-w-[720px] mx-auto px-4 py-6 space-y-4">
           {messages.length === 0 && !isStreaming ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="text-6xl mb-4">🦜</div>
+              <div className="mb-4"><Cpu size={64} className="text-accent" /></div>
               <h2 className="text-xl font-semibold text-text mb-2">Welcome to GGUF Loader</h2>
               <p className="text-text-muted max-w-md">
                 Load a GGUF model from the sidebar to start a conversation.

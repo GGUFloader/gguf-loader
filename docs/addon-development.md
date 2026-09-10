@@ -1,5 +1,11 @@
 # Addon Development Guide
 
+> **📜 Historical document** — describes the addon system at an earlier stage of
+> the project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend**. The
+> code examples below use PySide6 (Qt) which is no longer the active UI.
+> For the current addon contract, see [ggufloader/addons/README.md](../ggufloader/addons/README.md).
+
 Learn how to create custom addons for GGUF Loader.
 
 ## What is an Addon?

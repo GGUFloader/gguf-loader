@@ -1,5 +1,10 @@
 # Discover GGUF and GGUF Loader: Run Local AI, ChatGPT-Style Assistants on Your PC
 
+> **📜 Historical document** — describes GGUF Loader at an earlier stage of the
+> project and is kept for reference. The current build is a **single-model
+> (Gemma 4 12B Q4_K_M)** agent app with a **React/TypeScript frontend**.
+> Architecture details below may be outdated.
+
 Are you looking for ways to use powerful AI models like **ChatGPT**, **GPT-4**, or other famous language models **locally on your computer** without needing the internet? You’re not alone. Many people want fast, private, and customizable AI assistants they can run offline.
 
 This page introduces **GGUF**, a new AI model format, and **GGUF Loader**, a simple app to load and chat with local AI models — just like ChatGPT but running fully on your own PC.

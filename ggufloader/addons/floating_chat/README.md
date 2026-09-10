@@ -1,4 +1,9 @@
-# Floating Chat Addon
+# Floating Chat Addon (Historical)
+
+> **📜 Historical document** — the Floating Chat addon belongs to the PySide6-era build.
+> The current React app does not include a global floating chat; agent runs
+> show their process inline in the chat column instead. This addon is still
+> in the repo for reference but is not actively used.
 
 A Facebook Messenger-style floating chat button for GGUF Loader that works across all operating systems (Windows, Linux, macOS).
 

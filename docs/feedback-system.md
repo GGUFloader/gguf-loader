@@ -1,4 +1,7 @@
-# Feedback System Setup
+# Feedback System Setup (Historical)
+
+> **📜 Historical document** — describes the PySide6-era feedback dialog. The
+> current React app uses GitHub Issues and Discussions for feedback.
 
 This guide explains how to set up the feedback system for GGUF Loader.
 

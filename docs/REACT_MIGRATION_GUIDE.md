@@ -11,14 +11,15 @@ This guide explains what changed, how to use the new UI, and how to roll back if
 
 ## What Changed
 
-GGUF Loader now has **two UI modes**:
+GGUF Loader now has **one UI mode** — React:
 
 | Mode | Technology | When to Use |
 |------|-----------|-------------|
-| **React** (default) | FastAPI + React + Tailwind | Modern web UI, Electron packaging |
-| **PySide6** (legacy) | Qt Desktop | Offline, no browser needed |
+| **React** (only) | FastAPI + React + Tailwind | Modern web UI, Electron packaging, browser |
 
-The React UI is **the default**. The PySide6 UI is still available with `--qt`.
+The PySide6 (Qt) UI has been removed from the active build. The code is still
+in `ggufloader/ui/` and `ggufloader/widgets/` for reference but is no longer
+shipped in the installer or dependencies.
 
 ## Quick Start
 
@@ -38,26 +39,18 @@ python main.py --port 3000 --no-browser
 
 Open `http://localhost:8000` in your browser.
 
-### PySide6 Mode (Legacy)
+### PySide6 Mode (Removed)
 
-```bash
-python main.py --qt
-```
-
-Or set the environment variable:
-
-```bash
-set GGUFLOADER_UI=qt    # Windows
-export GGUFLOADER_UI=qt  # macOS/Linux
-python main.py
-```
+The PySide6 UI has been removed from the active build as of v2.3.0. The code
+is kept in `ggufloader/ui/` and `ggufloader/widgets/` for historical reference
+only.
 
 ## Command-Line Options
 
 | Flag | Description |
 |------|-------------|
 | `--react` | Launch React web UI (default) |
-| `--qt` | Launch PySide6 desktop UI |
+| `--qt` | Launch PySide6 desktop UI (**removed** in v2.3.0) |
 | `--port PORT` | Backend port (default: 8000) |
 | `--no-browser` | Don't open browser automatically |
 | `--version` | Show version |
@@ -65,15 +58,7 @@ python main.py
 
 ## Architecture Change
 
-### Before (PySide6)
-```
-python main.py
-  → QApplication (PySide6)
-  → MainWindow (Qt widgets)
-  → llama-cpp-python (in-process)
-```
-
-### After (React)
+### Architecture (React — the only UI)
 ```
 python main.py
   → FastAPI server (port 8000)
@@ -86,25 +71,29 @@ python main.py
 
 | Feature | PySide6 | React |
 |---------|---------|-------|
-| Chat with models | ✅ | ✅ |
-| Agent mode | ✅ | ✅ |
-| Model loading | ✅ | ✅ |
-| GPU management | ✅ | ✅ |
-| Session management | ✅ | ✅ |
-| File explorer | ✅ | ✅ |
-| Terminal | ✅ | ✅ |
-| Git panel | ✅ | ✅ |
-| Settings | ✅ | ✅ |
-| Keyboard shortcuts | ✅ | ✅ |
-| Theme customization | ✅ | ✅ |
-| Markdown rendering | ✅ | ✅ |
-| Code syntax highlighting | ✅ | ✅ |
-| Tool approval | ✅ | ✅ |
-| Context lens | ❌ | ✅ |
-| @ file mentions | ❌ | ✅ |
-| Mode selector | ❌ | ✅ |
-| Electron packaging | ❌ | ✅ |
-| Toast notifications | ✅ | ✅ |
+| Feature | Status |
+|---------|--------|
+| Chat with models | ✅ |
+| Agent mode (plan-driven) | ✅ |
+| Auto-load at startup | ✅ |
+| Model download in header | ✅ |
+| GPU management | ✅ |
+| Session management | ✅ |
+| File explorer | ✅ |
+| Terminal | ✅ |
+| Git panel | ✅ |
+| Settings | ✅ |
+| Keyboard shortcuts | ✅ |
+| Theme customization | ✅ |
+| Markdown rendering | ✅ |
+| Code syntax highlighting | ✅ |
+| Tool approval | ✅ |
+| Context lens | ✅ |
+| @ file mentions | ✅ |
+| Mode selector | ✅ |
+| Electron packaging | ✅ |
+| Toast notifications | ✅ |
+| Inline agent process | ✅ |
 
 ## New Features in React UI
 
@@ -117,21 +106,10 @@ python main.py
 7. **Error Boundary** — Graceful error recovery UI
 8. **Keyboard Shortcuts** — Ctrl+M, Ctrl+N, Ctrl+B, Ctrl+\, Esc
 
-## Rollback
+## Historical Note
 
-To go back to the PySide6 UI:
-
-```bash
-python main.py --qt
-```
-
-Or permanently:
-
-```bash
-set GGUFLOADER_UI=qt
-```
-
-The PySide6 code is still in `ggufloader/ui/` and `ggufloader/widgets/`.
+The PySide6 code is still in `ggufloader/ui/` and `ggufloader/widgets/` for
+reference, but is no longer shipped or installed. The React app is the only UI.
 
 ## Development
 

@@ -1,4 +1,8 @@
-# Smart Floater Addon Example
+# Smart Floater Addon Example (Historical)
+
+> **📜 Historical document** — describes the Smart Floater addon from the
+> PySide6-era build. The current React app does not include a global floating
+> chat; agent runs show their process inline in the chat column instead.
 
 > **📜 Historical document** — describes GGUF Loader at an earlier stage of the
 > project and is kept for reference. The current build is a **single-model

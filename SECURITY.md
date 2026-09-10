@@ -6,7 +6,8 @@ We provide security updates and fixes for the following versions of the project:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0  | ✅ Yes             |
+| 2.3     | ✅ Yes             |
+| < 2.3   | ❌ No              |
 
 Please upgrade to a supported version to receive security patches.
 
@@ -16,7 +17,7 @@ Please upgrade to a supported version to receive security patches.
 
 If you discover a security vulnerability in GGUF Loader, please report it responsibly:
 
-- **Send your report to:** hossainnazary475@gmail.com (replace with your contact email)
+- **Send your report to:** hussainnazary475@gmail.com
 - **Expected response time:** Within 3 business days, we will acknowledge your report.
 - **Process:**
   - We will assess and validate the vulnerability.

@@ -33,7 +33,7 @@ export function Header() {
           <PanelLeftClose size={16} className="text-text-sec" />
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-lg">🦜</span>
+          <Cpu size={18} className="text-accent" />
           <span className="text-sm font-medium text-text">GGUF Loader</span>
         </div>
       </div>

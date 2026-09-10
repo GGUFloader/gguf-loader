@@ -1,5 +1,9 @@
 # Running ChatGPT-OSS Locally: Complete Setup Guide
 
+> **📜 Historical document** — GGUF Loader is now a single-model app optimized
+> for **Gemma 4 12B Instruct (Q4_K_M)**. It does not load other GGUF files.
+> This guide is kept for reference only.
+
 ## Overview
 
 **GPT-OSS** is OpenAI's first open-weight model release under the Apache 2.0 license. This guide covers how to run these models locally on your hardware.

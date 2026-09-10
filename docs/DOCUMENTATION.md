@@ -144,5 +144,5 @@ Can't find what you need?
 
 ---
 
-**Last Updated:** January 2026
-**Version:** 2.0.1
+**Last Updated:** September 2026
+**Version:** 2.3.0

@@ -1,4 +1,9 @@
-# Configuration Files Guide
+# Configuration Files Guide (Historical)
+
+> **📜 Historical document** — describes configuration files from the PySide6-era build.
+> The current build (v2.3.0) uses `ggufloader/config.py` and
+> `ggufloader/config/model_families.json` for configuration. The `mixins/` and
+> `feedback_config.json` files below are no longer used.
 
 ## 📋 JSON Files in Root Directory
 

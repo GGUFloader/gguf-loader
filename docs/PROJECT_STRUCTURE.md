@@ -2,9 +2,9 @@
 
 ## Overview
 
-GGUF Loader is a local LLM runtime with two UI modes:
-- **React UI** (default): FastAPI backend + React frontend
-- **PySide6 UI** (legacy): Qt desktop application
+GGUF Loader is a single-model (Gemma 4 12B Q4_K_M) local AI agent app:
+- **React UI**: FastAPI backend + React frontend (the only UI)
+- **Agent**: Plan-driven LangGraph agent with sandboxed tools
 
 ## Directory Layout
 
@@ -48,18 +48,7 @@ gguf-loader/
 │   │   └── gpu_install_service.py   # GPU installation
 │   │
 │   ├── config/                      # Configuration files
-│   │   └── model_families.json      # 39 model family configs
-│   │
-│   ├── ui/                          # PySide6 UI (legacy, kept for --qt)
-│   │   ├── main_window.py
-│   │   ├── chat_panel.py
-│   │   ├── sidebar_panel.py
-│   │   └── ... (15 files)
-│   │
-│   └── widgets/                     # PySide6 widgets (legacy)
-│       ├── chat_bubble.py
-│       ├── file_tree.py
-│       └── ... (25 files)
+│   │   └── model_families.json      # gemma4 family (single model)
 │
 ├── frontend/                        # React frontend (NEW)
 │   ├── package.json
@@ -148,10 +137,8 @@ gguf-loader/
 │   ├── ui-upgrade-plan.md
 │   └── pyside6-to-react-migration.md
 │
-└── assets/                          # Static assets
-    ├── icon.ico
-    ├── float.png
-    └── screen.png
+├── icon.ico                         # App icon
+├── screen.png                       # README screenshot
 ```
 
 ## Key Architectural Decisions
@@ -168,8 +155,8 @@ Chat responses stream token-by-token over WebSocket, not REST polling.
 ### 4. Zustand for state
 Lightweight state management — no Redux overhead. Three stores: chat, model, UI.
 
-### 5. Dual-mode entry point
-`main.py` auto-detects React vs PySide6, or accepts `--react`/`--qt` flags.
+### 5. Single UI
+The React app running in FastAPI is the only UI. The legacy PySide6 code is no longer shipped.
 
 ### 6. Vite dev server proxies to FastAPI
 In development, Vite runs on :5173 and proxies `/api/*` to FastAPI on :8000.
@@ -189,6 +176,5 @@ In production, `app.py` serves `frontend/dist/` with SPA fallback routing.
 | Entry point | 1 | ~140 |
 | Config | 1 | ~10 |
 | **Total New** | **53** | **~4,300** |
-| PySide6 UI (kept) | 40 | ~13,000 |
-| Core/Services (kept) | 59 | ~12,000 |
-| **Grand Total** | **152** | **~29,300** |
+| Core/Services | 59 | ~12,000 |
+| **Grand Total** | **~105** | **~17,000** |
