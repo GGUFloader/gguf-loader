@@ -46,6 +46,17 @@ FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup/shutdown lifecycle."""
     logger.info("GGUFLoader API starting...")
+    # Set the workspace from the active workspace on startup
+    try:
+        from ggufloader.core.agent.workspace_manager import WorkspaceManager
+        from ggufloader.api.deps import set_workspace
+        mgr = WorkspaceManager()
+        active = mgr.active
+        if active and active.path:
+            set_workspace(active.path)
+            logger.info("Active workspace: %s (%s)", active.name, active.path)
+    except Exception as e:
+        logger.warning("Failed to set active workspace: %s", e)
     # Background scan + load of the pinned Gemma 4 12B Q4_K_M GGUF from the
     # models folder (start_auto_load spawns a daemon thread and returns
     # immediately; it is a no-op under pytest / GGUFLOADER_SKIP_AUTOLOAD).
