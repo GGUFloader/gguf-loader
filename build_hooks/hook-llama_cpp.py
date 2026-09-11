@@ -5,6 +5,34 @@ selected by the GGUFLOADER_CUDA environment variable:
 
   GGUFLOADER_CUDA unset/0  -> CPU-only bundle (default, small)
   GGUFLOADER_CUDA=1        -> include ggml-cuda + cublas runtime (~2 GB extra)
+
+CUDA runtime bundling (Linux): the cu124 Linux wheel ships libggml-cuda.so
+but links against libcudart.so.12 / libcublas*.so.12 which it does NOT
+bundle, so a frozen CUDA binary is only self-contained when those libs are in
+it (users then need just the NVIDIA driver, no CUDA Toolkit install).
+PyInstaller's dependency analysis bundles them automatically ONLY if the
+build machine can resolve them (GitHub runners ship CUDA; a bare machine
+does not). To build deterministically on any machine, install the CUDA
+runtime pip packages and copy their libs next to the wheel's own libs so
+llama_cpp imports and the analysis picks each lib up exactly once:
+
+  pip install -r requirements.txt \
+      --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 \
+      nvidia-cuda-runtime-cu12 nvidia-cublas-cu12
+  python - <<'PY'
+  import importlib.util, os, shutil, site
+  spec = importlib.util.find_spec('llama_cpp')
+  dst = os.path.join(os.path.dirname(spec.origin), 'lib')
+  sp = site.getsitepackages()[0]
+  for pkg, name in (('cuda_runtime', 'libcudart.so.12'),
+                    ('cublas', 'libcublas.so.12'),
+                    ('cublas', 'libcublasLt.so.12')):
+      shutil.copy2(os.path.join(sp, 'nvidia', pkg, 'lib', name), dst)
+  PY
+
+Do NOT add those libs to this hook's ``binaries`` output: dependency
+analysis would then bundle them a second time under their own paths,
+tripling the multi-hundred-MB cublas libs in the archive.
 """
 from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 import os
