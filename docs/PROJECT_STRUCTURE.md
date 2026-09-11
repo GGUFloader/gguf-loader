@@ -138,7 +138,7 @@ gguf-loader/
 │   └── pyside6-to-react-migration.md
 │
 ├── icon.ico                         # App icon
-├── screen.png                       # README screenshot
+├── (screen.png removed — TODO: capture React UI screenshot)
 ```
 
 ## Key Architectural Decisions
