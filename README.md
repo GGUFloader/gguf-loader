@@ -4,59 +4,105 @@
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 
 A privacy-first, beginner-friendly desktop application for running GGUF
-language models **fully locally** on Windows, Linux, and macOS. GGUF Loader is
-a **universal model loader** — you pick the model that fits your PC's
-resources. It ships with a built-in **agentic mode** that can read, create,
-edit, and organize files in a workspace you choose. No data ever leaves your
-computer.
-
-> 🧪 **Note:** the new v2.3.0 testing release is temporarily optimized for
-> one model (Gemma 4 12B Instruct Q4_K_M) so its agentic work runs well —
-> universal model support returns in the next release.
-
-> ⚠️ **Testing Release Notice**
-> **This version (2.3.0) is a testing/preview release.** It is locked to a
-> single model (Gemma 4 12B Instruct Q4_K_M) while we validate the new
-> plan-driven agent. Expect rough edges, and please
-> [report issues](https://github.com/GGUFloader/gguf-loader/issues) you find.
->
-> 🔮 **Coming in the next release — Universal Model Loader**
-> We are working on removing the single-model restriction so the agent works
-> with **any GGUF model you choose**. The universal loader will detect your
-> PC's capabilities (RAM, VRAM, CPU/GPU) and recommend models that fit your
-> hardware — so you can run anything from small 3B models on modest machines
-> to large 70B+ models on high-end rigs. Stay tuned!
+language models **fully locally** on Windows, Linux, and macOS. No data ever
+leaves your machine.
 
 ---
 
-## What's New in 2.3.0 - the single-model agent build (testing)
+## 📦 v2.2.0 — Stable Release (Universal Model Loader)
 
-- **One model, zero config (temporary)** - this testing release is optimized for **Gemma 4 12B Instruct Q4_K_M**; multi-model detection was temporarily removed so this one model just works. Universal loading returns next release.
-- **Auto-load at startup** - the app scans its `models/` folder (plus the last-used model folder) and loads the pinned GGUF automatically; if it is missing, the header model chip downloads it with live progress. The manual Load Model step is gone.
-- **Strictly plan-driven agent** - every agent turn goes through a planner node: no tools needed, the model answers directly; tools needed, a plan is written and executed step by step. The reactive ReAct fallback was removed.
-- **Codebuff-style process UI** - plan steps, tool calls, and results render inline in the chat above each answer; the old right-hand progress panel is gone.
-- **Reliable final answers** - stray tool-call JSON envelopes are scrubbed from the live stream and the final reply, and wait-status text such as "Planning..." never sticks in the timeline.
-- **Pruned tools** - the default registry is the 10 workspace tools the agent actually uses (memory/meta tools removed), and searches are hardened against huge generated folders.
-- **Self-setup launchers** - `launch.bat` / `launch.sh` offer browser, Electron, and production modes and install Python + Node dependencies.
+> **Install via pip:** `pip install ggufloader` then run `ggufloader`
+> [View on PyPI](https://pypi.org/project/ggufloader/)
 
-Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in docs marked as historical.
+**GGUF Loader v2.2.0 is the stable, universal model loader.** You pick any
+GGUF model that fits your PC's resources — from small 3B models on modest
+machines to large 70B+ models on high-end rigs. The app detects your hardware
+(RAM, VRAM, CPU/GPU) and recommends models that work for you.
+
+### What v2.2.0 includes
+
+- 🌐 **Universal model loader** — load any GGUF model, no restrictions
+- 📦 **PyPI package** — `pip install ggufloader`, works in any Python environment
+- 🤖 **Basic agentic mode** — LangGraph-driven agent with 7 sandboxed tools
+- 🔎 **Find Paragraph** — locate a passage in a document or folder, no RAG needed
+- 📂 **Full-folder summaries** — reads every readable file before answering
+- ⚡ **One-click GPU** — install CUDA/Metal support from the Settings UI
+- 💬 **Streaming chat** — token-by-token delivery via WebSocket
+- 🔒 **100% local** — no cloud, no subscriptions, no data leaves your machine
+
+### Install v2.2.0
+
+```bash
+pip install ggufloader
+ggufloader
+```
+
+Or download a prebuilt executable from
+[GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases).
 
 ---
-## 🆕 What's New in 2.2.0
 
-- **Mature Agentic Mode** — LangGraph-driven multi-step agent with 7 sandboxed
-  tools, a live transcript panel, **Allow/Deny approval cards** for shell
-  commands and git writes, and SQLite checkpointing so each workspace's
-  conversation survives restarts and resumes where you left off.
-- **Find Paragraph (no-RAG search)** — ask a question and locate the exact
-  paragraph in a document or a whole folder, with a planner that decides what
-  to read and live per-file progress.
-- **Full-folder summaries** — "summarize this folder" now reads **every**
-  readable file (Markdown, PDF, DOCX, TXT, code) before answering, with a
-  "Reading remaining files…" status so you always know what's happening.
-- **One-click GPU support** — an **Install GPU Support** button in the UI that
-  installs the CUDA-enabled build for you and shows a green tick when GPU
-  acceleration is ready.
+## 🧪 v2.3.0 — Testing Release (Single-Model Agent)
+
+> ⚠️ **This is a testing/preview release.** It is locked to one model while
+> we validate the new plan-driven agent architecture. Expect rough edges.
+> [Report issues](https://github.com/GGUFloader/gguf-loader/issues) you find.
+
+**v2.3.0 is a testing release** that takes the agentic experience further
+with a **strictly plan-driven agent** and a **Codebuff-style inline process
+UI** — but it is temporarily pinned to a single model (Gemma 4 12B Instruct
+Q4_K_M) to tune the agent's performance before expanding model support.
+
+### What's new in v2.3.0
+
+- 🎯 **Single-model focus (temporary)** — optimized for Gemma 4 12B Instruct
+  Q4_K_M; multi-model detection removed so this one model just works. Universal
+  loading returns next release.
+- 📋 **Strictly plan-driven agent** — every turn goes through a planner node:
+  tool-free questions answered directly; tasks get a step-by-step plan executed
+  with sandboxed tools. The reactive ReAct fallback was removed.
+- 🖥️ **Codebuff-style process UI** — plan steps, tool calls, and results
+  render inline in the chat above each answer.
+- 🧹 **Reliable final answers** — stray tool-call JSON and stale status text
+  are scrubbed from replies.
+- 📥 **Auto-load at startup** — scans `models/` folder and loads the pinned
+  GGUF automatically; missing model downloads with live progress.
+- 🔧 **Pruned tools** — 10 focused workspace tools (memory/meta tools removed).
+- 🚀 **Self-setup launchers** — `launch.bat` / `launch.sh` handle all
+  dependency installation.
+
+### Download v2.3.0
+
+Standalone executables on
+[GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases):
+
+| Artifact | Size | Notes |
+|---|---|---|
+| `GGUFLoader_v2.3.0_CPU.exe` | ~145 MB | Windows · CPU-only, works everywhere |
+| `GGUFLoader_v2.3.0_CUDA.exe` | ~930 MB | Windows · NVIDIA CUDA |
+| `GGUFLoader_v2.3.0_linux_x86_64_CPU` | ~50 MB | Linux · CPU-only |
+| `GGUFLoader_v2.3.0_linux_x86_64_CUDA` | ~1.35 GB | Linux · NVIDIA CUDA (driver ≥ 550) |
+
+The CUDA build bundles the full CUDA runtime; the CPU build is several times
+smaller. Pick CUDA if you have an NVIDIA card, CPU otherwise.
+
+### First launch (v2.3.0)
+
+1. Start the app — it **auto-loads** the pinned Gemma 4 12B Q4_K_M from the
+   `models/` folder in the background.
+2. No model on disk? The **model chip in the header** downloads it with live
+   progress and loads it when finished.
+3. Chat in the main window, or press **Ctrl/Cmd + Shift + A** for Agent Mode
+   and choose a workspace folder.
+
+---
+
+## 🔮 What's Coming Next
+
+> **Universal Model Loader returns** — the next release removes the single-model
+> restriction. You'll be able to run **any GGUF model** with the agent, with
+> hardware-aware recommendations so you can pick a model that fits your PC's
+> RAM/VRAM.
 
 ---
 
@@ -64,25 +110,34 @@ Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in d
 
 ### Interface
 
-- 🗂️ **Sessions left, chat center, tools right** - sessions (left), the chat with the inline agent process (center), and tool panels - Files, Dashboard, Templates, Search, Workspaces - (right)
-- 💬 **Streaming chat** - token-by-token delivery via WebSocket
-- 🤖 **Agent mode** - planner-driven runs with Allow/Deny approvals, streamed inline in the chat
-- 📥 **Model chip in the header** - shows load state; downloads the pinned Gemma 4 12B Q4_K_M GGUF with live progress when it is missing
-- ⚙️ **Settings dialog** - Model, Providers, Agent, Hardware, Appearance, Keyboard, Plugins tabs
-- 🎨 **Theme** - dark/light mode, accent colors, font size
-- ⌨️ **Command palette & shortcuts** - Ctrl/Cmd+K, Ctrl/Cmd+Shift+A (agent mode), Ctrl/Cmd+Shift+[ / ] (panels), Ctrl/Cmd+1/2/3
-- 📱 **Electron** - standalone desktop app (no browser needed)
+- 🗂️ **Sessions left, chat center, tools right** — sessions (left), chat with
+  inline agent process (center), tool panels (right)
+- 💬 **Streaming chat** — token-by-token delivery via WebSocket
+- 🤖 **Agent mode** — planner-driven runs with Allow/Deny approvals, streamed
+  inline in the chat
+- 📥 **Model chip** — shows load state; downloads the model with live progress
+- ⚙️ **Settings** — Model, Providers, Agent, Hardware, Appearance, Keyboard,
+  Plugins tabs
+- 🎨 **Theme** — dark/light mode, accent colors, font size
+- ⌨️ **Command palette** — Ctrl/Cmd+K, Ctrl/Cmd+Shift+A (agent mode)
+- 📱 **Electron** — standalone desktop app (no browser needed)
 
 ### Core Features
 
-- 🤖 **Plan-driven agent (LangGraph)** - a planner node decides each turn: tool-free questions are answered directly; tasks get a step-by-step plan that runs with sandboxed tools (list/read/write/edit/move/search files, shell commands, code, git) inside the workspace you grant - with Allow/Deny approval for commands, code, and git writes, and SQLite checkpointing so conversations resume after restarts.
-- 🔎 **Advanced Search (Find Paragraph)** - locate a passage in a document or folder with the model itself, no RAG or vector database required.
-- 🧾 **Real file reading** - extracts text from `.md`, `.pdf`, `.docx`, `.txt` and source files, so the agent can summarize and answer from real content.
-- 🎯 **Single-model focus (testing release)** - v2.3.0 temporarily loads exactly Gemma 4 12B Q4_K_M, tuned so its agentic work runs well; other GGUFs are rejected with a clear message. Universal model support returns in the next release.
-- ⚡ **GPU acceleration** - enable it under **Settings -> Hardware** (it installs the CUDA/Metal build with live status); the app then uses the GPU for inference.
-- 📋 **Process you can follow** - agent runs stream their plan, tool calls, and results inline in the chat, Codebuff-style.
-- 🔒 **Privacy first** - 100% local inference. Your prompts and files never leave your machine.
-- 💻 **Cross-platform** - Windows 10/11, Linux, and macOS (including Apple Silicon), via React + Electron or in the browser.
+- 🤖 **Plan-driven agent (LangGraph)** — a planner node decides each turn:
+  tool-free questions answered directly; tasks get a step-by-step plan with
+  sandboxed tools inside your workspace, with Allow/Deny approval for commands,
+  code, and git writes, and SQLite checkpointing.
+- 🔎 **Advanced Search (Find Paragraph)** — locate a passage in a document or
+  folder with the model itself, no RAG or vector database required.
+- 🧾 **Real file reading** — extracts text from `.md`, `.pdf`, `.docx`, `.txt`
+  and source files.
+- ⚡ **GPU acceleration** — enable under Settings → Hardware (installs CUDA/Metal
+  build with live status).
+- 🔒 **Privacy first** — 100% local inference. Your prompts and files never
+  leave your machine.
+- 💻 **Cross-platform** — Windows 10/11, Linux, and macOS (including Apple
+  Silicon), via React + Electron or in the browser.
 
 ## 🎬 Screenshots
 
@@ -94,78 +149,31 @@ Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in d
 
 ---
 
-## 🚀 Quick Start
-
-### Option 1: Run from source
-
-```bash
-git clone https://github.com/GGUFloader/gguf-loader.git
-cd gguf-loader
-python -m venv .venv
-.venv\Scripts\activate        # Windows (or: source .venv/bin/activate)
-pip install -r requirements.txt
-python main.py
-```
-
-Windows/Linux users can also run `launch.bat` / `launch.sh` from the extracted
-ZIP (keep `launch.sh` executable after extraction). The scripts create a
-virtualenv, check every dependency, and install anything missing — on Linux
-`llama-cpp-python` is pulled from abetlen's prebuilt CPU wheel index, so no C
-compiler is required. They need Python 3.10+ (on Debian/Ubuntu also
-`python3-venv` or `virtualenv`); any missing piece is reported with a clear,
-actionable message.
-
-### Option 2: Prebuilt executable
-
-Standalone one-file executables are published on the
-[GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases) page:
-
-| Artifact | Size | Notes |
-|---|---|---|
-| `GGUFLoader_v<version>_CUDA.exe` | ~930 MB | Windows · NVIDIA CUDA, zero setup |
-| `GGUFLoader_v<version>_CPU.exe` | ~145 MB | Windows · CPU-only, works everywhere |
-| `GGUFLoader_v<version>_linux_x86_64_CPU` | ~50 MB | Linux · CPU-only |
-| `GGUFLoader_v<version>_linux_x86_64_CUDA` | ~1.35 GB | Linux · NVIDIA CUDA (driver ≥ 550) |
-
-The CUDA build bundles the full CUDA runtime; the CPU build drops it entirely,
-which is why it is several times smaller. Pick the CUDA build if you have an
-NVIDIA card (driver ≥ 550 on Linux), the CPU build otherwise.
-
-### First launch
-
-1. Start the app - it **auto-loads** the pinned Gemma 4 12B Q4_K_M GGUF from the `models/` folder (or the last-used model folder) in the background.
-2. No model on disk? The **model chip in the header** downloads it with live progress and loads it when finished.
-3. Chat in the main window, or press **Ctrl/Cmd + Shift + A** for Agent Mode and choose a workspace folder.
-
 ## 🤖 Agentic Mode
 
 Agentic Mode turns the local model into a working assistant for a folder you
-choose (your project, a documentation set, any workspace). It plans multi-step
-tasks, calls tools, and streams every step live.
+choose. It plans multi-step tasks, calls tools, and streams every step live.
 
 ### Tools
 
 | Tool | What it does |
 |---|---|
-| `list_directory` / `glob` | Explore folders and match file paths in the workspace |
-| `read_file` | Read any file (MD/PDF/DOCX/TXT/code - text extracted automatically) |
+| `list_directory` / `glob` | Explore folders and match file paths |
+| `read_file` | Read any file (MD/PDF/DOCX/TXT/code) |
 | `search_files` | Find files and grep for content |
 | `write_file` / `edit_file` / `move_file` | Create, edit, and move files |
-| `run_command` | Run a shell command inside the workspace (approval-gated) |
-| `run_python` | Execute Python source inside the workspace (approval-gated) |
-| `git` | Git operations - read-only runs freely, writes require approval |
+| `run_command` | Run a shell command (approval-gated) |
+| `run_python` | Execute Python source (approval-gated) |
+| `git` | Git operations (writes require approval) |
 
 ### Human approval
 
-Shell commands, code execution, and git writes are sensitive, so they pause for an **Allow / Deny** card and the run waits for your choice. Everything else (reading, searching, file edits) runs automatically.
-
-### Inline process
-
-Each agent turn renders inline in the chat: the plan's steps, every tool call with its result, and status lines appear above the answer as the run happens, Codebuff-style. Runs are checkpointed (SQLite), so state survives restarts, and a step budget keeps runaway loops in check.
+Shell commands, code execution, and git writes pause for an **Allow / Deny**
+card. Everything else (reading, searching, file edits) runs automatically.
 
 ### Example tasks
 
-- "Summarize the Day 4 folder" → reads all 5 files (MD + PDF + DOCX) and gives a real summary
+- "Summarize the Day 4 folder" → reads all files and gives a real summary
 - "Create a new feature module with proper structure"
 - "Refactor this codebase and organize files"
 - "Find where `MAX_TOKENS` is defined and explain it"
@@ -174,73 +182,45 @@ Each agent turn renders inline in the chat: the plan's steps, every tool call wi
 
 ## 🔎 Advanced Search (Find Paragraph, no RAG)
 
-Open the **Advanced Search** panel (magnifier icon in the right-hand panel) to locate a specific passage in a document or across a folder:
+Open the **Advanced Search** panel to locate a specific passage:
 
-**Single file** — type a question ("what does it say about control flow?")
-  and the model finds and ranks the matching paragraphs.
-- **Folder search** — a planner decides which files to look at and in what
-  order (using only read-only tools), with a live per-file scan counter.
-- **Smart defaults** — your last query, source, folder, pattern, and
-  exhaustive-search setting are remembered between sessions.
+- **Single file** — type a question and the model finds matching paragraphs
+- **Folder search** — a planner decides which files to read, with live progress
+- **Smart defaults** — your last query, source, and settings are remembered
 
-No vector database, no embeddings — just the model reading the text and
-finding the answer.
+No vector database, no embeddings — just the model reading the text.
 
 ---
 
 ## ⚡ GPU Acceleration
 
-The app runs on CPU by default. To speed up inference with an
-NVIDIA GPU:
+The app runs on CPU by default. To enable GPU:
 
-1. Open **Settings -> Hardware** and click the GPU install option.
-2. The app installs the CUDA-enabled `llama-cpp-python` build into your current Python environment (you'll see progress, then a green check when it is done).
-3. Restart the app. Settings then shows a **green tick** ("GPU support is installed") and inference uses the GPU - no CPU+GPU mixing, just the GPU.
+1. Open **Settings → Hardware** and click the GPU install option.
+2. The app installs the CUDA-enabled build and shows a green tick when done.
+3. Restart the app — inference now uses the GPU.
 
-For manual control you can also run the bundled scripts:
-`scripts/install_gpu_llama.bat` (Windows) / `scripts/install_gpu_llama.sh`
-(Linux/macOS), and verify with `python scripts/verify_gpu_support.py`.
-
----
-
-## 📥 Supported Model
-
-| Model | Size | Notes |
-|---|---|---|
-| **Gemma 4 12B Instruct (Q4_K_M)** | ~8 GB | The model this testing release loads — sampling, context and prompts are tuned for it |
-
-GGUF Loader itself is a **universal model loader** — historically it accepted
-any GGUF model, and it will again. The v2.3.0 testing release is temporarily
-pinned to Gemma 4 12B Instruct Q4_K_M (auto-downloaded on first launch) while
-the new agent architecture is validated. Grab it from
-[Hugging Face](https://huggingface.co/models?library=gguf&query=gemma+4+12b).
-
-> 🔮 **Next release:** the **Universal Model Loader** returns — any GGUF
-> model will work, with hardware-aware recommendations so you can pick a
-> model that fits your PC's RAM/VRAM (small 3B models on modest machines up
-> to 70B+ on high-end rigs).
+Manual scripts: `scripts/install_gpu_llama.bat` (Windows) /
+`scripts/install_gpu_llama.sh` (Linux/macOS).
 
 ---
 
 ## 🛠️ System Requirements
 
-- **Python:** 3.10–3.13 (pip install)
 - **OS:** Windows 10/11, Linux, macOS (Intel & Apple Silicon)
-- **RAM:** 8 GB minimum for the 12B model (16 GB recommended)
+- **RAM:** 8 GB minimum (16 GB recommended for 12B models)
 - **Storage:** ~8 GB free for the model file
 - **GPU:** Optional — NVIDIA CUDA on Windows/Linux, Metal on macOS
+- **Python:** 3.10–3.13 (for running from source only)
 
-
+---
 
 ## 🧱 Building from source
 
-- **Windows executable:** `scripts/build_exe.bat` (or `python -m PyInstaller
-  build_exe.spec`). The script detects whether the installed llama-cpp-python
-  is CUDA-enabled and names the output `GGUFLoader_v<version>_CUDA.exe` or
-  `GGUFLoader_v<version>_CPU.exe` automatically.
+- **Windows executable:** `scripts/build_exe.bat` — detects CUDA and names the
+  output `GGUFLoader_v<version>_CUDA.exe` or `_CPU.exe` automatically.
 - **Linux executable:** `scripts/build_linux.sh` — must run on Linux (or WSL);
-  produces `GGUFLoader_v<version>_linux_x86_64_CPU`. One-file binaries are not
-  cross-platform.
+  produces `GGUFLoader_v<version>_linux_x86_64_CPU`.
 - **Tests:** `pip install pytest && python -m pytest`
 
 ## 📚 Documentation
@@ -248,7 +228,6 @@ the new agent architecture is validated. Grab it from
 - [Quick Reference](QUICK_REFERENCE.md)
 - [Developing Addons](ggufloader/addons/README.md)
 - [AGENTS.md](AGENTS.md) — codebase guide for AI coding agents
-- [Docs archive (v2.1.2)](docs/README.md) — historical documentation restored from git history
 - [Architecture](ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
