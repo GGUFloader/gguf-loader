@@ -28,7 +28,7 @@ Project maintainers are responsible for clarifying and enforcing our standards o
 
 ## Reporting Guidelines
 
-If you are subject to or witness unacceptable behavior, please report it by contacting the project maintainers at **security@yourdomain.com** (replace with your actual contact email). All complaints will be reviewed and investigated promptly and fairly.
+If you are subject to or witness unacceptable behavior, please report it by contacting the project maintainers at **hussainnazary475@gmail.com**. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Enforcement Process
 
