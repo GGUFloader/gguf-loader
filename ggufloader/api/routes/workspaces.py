@@ -57,11 +57,14 @@ async def create_workspace(req: WorkspaceCreate) -> dict:
 async def switch_workspace(workspace_id: str) -> dict:
     """Switch to a different workspace."""
     from ggufloader.core.agent.workspace_manager import WorkspaceManager
+    from ggufloader.api.deps import set_workspace
     mgr = WorkspaceManager()
     success = mgr.switch_to(workspace_id)
     if not success:
         raise HTTPException(status_code=404, detail="Workspace not found")
     ws = mgr.active
+    if ws and ws.path:
+        set_workspace(ws.path)
     return {"status": "switched", **ws.to_dict()}
 
 
