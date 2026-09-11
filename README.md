@@ -49,7 +49,7 @@ Or download a prebuilt executable from
 > [Report issues](https://github.com/GGUFloader/gguf-loader/issues) you find.
 
 **v2.3.0 is a testing release** that takes the agentic experience further
-with a **strictly plan-driven agent** and a **Codebuff-style inline process
+with a **strictly plan-driven agent** and a **developer-style inline process
 UI** — but it is temporarily pinned to a single model (Gemma 4 12B Instruct
 Q4_K_M) to tune the agent's performance before expanding model support.
 
@@ -61,7 +61,7 @@ Q4_K_M) to tune the agent's performance before expanding model support.
 - 📋 **Strictly plan-driven agent** — every turn goes through a planner node:
   tool-free questions answered directly; tasks get a step-by-step plan executed
   with sandboxed tools. The reactive ReAct fallback was removed.
-- 🖥️ **Codebuff-style process UI** — plan steps, tool calls, and results
+- 🖥️ **Developer-style process UI** — plan steps, tool calls, and results
   render inline in the chat above each answer.
 - 🧹 **Reliable final answers** — stray tool-call JSON and stale status text
   are scrubbed from replies.
