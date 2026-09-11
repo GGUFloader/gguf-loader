@@ -18,6 +18,10 @@ import traceback
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# The bundled Electron shell, when we spawned one. Kept module-level so the
+# launcher can shut it down before the process exits (see _shutdown_electron).
+_electron_proc = None
+
 
 def _show_error_dialog(message: str) -> None:
     """Surface a fatal startup error to the user.
@@ -182,11 +186,38 @@ def _launch_react(port: int = 8000, open_browser: bool = True) -> int:
         server_thread.join()
     except KeyboardInterrupt:
         logger.info("Shutting down...")
+    _shutdown_electron()
     return 0
+
+
+def _shutdown_electron(timeout: float = 2.0) -> None:
+    """Stop the bundled Electron shell before this process exits.
+
+    PyInstaller's onefile bootloader deletes the extracted ``_MEIPASS``
+    directory once the app exits. If ``electron.exe`` is still alive it holds
+    files open inside ``_MEIPASS/electron`` and the cleanup fails, which the
+    bootloader reports as a scary "Failed to remove temporary directory"
+    dialog. Waiting briefly (Electron is usually already quitting after its
+    /api/shutdown call) then killing it keeps the exit clean.
+    """
+    proc = _electron_proc
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.wait(timeout=timeout)
+        return
+    except Exception:  # noqa: BLE001 - fall through to the hard kill
+        pass
+    try:
+        proc.kill()
+        proc.wait(timeout=2)
+    except Exception:  # noqa: BLE001 - nothing else we can do
+        pass
 
 
 def _open_ui(url: str) -> None:
     """Open the UI in Electron (frozen) or a browser (dev)."""
+    global _electron_proc
     if getattr(sys, "frozen", False):
         # Frozen exe: launch the bundled Electron standalone launcher
         import subprocess
@@ -194,7 +225,7 @@ def _open_ui(url: str) -> None:
         electron_exe = os.path.join(electron_dir, "electron.exe")
         if os.path.isfile(electron_exe):
             logger.info("Launching Electron: %s", electron_exe)
-            subprocess.Popen(
+            _electron_proc = subprocess.Popen(
                 [electron_exe, electron_dir, f"--url={url}"],
                 cwd=electron_dir,
                 creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
