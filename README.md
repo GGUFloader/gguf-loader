@@ -9,6 +9,74 @@ leaves your machine.
 
 ---
 
+## 🧪 v2.3.0 — Testing Release (Single-Model Agent)
+
+> ⚠️ **This is a testing/preview release.** It is locked to one model while
+> we validate the new plan-driven agent architecture. Expect rough edges.
+> [Report issues](https://github.com/GGUFloader/gguf-loader/issues) you find.
+
+**v2.3.0 is a testing release** that takes the agentic experience further
+with a **strictly plan-driven agent** and a **developer-style inline process
+UI** — but it is temporarily pinned to a single model (Gemma 4 12B Instruct
+Q4_K_M) to tune the agent's performance before expanding model support.
+
+### What's new in v2.3.0
+
+- 🎯 **Single-model focus (temporary)** — optimized for Gemma 4 12B Instruct
+  Q4_K_M; multi-model detection removed so this one model just works. Universal
+  loading returns next release.
+- 📋 **Strictly plan-driven agent** — every turn goes through a planner node:
+  tool-free questions answered directly; tasks get a step-by-step plan executed
+  with sandboxed tools. The reactive ReAct fallback was removed.
+- 🖥️ **Developer-style process UI** — plan steps, tool calls, and results
+  render inline in the chat above each answer.
+- 🧹 **Reliable final answers** — stray tool-call JSON and stale status text
+  are scrubbed from replies.
+- 📥 **Auto-load at startup** — scans `models/` folder and loads the pinned
+  GGUF automatically; missing model downloads with live progress.
+- 🔧 **Pruned tools** — 10 focused workspace tools (memory/meta tools removed).
+- 🚀 **Self-setup launchers** — `launch.bat` / `launch.sh` handle all
+  dependency installation.
+
+### Screenshots (v2.3.0)
+
+![v2.3.0 - Chat Interface](screenshots/screen1.png)
+
+![v2.3.0 - Agent Mode](screenshots/screen2.png)
+
+![v2.3.0 - Settings](screenshots/screen3.png)
+
+### Download v2.3.0
+
+| Artifact | Size | Notes |
+|---|---|---|
+| [GGUFLoader_v2.3.0_CPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CPU.exe) | ~145 MB | Windows · CPU-only, works everywhere |
+| [GGUFLoader_v2.3.0_CUDA.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CUDA.exe) | ~930 MB | Windows · NVIDIA CUDA |
+| [GGUFLoader_v2.3.0_linux_x86_64_CPU](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_linux_x86_64_CPU) | ~50 MB | Linux · CPU-only |
+
+Click any filename above to download directly. The CUDA build bundles the full
+CUDA runtime; the CPU build is several times smaller.
+
+### First launch (v2.3.0)
+
+1. Start the app — it **auto-loads** the pinned Gemma 4 12B Q4_K_M from the
+   `models/` folder in the background.
+2. No model on disk? The **model chip in the header** downloads it with live
+   progress and loads it when finished.
+3. Chat in the main window, or press **Ctrl/Cmd + Shift + A** for Agent Mode
+   and choose a workspace folder.
+
+---
+
+## 🔮 What's Coming Next
+
+> **Universal Model Loader returns** — the next release removes the single-model
+> restriction. You'll be able to run **any GGUF model** with the agent, with
+> hardware-aware recommendations so you can pick a model that fits your PC's
+> RAM/VRAM.
+
+---
+
 ## 📦 v2.2.0 — Stable Release (Universal Model Loader)
 
 > **Install via pip:** `pip install ggufloader` then run `ggufloader`
@@ -51,66 +119,6 @@ Click any filename above to download directly.
 
 ---
 
-## 🧪 v2.3.0 — Testing Release (Single-Model Agent)
-
-> ⚠️ **This is a testing/preview release.** It is locked to one model while
-> we validate the new plan-driven agent architecture. Expect rough edges.
-> [Report issues](https://github.com/GGUFloader/gguf-loader/issues) you find.
-
-**v2.3.0 is a testing release** that takes the agentic experience further
-with a **strictly plan-driven agent** and a **developer-style inline process
-UI** — but it is temporarily pinned to a single model (Gemma 4 12B Instruct
-Q4_K_M) to tune the agent's performance before expanding model support.
-
-### What's new in v2.3.0
-
-- 🎯 **Single-model focus (temporary)** — optimized for Gemma 4 12B Instruct
-  Q4_K_M; multi-model detection removed so this one model just works. Universal
-  loading returns next release.
-- 📋 **Strictly plan-driven agent** — every turn goes through a planner node:
-  tool-free questions answered directly; tasks get a step-by-step plan executed
-  with sandboxed tools. The reactive ReAct fallback was removed.
-- 🖥️ **Developer-style process UI** — plan steps, tool calls, and results
-  render inline in the chat above each answer.
-- 🧹 **Reliable final answers** — stray tool-call JSON and stale status text
-  are scrubbed from replies.
-- 📥 **Auto-load at startup** — scans `models/` folder and loads the pinned
-  GGUF automatically; missing model downloads with live progress.
-- 🔧 **Pruned tools** — 10 focused workspace tools (memory/meta tools removed).
-- 🚀 **Self-setup launchers** — `launch.bat` / `launch.sh` handle all
-  dependency installation.
-
-### Download v2.3.0
-
-| Artifact | Size | Notes |
-|---|---|---|
-| [GGUFLoader_v2.3.0_CPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CPU.exe) | ~145 MB | Windows · CPU-only, works everywhere |
-| [GGUFLoader_v2.3.0_CUDA.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CUDA.exe) | ~930 MB | Windows · NVIDIA CUDA |
-| [GGUFLoader_v2.3.0_linux_x86_64_CPU](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_linux_x86_64_CPU) | ~50 MB | Linux · CPU-only |
-
-Click any filename above to download directly. The CUDA build bundles the full
-CUDA runtime; the CPU build is several times smaller.
-
-### First launch (v2.3.0)
-
-1. Start the app — it **auto-loads** the pinned Gemma 4 12B Q4_K_M from the
-   `models/` folder in the background.
-2. No model on disk? The **model chip in the header** downloads it with live
-   progress and loads it when finished.
-3. Chat in the main window, or press **Ctrl/Cmd + Shift + A** for Agent Mode
-   and choose a workspace folder.
-
----
-
-## 🔮 What's Coming Next
-
-> **Universal Model Loader returns** — the next release removes the single-model
-> restriction. You'll be able to run **any GGUF model** with the agent, with
-> hardware-aware recommendations so you can pick a model that fits your PC's
-> RAM/VRAM.
-
----
-
 ## ✨ Features
 
 ### Interface
@@ -143,14 +151,6 @@ CUDA runtime; the CPU build is several times smaller.
   leave your machine.
 - 💻 **Cross-platform** — Windows 10/11, Linux, and macOS (including Apple
   Silicon), via React + Electron or in the browser.
-
-## 🎬 Screenshots
-
-![GGUF Loader - Chat Interface](screenshots/screen1.png)
-
-![GGUF Loader - Agent Mode](screenshots/screen2.png)
-
-![GGUF Loader - Settings](screenshots/screen3.png)
 
 ---
 
