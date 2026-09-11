@@ -32,13 +32,22 @@ machines to large 70B+ models on high-end rigs. The app detects your hardware
 
 ### Install v2.2.0
 
+**Option 1: pip**
+
 ```bash
 pip install ggufloader
 ggufloader
 ```
 
-Or download a prebuilt executable from
-[GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases).
+**Option 2: Prebuilt executable**
+
+| Artifact | Size | Notes |
+|---|---|---|
+| [GGUFLoader_v2.2.0_GPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.2.0/GGUFLoader_v2.2.0_GPU.exe) | ~850 MB | Windows · NVIDIA CUDA |
+| [GGUFLoader_v2.2.0_CPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.2.0/GGUFLoader_v2.2.0_CPU.exe) | ~70 MB | Windows · CPU-only |
+| [GGUFLoader_v2.2.0_linux_x86_64_CPU](https://github.com/GGUFloader/gguf-loader/releases/download/v2.2.0/GGUFLoader_v2.2.0_linux_x86_64_CPU) | ~105 MB | Linux · CPU-only |
+
+Click any filename above to download directly.
 
 ---
 
@@ -73,17 +82,14 @@ Q4_K_M) to tune the agent's performance before expanding model support.
 
 ### Download v2.3.0
 
-Standalone executables on
-[GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases):
-
 | Artifact | Size | Notes |
 |---|---|---|
-| `GGUFLoader_v2.3.0_CPU.exe` | ~145 MB | Windows · CPU-only, works everywhere |
-| `GGUFLoader_v2.3.0_CUDA.exe` | ~930 MB | Windows · NVIDIA CUDA |
-| `GGUFLoader_v2.3.0_linux_x86_64_CPU` | ~50 MB | Linux · CPU-only |
+| [GGUFLoader_v2.3.0_CPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CPU.exe) | ~145 MB | Windows · CPU-only, works everywhere |
+| [GGUFLoader_v2.3.0_CUDA.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CUDA.exe) | ~930 MB | Windows · NVIDIA CUDA |
+| [GGUFLoader_v2.3.0_linux_x86_64_CPU](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_linux_x86_64_CPU) | ~50 MB | Linux · CPU-only |
 
-The CUDA build bundles the full CUDA runtime; the CPU build is several times
-smaller. Pick CUDA if you have an NVIDIA card, CPU otherwise.
+Click any filename above to download directly. The CUDA build bundles the full
+CUDA runtime; the CPU build is several times smaller.
 
 ### First launch (v2.3.0)
 
