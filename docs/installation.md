@@ -23,21 +23,7 @@ from the header chip if it is missing (see First Launch below).
 
 ---
 
-## Method 2: pip install
-
-```bash
-pip install ggufloader
-ggufloader
-```
-
-- Requires **Python 3.10-3.13**.
-- The wheel installs only the `ggufloader` name, so it is safe alongside other
-  packages in a shared/global environment.
-- Update any time with `pip install --upgrade ggufloader`.
-
----
-
-## Method 3: Run from source
+## Method 2: Run from source
 
 ### Prerequisites
 
