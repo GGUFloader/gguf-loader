@@ -7,23 +7,39 @@
 ![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 
-A privacy-first, beginner-friendly desktop application for running large
-language models **fully locally** on Windows, Linux, and macOS. This build is
-**optimized for a single model — Google Gemma 4 12B Instruct (Q4_K_M)** — with
-per-model detection and family tuning removed so everything just works for
-that target. It ships with a built-in **agentic mode** that can read, create,
+A privacy-first, beginner-friendly desktop application for running GGUF
+language models **fully locally** on Windows, Linux, and macOS. GGUF Loader is
+a **universal model loader** — you pick the model that fits your PC's
+resources. It ships with a built-in **agentic mode** that can read, create,
 edit, and organize files in a workspace you choose. No data ever leaves your
 computer.
+
+> 🧪 **Note:** the new v2.3.0 testing release is temporarily optimized for
+> one model (Gemma 4 12B Instruct Q4_K_M) so its agentic work runs well —
+> universal model support returns in the next release.
 
 > 📦 **Also available as a Python package** — install it in seconds with
 > `pip install ggufloader` and launch it with `ggufloader`.
 > [View on PyPI](https://pypi.org/project/ggufloader/)
 
+> ⚠️ **Testing Release Notice**
+> **This version (2.3.0) is a testing/preview release.** It is locked to a
+> single model (Gemma 4 12B Instruct Q4_K_M) while we validate the new
+> plan-driven agent. Expect rough edges, and please
+> [report issues](https://github.com/GGUFloader/gguf-loader/issues) you find.
+>
+> 🔮 **Coming in the next release — Universal Model Loader**
+> We are working on removing the single-model restriction so the agent works
+> with **any GGUF model you choose**. The universal loader will detect your
+> PC's capabilities (RAM, VRAM, CPU/GPU) and recommend models that fit your
+> hardware — so you can run anything from small 3B models on modest machines
+> to large 70B+ models on high-end rigs. Stay tuned!
+
 ---
 
-## What's New in 2.3.0 - the single-model agent build
+## What's New in 2.3.0 - the single-model agent build (testing)
 
-- **One model, zero config** - the app is optimized for **Gemma 4 12B Instruct Q4_K_M** only; all multi-model detection, family profiles, and per-model prompts were removed so that one model just works.
+- **One model, zero config (temporary)** - this testing release is optimized for **Gemma 4 12B Instruct Q4_K_M**; multi-model detection was temporarily removed so this one model just works. Universal loading returns next release.
 - **Auto-load at startup** - the app scans its `models/` folder (plus the last-used model folder) and loads the pinned GGUF automatically; if it is missing, the header model chip downloads it with live progress. The manual Load Model step is gone.
 - **Strictly plan-driven agent** - every agent turn goes through a planner node: no tools needed, the model answers directly; tools needed, a plan is written and executed step by step. The reactive ReAct fallback was removed.
 - **Codebuff-style process UI** - plan steps, tool calls, and results render inline in the chat above each answer; the old right-hand progress panel is gone.
@@ -75,15 +91,19 @@ Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in d
 - 🤖 **Plan-driven agent (LangGraph)** - a planner node decides each turn: tool-free questions are answered directly; tasks get a step-by-step plan that runs with sandboxed tools (list/read/write/edit/move/search files, shell commands, code, git) inside the workspace you grant - with Allow/Deny approval for commands, code, and git writes, and SQLite checkpointing so conversations resume after restarts.
 - 🔎 **Advanced Search (Find Paragraph)** - locate a passage in a document or folder with the model itself, no RAG or vector database required.
 - 🧾 **Real file reading** - extracts text from `.md`, `.pdf`, `.docx`, `.txt` and source files, so the agent can summarize and answer from real content.
-- 🎯 **Single-model focus** - the build loads exactly Gemma 4 12B Q4_K_M (the only file it is tuned for); other GGUFs are rejected with a clear message.
+- 🎯 **Single-model focus (testing release)** - v2.3.0 temporarily loads exactly Gemma 4 12B Q4_K_M, tuned so its agentic work runs well; other GGUFs are rejected with a clear message. Universal model support returns in the next release.
 - ⚡ **GPU acceleration** - enable it under **Settings -> Hardware** (it installs the CUDA/Metal build with live status); the app then uses the GPU for inference.
 - 📋 **Process you can follow** - agent runs stream their plan, tool calls, and results inline in the chat, Codebuff-style.
 - 🔒 **Privacy first** - 100% local inference. Your prompts and files never leave your machine.
 - 💻 **Cross-platform** - Windows 10/11, Linux, and macOS (including Apple Silicon), via React + Electron or in the browser.
 
-## 🎬 Screenshot
+## 🎬 Screenshots
 
-![GGUF Loader - main window](https://raw.githubusercontent.com/GGUFloader/gguf-loader/main/screen.png)
+![GGUF Loader - Chat Interface](screenshots/screen1.png)
+
+![GGUF Loader - Agent Mode](screenshots/screen2.png)
+
+![GGUF Loader - Settings](screenshots/screen3.png)
 
 ---
 
@@ -132,13 +152,14 @@ Standalone one-file executables are published on the
 
 | Artifact | Size | Notes |
 |---|---|---|
-| `GGUFLoader_v<version>_GPU.exe` | ~850 MB | Windows · NVIDIA CUDA, zero setup |
-| `GGUFLoader_v<version>_CPU.exe` | ~70 MB | Windows · CPU-only, works everywhere |
-| `GGUFLoader_v<version>_linux_x86_64_CPU` | ~105 MB | Linux · CPU-only |
+| `GGUFLoader_v<version>_CUDA.exe` | ~930 MB | Windows · NVIDIA CUDA, zero setup |
+| `GGUFLoader_v<version>_CPU.exe` | ~145 MB | Windows · CPU-only, works everywhere |
+| `GGUFLoader_v<version>_linux_x86_64_CPU` | ~50 MB | Linux · CPU-only |
+| `GGUFLoader_v<version>_linux_x86_64_CUDA` | ~1.35 GB | Linux · NVIDIA CUDA (driver ≥ 550) |
 
-The GPU build bundles the full CUDA runtime; the CPU build drops it entirely,
-which is why it is ~10× smaller. Pick the GPU build if you have an NVIDIA card,
-the CPU build otherwise.
+The CUDA build bundles the full CUDA runtime; the CPU build drops it entirely,
+which is why it is several times smaller. Pick the CUDA build if you have an
+NVIDIA card (driver ≥ 550 on Linux), the CPU build otherwise.
 
 ### First launch
 
@@ -216,11 +237,18 @@ For manual control you can also run the bundled scripts:
 
 | Model | Size | Notes |
 |---|---|---|
-| **Gemma 4 12B Instruct (Q4_K_M)** | ~8 GB | The only model this build loads — sampling, context and prompts are tuned for it |
+| **Gemma 4 12B Instruct (Q4_K_M)** | ~8 GB | The model this testing release loads — sampling, context and prompts are tuned for it |
 
-Other GGUF files are rejected at load time with a clear message. Grab the
-Gemma 4 12B Instruct Q4_K_M GGUF from
+GGUF Loader itself is a **universal model loader** — historically it accepted
+any GGUF model, and it will again. The v2.3.0 testing release is temporarily
+pinned to Gemma 4 12B Instruct Q4_K_M (auto-downloaded on first launch) while
+the new agent architecture is validated. Grab it from
 [Hugging Face](https://huggingface.co/models?library=gguf&query=gemma+4+12b).
+
+> 🔮 **Next release:** the **Universal Model Loader** returns — any GGUF
+> model will work, with hardware-aware recommendations so you can pick a
+> model that fits your PC's RAM/VRAM (small 3B models on modest machines up
+> to 70B+ on high-end rigs).
 
 ---
 
@@ -252,7 +280,7 @@ all three platforms:
 - **Wheel / sdist:** `pip install build && python -m build` → artifacts in `dist/`
 - **Windows executable:** `scripts/build_exe.bat` (or `python -m PyInstaller
   build_exe.spec`). The script detects whether the installed llama-cpp-python
-  is CUDA-enabled and names the output `GGUFLoader_v<version>_GPU.exe` or
+  is CUDA-enabled and names the output `GGUFLoader_v<version>_CUDA.exe` or
   `GGUFLoader_v<version>_CPU.exe` automatically.
 - **Linux executable:** `scripts/build_linux.sh` — must run on Linux (or WSL);
   produces `GGUFLoader_v<version>_linux_x86_64_CPU`. One-file binaries are not
