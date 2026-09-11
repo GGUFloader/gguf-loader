@@ -1,8 +1,10 @@
 # Package Structure (Historical)
 
 > **📜 Historical document** — describes the package structure at version 2.0.0.
-> The current build (v2.3.0) is a **single-model (Gemma 4 12B Q4_K_M)** agent
-> app with a **React/TypeScript frontend** on a **FastAPI backend**. The
+> The current build (v2.3.0) is a **universal GGUF model loader** with a
+> plan-driven agent (**React/TypeScript frontend** on a **FastAPI backend**).
+> The v2.3.0 testing release is temporarily pinned to Gemma 4 12B Instruct
+> Q4_K_M. The
 > structure below is outdated. For the current structure see
 > [AGENTS.md](../AGENTS.md) and [docs/PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md).
 
