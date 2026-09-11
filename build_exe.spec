@@ -38,6 +38,33 @@ try:
 except Exception as e:
     print(f"Warning: Could not find llama_cpp lib: {e}")
 
+# Guard: a CPU-only bundle MUST be built from the CPU wheel.
+#
+# The CUDA wheel's llama.dll (-> ggml.dll) has a hard load-time dependency on
+# ggml-cuda.dll: stripping it produces an exe whose `from llama_cpp import
+# Llama` fails with FileNotFoundError ("or one of its dependencies"), so the
+# FastAPI backend never starts and the window shows no UI. Measured on
+# llama-cpp-python 0.3.34 / Windows: LoadLibraryExW(llama.dll) returns
+# ERROR_MOD_NOT_FOUND (126) without ggml-cuda.dll and succeeds with it.
+# Refusing here is far better than shipping an exe that crashes on launch.
+if llama_cpp_lib_path and os.path.isdir(llama_cpp_lib_path):
+    _cuda_libs = sorted(
+        f for f in os.listdir(llama_cpp_lib_path)
+        if 'cuda' in f.lower() or 'cublas' in f.lower()
+    )
+    if _cuda_libs and not INCLUDE_CUDA:
+        raise SystemExit(
+            "ERROR: the installed llama-cpp-python wheel ships CUDA libraries "
+            f"({', '.join(_cuda_libs)}).\n"
+            "A CPU-only bundle would have to strip them, but this wheel's "
+            "llama.dll cannot load without ggml-cuda.dll, so the exe would "
+            "crash at startup (no UI).\n\n"
+            "Either install the CPU wheel first:\n"
+            "    pip install llama-cpp-python==0.3.34 --force-reinstall\n"
+            "or build the GPU bundle:\n"
+            "    set GGUFLOADER_CUDA=1 && pyinstaller build_exe.spec"
+        )
+
 # Collect all data files and binaries
 datas = []
 binaries = []
@@ -57,7 +84,11 @@ datas += [
 # opens a BrowserWindow to the already-running backend on localhost:8000.
 electron_dist = os.path.join(current_dir, 'electron', 'node_modules', 'electron', 'dist')
 electron_app = os.path.join(current_dir, 'electron', 'dist')
-if os.path.isdir(electron_dist) and os.path.isfile(os.path.join(electron_dist, 'electron.exe')):
+# Windows only: the Linux binary intentionally keeps its browser fallback, and
+# a checkout whose electron/node_modules was populated on Windows (as this dev
+# machine's is) would otherwise bundle a Windows electron.exe into the Linux
+# build - hundreds of MB of dead weight that can never launch there.
+if sys.platform == 'win32' and os.path.isdir(electron_dist) and os.path.isfile(os.path.join(electron_dist, 'electron.exe')):
     # Bundle the entire Electron dist directory (exe, DLLs, .pak, resources/, locales/)
     for root, _dirs, files in os.walk(electron_dist):
         for fname in files:
