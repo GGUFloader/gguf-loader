@@ -2,9 +2,10 @@
 
 ## Overview
 
-GGUF Loader is a single-model (Gemma 4 12B Q4_K_M) local AI agent app:
+GGUF Loader is a **universal GGUF model loader** with a built-in plan-driven agent:
 - **React UI**: FastAPI backend + React frontend (the only UI)
 - **Agent**: Plan-driven LangGraph agent with sandboxed tools
+- **Note**: v2.3.0 is a testing release temporarily pinned to Gemma 4 12B Instruct Q4_K_M; universal model support returns next release
 
 ## Directory Layout
 
@@ -138,7 +139,10 @@ gguf-loader/
 │   └── pyside6-to-react-migration.md
 │
 ├── icon.ico                         # App icon
-├── (screen.png removed — TODO: capture React UI screenshot)
+├── screenshots/                      # UI screenshots for README
+│   ├── screen1.png
+│   ├── screen2.png
+│   └── screen3.png
 ```
 
 ## Key Architectural Decisions
