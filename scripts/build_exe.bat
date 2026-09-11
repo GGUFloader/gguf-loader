@@ -27,31 +27,45 @@ echo.
 echo [2/4] Installing PyInstaller...
 pip install pyinstaller
 
+REM Detect the build variant from the installed llama-cpp-python wheel BEFORE
+REM the build: the spec needs GGUFLOADER_CUDA to know whether to keep the CUDA
+REM runtime, and it refuses to build a CPU bundle from a CUDA wheel (that
+REM wheel's llama.dll cannot load without ggml-cuda.dll, so the exe would
+REM crash at startup with no UI).
+set "VARIANT=CPU"
+set "GGUFLOADER_CUDA=0"
+if exist ".venv\Lib\site-packages\llama_cpp\lib\ggml-cuda.dll" (
+    set "VARIANT=GPU"
+    set "GGUFLOADER_CUDA=1"
+)
+
+REM Resolve the app version and the final artifact name up front, so %VARIABLE%
+REM values are set before the success block below is parsed (cmd expands %VARS%
+REM at parse time inside parenthesized blocks).
+set "VERSION="
+for /f "tokens=2 delims== " %%V in ('findstr /B "__version__" ggufloader\_version.py') do set "VERSION=%%V"
+set "VERSION=%VERSION:"=%"
+set "FINAL_NAME=GGUFLoader_v%VERSION%_%VARIANT%.exe"
+
 REM Clean previous builds. Keep other dist artifacts (GPU/CPU variant exes,
 REM wheels, Linux binaries) - only remove this build's stale output.
 echo.
 echo [3/4] Cleaning previous builds...
 if exist "build" rmdir /s /q build
 if exist "dist\GGUFLoader_WithAddons.exe" del /q "dist\GGUFLoader_WithAddons.exe"
+if exist "dist\GGUFLoader_WithAddons_GPU.exe" del /q "dist\GGUFLoader_WithAddons_GPU.exe"
 
 REM Build executable
 echo.
-echo [4/4] Building executable...
+echo [4/4] Building %VARIANT% executable...
 pyinstaller build_exe.spec
 
-REM Resolve the app version and the GPU/CPU variant BEFORE the success block
-REM below, so %VARIABLE% values are set before that block is parsed (cmd
-REM expands %VARS% at parse time inside parenthesized blocks).
-set "VARIANT=CPU"
-if exist ".venv\Lib\site-packages\llama_cpp\lib\ggml-cuda.dll" set "VARIANT=GPU"
-set "VERSION="
-for /f "tokens=2 delims== " %%V in ('findstr /B "__version__" ggufloader\_version.py') do set "VERSION=%%V"
-set "VERSION=%VERSION:"=%"
-set "FINAL_NAME=GGUFLoader_v%VERSION%_%VARIANT%.exe"
-
-REM Check if build was successful
-if exist "dist\GGUFLoader_WithAddons.exe" (
-    move /y "dist\GGUFLoader_WithAddons.exe" "dist\%FINAL_NAME%" >nul
+REM Check if build was successful. The spec names the CUDA build with a _GPU
+REM suffix, so rename from whichever file this variant produced.
+set "BUILT=dist\GGUFLoader_WithAddons.exe"
+if "%VARIANT%"=="GPU" set "BUILT=dist\GGUFLoader_WithAddons_GPU.exe"
+if exist "%BUILT%" (
+    move /y "%BUILT%" "dist\%FINAL_NAME%" >nul
 
     echo.
     echo ========================================
@@ -70,7 +84,7 @@ if exist "dist\GGUFLoader_WithAddons.exe" (
     echo - No installation required
     echo.
     echo Just share this ONE file - users can run it directly
-    echo File size: CPU-only ~70MB, GPU ~850MB (CUDA runtime included)
+    echo File size: CPU-only ~145MB, GPU ~930MB (CUDA runtime included)
     echo.
 ) else (
     echo.
