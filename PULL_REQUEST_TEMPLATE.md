@@ -25,6 +25,7 @@ Fixes #123
 - [ ] New feature  
 - [ ] Documentation update  
 - [ ] Refactoring  
+- [ ] Model/agent improvement  
 - [ ] Other (please describe): __________
 
 ---
