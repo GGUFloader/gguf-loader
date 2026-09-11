@@ -15,7 +15,6 @@ with a built-in plan-driven agent. Pick whichever method fits you.
    - `GGUFLoader_v<version>_CUDA.exe` - Windows with an NVIDIA GPU (CUDA)
    - `GGUFLoader_v<version>_CPU.exe` - Windows, any machine
    - `GGUFLoader_v<version>_linux_x86_64_CPU` - Linux, CPU-only
-   - `GGUFLoader_v<version>_linux_x86_64_CUDA` - Linux with NVIDIA GPU (driver ≥ 550)
 3. Run it. No Python, Node, or other runtime is needed.
 
 On first start the app looks for the pinned model and offers to download it

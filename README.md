@@ -81,7 +81,6 @@ Standalone executables on
 | `GGUFLoader_v2.3.0_CPU.exe` | ~145 MB | Windows · CPU-only, works everywhere |
 | `GGUFLoader_v2.3.0_CUDA.exe` | ~930 MB | Windows · NVIDIA CUDA |
 | `GGUFLoader_v2.3.0_linux_x86_64_CPU` | ~50 MB | Linux · CPU-only |
-| `GGUFLoader_v2.3.0_linux_x86_64_CUDA` | ~1.35 GB | Linux · NVIDIA CUDA (driver ≥ 550) |
 
 The CUDA build bundles the full CUDA runtime; the CPU build is several times
 smaller. Pick CUDA if you have an NVIDIA card, CPU otherwise.

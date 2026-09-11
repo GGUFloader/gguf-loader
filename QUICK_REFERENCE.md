@@ -19,7 +19,6 @@ Grab the right file from [GitHub Releases](https://github.com/GGUFloader/gguf-lo
 | `GGUFLoader_v<version>_CUDA.exe` | ~930 MB | Windows + NVIDIA GPU (CUDA) |
 | `GGUFLoader_v<version>_CPU.exe` | ~145 MB | Windows, any machine |
 | `GGUFLoader_v<version>_linux_x86_64_CPU` | ~50 MB | Linux, CPU-only |
-| `GGUFLoader_v<version>_linux_x86_64_CUDA` | ~1.35 GB | Linux + NVIDIA GPU (driver ≥ 550) |
 
 No Python or other runtime is needed - the exe is self-contained.
 
