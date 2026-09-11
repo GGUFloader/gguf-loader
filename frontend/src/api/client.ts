@@ -163,7 +163,7 @@ export const filesApi = {
       method: 'PUT',
       body: JSON.stringify({ path, content }),
     }),
-  search: (q: string) => request<any[]>(`/files/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, path?: string) => request<any[]>(`/files/search?q=${encodeURIComponent(q)}${path ? `&path=${encodeURIComponent(path)}` : ''}`),
 }
 
 // GPU API
