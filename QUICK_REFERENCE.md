@@ -16,9 +16,10 @@ Grab the right file from [GitHub Releases](https://github.com/GGUFloader/gguf-lo
 
 | Artifact | Size | Use when |
 |---|---|---|
-| `GGUFLoader_v<version>_GPU.exe` | ~850 MB | Windows + NVIDIA GPU (CUDA) |
-| `GGUFLoader_v<version>_CPU.exe` | ~70 MB | Windows, any machine |
-| `GGUFLoader_v<version>_linux_x86_64_CPU` | ~105 MB | Linux (chmod +x, run directly) |
+| `GGUFLoader_v<version>_CUDA.exe` | ~930 MB | Windows + NVIDIA GPU (CUDA) |
+| `GGUFLoader_v<version>_CPU.exe` | ~145 MB | Windows, any machine |
+| `GGUFLoader_v<version>_linux_x86_64_CPU` | ~50 MB | Linux, CPU-only |
+| `GGUFLoader_v<version>_linux_x86_64_CUDA` | ~1.35 GB | Linux + NVIDIA GPU (driver ≥ 550) |
 
 No Python or other runtime is needed - the exe is self-contained.
 
@@ -126,8 +127,9 @@ checkpointed to SQLite, so work survives restarts.
 
 ## GPU vs CPU
 
-- The **GPU exe** bundles the CUDA runtime; the **CPU exe** is ~10x smaller and
-  runs anywhere. CPU-only builds still work on NVIDIA machines, just slower.
+- The **GPU exe** bundles the CUDA runtime; the **CPU exe** is several times
+  smaller and runs anywhere. CPU-only builds still work on NVIDIA machines,
+  just slower.
 - From source/pip, the default install is **CPU**. To enable GPU: open
   **Settings > Hardware** and click the GPU install option (installs the CUDA
   build with live status, then restart). macOS uses Metal.
