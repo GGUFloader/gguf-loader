@@ -7,6 +7,7 @@ import {
 import { useUIStore } from '../../stores/uiStore'
 import { gpuApi, agentApi } from '../../api/client'
 import { usePluginRegistry } from '../../stores/pluginRegistry'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { ThemeSwitcher } from '../ui/ThemeSwitcher'
 
 interface Props {
@@ -67,7 +68,8 @@ export function SettingsDialog({ onClose }: Props) {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [ragEnabled, setRagEnabled] = useState(false)
   const [ragFolder, setRagFolder] = useState('')
-  const [workspace, setWorkspace] = useState('')
+  const workspace = useWorkspaceStore((s) => s.workspace)
+  const setWorkspace = useWorkspaceStore((s) => s.setWorkspace)
 
   // Hardware
   const [gpuStatus, setGpuStatus] = useState<any>(null)
@@ -144,12 +146,11 @@ export function SettingsDialog({ onClose }: Props) {
 
   function handleBrowseWorkspace() {
     if ((window as any).electronAPI?.openFolderDialog) {
-      (window as any).electronAPI.openFolderDialog().then((path: string | null) => {
-        if (path) { setWorkspace(path); setTimeout(saveSettings, 100) }
-      })
+      (window as any).electronAPI.openFolderDialog().then((path: string | null) => {      if (path) { setWorkspace(path) }
+    })
     } else {
       const path = prompt('Enter workspace folder path:')
-      if (path) { setWorkspace(path); setTimeout(saveSettings, 100) }
+      if (path) { setWorkspace(path) }
     }
   }
 
@@ -351,7 +352,7 @@ export function SettingsDialog({ onClose }: Props) {
 
                 <Section title="Workspace">
                   <div className="flex gap-2">
-                    <input value={workspace} onChange={(e) => { setWorkspace(e.target.value); setTimeout(saveSettings, 100) }}
+                    <input value={workspace} onChange={(e) => setWorkspace(e.target.value)}
                       placeholder="Select project folder..." readOnly
                       className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-text-muted outline-none focus:border-accent font-mono" />
                     <button onClick={handleBrowseWorkspace}
