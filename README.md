@@ -1,9 +1,5 @@
 # GGUF Loader
 
-[![PyPI - Version](https://img.shields.io/pypi/v/ggufloader)](https://pypi.org/project/ggufloader/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/ggufloader)](https://pypi.org/project/ggufloader/)
-[![PyPI - Wheel](https://img.shields.io/pypi/wheel/ggufloader)](https://pypi.org/project/ggufloader/)
-![PyPI - Python Versions](https://img.shields.io/pypi/pyversions/ggufloader)
 ![GitHub License](https://img.shields.io/github/license/ggufloader/gguf-loader)
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/ggufloader/gguf-loader)
 
@@ -17,10 +13,6 @@ computer.
 > 🧪 **Note:** the new v2.3.0 testing release is temporarily optimized for
 > one model (Gemma 4 12B Instruct Q4_K_M) so its agentic work runs well —
 > universal model support returns in the next release.
-
-> 📦 **Also available as a Python package** — install it in seconds with
-> `pip install ggufloader` and launch it with `ggufloader`.
-> [View on PyPI](https://pypi.org/project/ggufloader/)
 
 > ⚠️ **Testing Release Notice**
 > **This version (2.3.0) is a testing/preview release.** It is locked to a
@@ -52,11 +44,6 @@ Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in d
 ---
 ## 🆕 What's New in 2.2.0
 
-- **Collision-proof pip package** — the entire app now ships inside a single
-  `ggufloader` package, so `pip install ggufloader` is safe even in shared or
-  global Python environments where other packages live (no more top-level
-  `config`/`utils`/`core` name clashes, no dependency mismatch: the tested
-  dependency set is pinned).
 - **Mature Agentic Mode** — LangGraph-driven multi-step agent with 7 sandboxed
   tools, a live transcript panel, **Allow/Deny approval cards** for shell
   commands and git writes, and SQLite checkpointing so each workspace's
@@ -109,24 +96,7 @@ Older notes below and in [CHANGELOG.md](CHANGELOG.md); Qt-era history lives in d
 
 ## 🚀 Quick Start
 
-### Option 1: Install via pip (recommended)
-
-```bash
-pip install ggufloader
-ggufloader
-```
-
-That's it — the app opens. Requires **Python 3.10–3.13**.
-
-The package is published on [PyPI](https://pypi.org/project/ggufloader/) —
-update it any time with `pip install --upgrade ggufloader`.
-
-The wheel installs only the `ggufloader` name into your environment, so it
-works perfectly in a global Python install alongside other packages — nothing
-gets overwritten, and the dependency set is pinned to the exact combination
-that is tested to install and boot together on all three platforms.
-
-### Option 2: Run from source
+### Option 1: Run from source
 
 ```bash
 git clone https://github.com/GGUFloader/gguf-loader.git
@@ -145,7 +115,7 @@ compiler is required. They need Python 3.10+ (on Debian/Ubuntu also
 `python3-venv` or `virtualenv`); any missing piece is reported with a clear,
 actionable message.
 
-### Option 3: Prebuilt executable
+### Option 2: Prebuilt executable
 
 Standalone one-file executables are published on the
 [GitHub Releases](https://github.com/GGUFloader/gguf-loader/releases) page:
@@ -220,7 +190,7 @@ finding the answer.
 
 ## ⚡ GPU Acceleration
 
-The pip-installed app runs on CPU by default. To speed up inference with an
+The app runs on CPU by default. To speed up inference with an
 NVIDIA GPU:
 
 1. Open **Settings -> Hardware** and click the GPU install option.
@@ -260,24 +230,10 @@ the new agent architecture is validated. Grab it from
 - **Storage:** ~8 GB free for the model file
 - **GPU:** Optional — NVIDIA CUDA on Windows/Linux, Metal on macOS
 
-## 📦 Dependencies
 
-The wheel declares its dependencies pinned to the exact set verified to work
-together, so `pip install ggufloader` resolves the same tested combination
-every time — no dependency mismatch, and every package has prebuilt wheels for
-all three platforms:
-
-`llama-cpp-python` (CPU by default) · `langgraph` ·
-`langgraph-checkpoint-sqlite` · `langchain-core` · `fastapi` · `uvicorn` ·
-`pydantic`
-
-(The legacy PySide6 desktop UI is no longer shipped or installed - the React app running in Electron is the only UI, so the installer contains just the Python backend plus the Electron/React frontend.)
-
----
 
 ## 🧱 Building from source
 
-- **Wheel / sdist:** `pip install build && python -m build` → artifacts in `dist/`
 - **Windows executable:** `scripts/build_exe.bat` (or `python -m PyInstaller
   build_exe.spec`). The script detects whether the installed llama-cpp-python
   is CUDA-enabled and names the output `GGUFLoader_v<version>_CUDA.exe` or
