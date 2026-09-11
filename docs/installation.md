@@ -1,7 +1,10 @@
 # Installation Guide
 
-How to install and launch **GGUF Loader** - the single-model (Gemma 4 12B
-Q4_K_M) local AI agent app. Pick whichever method fits you.
+How to install and launch **GGUF Loader** — a universal GGUF model loader
+with a built-in plan-driven agent. Pick whichever method fits you.
+
+> 🧪 **Note:** v2.3.0 is a testing release temporarily pinned to Gemma 4 12B
+> Instruct Q4_K_M. Universal model support returns in the next release.
 
 ---
 
@@ -85,8 +88,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 3. Start chatting. Press **Ctrl/Cmd + Shift + A** for Agent Mode (choose a
    workspace folder to let the agent work in).
 
-This build runs exactly one model - Gemma 4 12B Instruct Q4_K_M. Other GGUF
-files are rejected with a clear message.
+This testing release runs exactly one model — Gemma 4 12B Instruct Q4_K_M.
+Other GGUF files are rejected with a clear message. The full universal model
+loader (any GGUF) returns in the next release.
 
 ---
 
