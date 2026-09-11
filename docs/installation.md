@@ -9,9 +9,10 @@ Q4_K_M) local AI agent app. Pick whichever method fits you.
 
 1. Open the [GitHub Releases page](https://github.com/GGUFloader/gguf-loader/releases).
 2. Download the artifact for your platform:
-   - `GGUFLoader_v<version>_GPU.exe` - Windows with an NVIDIA GPU (CUDA)
+   - `GGUFLoader_v<version>_CUDA.exe` - Windows with an NVIDIA GPU (CUDA)
    - `GGUFLoader_v<version>_CPU.exe` - Windows, any machine
-   - `GGUFLoader_v<version>_linux_x86_64_CPU` - Linux
+   - `GGUFLoader_v<version>_linux_x86_64_CPU` - Linux, CPU-only
+   - `GGUFLoader_v<version>_linux_x86_64_CUDA` - Linux with NVIDIA GPU (driver ≥ 550)
 3. Run it. No Python, Node, or other runtime is needed.
 
 On first start the app looks for the pinned model and offers to download it
