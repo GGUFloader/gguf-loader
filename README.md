@@ -213,7 +213,7 @@ Manual scripts: `scripts/install_gpu_llama.bat` (Windows) /
 ## 🛠️ System Requirements
 
 - **OS:** Windows 10/11, Linux, macOS (Intel & Apple Silicon)
-- **RAM:** 8 GB minimum (16 GB recommended for 12B models)
+- **RAM:** 32 GB minimum recommended
 - **Storage:** ~8 GB free for the model file
 - **GPU:** Optional — NVIDIA CUDA on Windows/Linux, Metal on macOS
 - **Python:** 3.10–3.13 (for running from source only)
