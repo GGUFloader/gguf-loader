@@ -10,6 +10,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { filesApi } from '../../api/client'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
 import type { FileNode } from '../../api/types'
 
 interface Props {
@@ -146,17 +147,18 @@ export function FileExplorer({ onFileSelect, selectedFile }: Props) {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<FileNode[]>([])
+  const workspace = useWorkspaceStore((s) => s.workspace)
 
   const loadTree = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await filesApi.tree()
+      const data = await filesApi.tree(workspace || undefined)
       setTree(data)
     } catch {
       setTree([])
     }
     setLoading(false)
-  }, [])
+  }, [workspace])
 
   useEffect(() => {
     loadTree()
@@ -169,14 +171,14 @@ export function FileExplorer({ onFileSelect, selectedFile }: Props) {
     }
     const timer = setTimeout(async () => {
       try {
-        const results = await filesApi.search(searchQuery)
+        const results = await filesApi.search(searchQuery, workspace || undefined)
         setSearchResults(results)
       } catch {
         setSearchResults([])
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [searchQuery, workspace])
 
   return (
     <div className="h-full flex flex-col">
