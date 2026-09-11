@@ -1,8 +1,10 @@
 # Frequently Asked Questions
 
-Common questions about GGUF Loader, answered for the current build (a
-single-model, plan-driven agent app with a React frontend on a FastAPI
-backend).
+Common questions about GGUF Loader — a **universal GGUF model loader** with a
+built-in plan-driven agent (React frontend on a FastAPI backend).
+
+> 🧪 **Note:** v2.3.0 is a testing release temporarily pinned to Gemma 4 12B
+> Instruct Q4_K_M. Universal model support returns in the next release.
 
 ---
 
@@ -10,11 +12,11 @@ backend).
 
 ### What is GGUF Loader?
 
-A privacy-first desktop application that runs one large language model -
-Google **Gemma 4 12B Instruct (Q4_K_M)** - fully locally. It combines a
-streaming chat with an **agent mode** that plans and executes multi-step file
-tasks (read, search, write, edit, run commands, git) inside a workspace folder
-you choose. Everything runs on your machine.
+A privacy-first desktop application that runs GGUF language models **fully
+locally**. GGUF Loader is a **universal model loader** — you pick the model
+that fits your PC's resources. It ships with a built-in **agentic mode** that
+plans and executes multi-step file tasks (read, search, write, edit, run
+commands, git) inside a workspace you choose. No data ever leaves your machine.
 
 ### Does GGUF Loader need the internet?
 
@@ -24,16 +26,16 @@ packages, and update checks use the network only if you enable them.
 
 ### Which model does this build run?
 
-Exactly one: **Gemma 4 12B Instruct, Q4_K_M** (`gemma-4-12B-it-Q4_K_M.gguf`).
-The app is deliberately optimized for that model - prompts, sampling, and
-context settings are tuned for it. Other GGUF files are rejected at load time
-with a clear message.
+**Gemma 4 12B Instruct, Q4_K_M** (`gemma-4-12B-it-Q4_K_M.gguf`) in this
+testing release. The app is tuned for that model — prompts, sampling, and
+context settings are optimized for it. Other GGUF files are rejected with a
+clear message. The full universal model loader (any GGUF) returns next release.
 
 ### What happened to the old multi-model version?
 
-Earlier versions loaded any GGUF. This build intentionally dropped that in
-favor of a single, well-tuned model so everything "just works" - no model
-family detection, no per-model prompt headaches. Older multi-model docs are
+Earlier versions loaded any GGUF. The v2.3.0 testing release temporarily
+pinned to one model so the new agent architecture could be validated. The full
+universal model loader returns in the next release. Older multi-model docs are
 kept for reference and marked as historical.
 
 ---
@@ -68,9 +70,10 @@ Download button.
 
 ### Can I use a different or larger model?
 
-No - not in this build. It is pinned to Gemma 4 12B Q4_K_M by design. If you
-need another model, use the multi-model (Qt-era) releases or fork the code;
-the current codebase intentionally hard-codes one model.
+Not in this testing release — it is pinned to Gemma 4 12B Q4_K_M while the
+agent architecture is validated. The universal model loader (any GGUF) returns
+in the next release. You'll be able to pick a model that fits your PC's
+RAM/VRAM.
 
 ### Do I need a GPU?
 
