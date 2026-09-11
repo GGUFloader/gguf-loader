@@ -164,7 +164,7 @@ hiddenimports = [
 
 1. Remove unused dependencies from `requirements.txt`
 2. Use `upx=True` in the spec file (already enabled)
-3. Consider using `--onefile` mode (creates single .exe but slower startup)
+3. Build CPU-only if GPU is not needed (drops ~800 MB)
 
 ### Missing DLL Errors
 
@@ -220,9 +220,9 @@ Before distribution:
 Typical executable size: 145-930 MB (CPU build ~145 MB, GPU build ~930 MB with CUDA runtime)
 
 To reduce size:
-- Remove unused Qt modules
 - Use lighter AI model libraries
 - Exclude documentation from build
+- Use CPU-only llama-cpp-python (no CUDA runtime)
 
 ## Support
 
