@@ -51,7 +51,7 @@ Q4_K_M) to tune the agent's performance before expanding model support.
 | Artifact | Size | Notes |
 |---|---|---|
 | [GGUFLoader_v2.3.0_CPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CPU.exe) | ~145 MB | Windows · CPU-only, works everywhere |
-| [GGUFLoader_v2.3.0_CUDA.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_CUDA.exe) | ~930 MB | Windows · NVIDIA CUDA |
+| [GGUFLoader_v2.3.0_GPU.exe](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_GPU.exe) | ~930 MB | Windows · NVIDIA CUDA |
 | [GGUFLoader_v2.3.0_linux_x86_64_CPU](https://github.com/GGUFloader/gguf-loader/releases/download/v2.3.0/GGUFLoader_v2.3.0_linux_x86_64_CPU) | ~50 MB | Linux · CPU-only |
 
 Click any filename above to download directly. The CUDA build bundles the full
@@ -223,7 +223,7 @@ Manual scripts: `scripts/install_gpu_llama.bat` (Windows) /
 ## 🧱 Building from source
 
 - **Windows executable:** `scripts/build_exe.bat` — detects CUDA and names the
-  output `GGUFLoader_v<version>_CUDA.exe` or `_CPU.exe` automatically.
+  output `GGUFLoader_v<version>_GPU.exe` or `_CPU.exe` automatically.
 - **Linux executable:** `scripts/build_linux.sh` — must run on Linux (or WSL);
   produces `GGUFLoader_v<version>_linux_x86_64_CPU`.
 - **Tests:** `pip install pytest && python -m pytest`
