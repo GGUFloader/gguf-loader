@@ -217,7 +217,7 @@ Before distribution:
 
 ## File Size Optimization
 
-Typical executable size: 70-850 MB (CPU build ~70 MB, GPU build ~850 MB with CUDA runtime)
+Typical executable size: 145-930 MB (CPU build ~145 MB, GPU build ~930 MB with CUDA runtime)
 
 To reduce size:
 - Remove unused Qt modules
