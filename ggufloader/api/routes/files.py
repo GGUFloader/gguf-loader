@@ -104,9 +104,9 @@ async def write_file(req: WriteRequest) -> dict:
 
 
 @router.get("/search")
-async def search_files(q: str) -> List[dict]:
+async def search_files(q: str, path: Optional[str] = None) -> List[dict]:
     """Search workspace files by name."""
-    workspace = get_workspace() or "."
+    workspace = path or get_workspace() or "."
     results = []
     for root, dirs, files in os.walk(workspace):
         # Skip hidden and ignored dirs
